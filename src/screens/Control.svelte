@@ -44,14 +44,27 @@
   });
   const modeIndex = $derived(Math.max(0, modes.findIndex((m) => m.id === d.mode)));
   const modeLocked = $derived(!conn.modeSwitchable || !d.heaterOn);
+
+  function pickMode(mode: HeatMode) {
+    if (!conn.modeSwitchable) return conn.say('Boost is switched with the button on the device.');
+    if (!d.heaterOn) return conn.say('Boost works while the heater is on.');
+    conn.setMode(mode);
+  }
+
+  // The dial gets whatever height is left, so the dashboard fits without scrolling.
+  let areaH = $state(268);
+  let areaW = $state(320);
+  const dialScale = $derived(Math.max(0.62, Math.min(1, (areaH - 6) / 262, (areaW - 8) / 290)));
 </script>
 
 <Warmth {warmth} />
-<div class="screen">
+<div class="screen fit">
   <Header />
 
-  <Dial current={d.currentTemp} target={goal} min={d.minTemp} max={d.maxTemp} heating={d.heaterOn} {ready} {unit} {offline}
+  <div class="dial-area" bind:clientHeight={areaH} bind:clientWidth={areaW}>
+  <Dial scale={dialScale} current={d.currentTemp} target={goal} min={d.minTemp} max={d.maxTemp} heating={d.heaterOn} {ready} {unit} {offline}
     onstep={(delta) => conn.setTarget((d.targetTemp ?? d.minTemp) + (unit === 'F' ? delta * 5 / 9 : delta))} />
+  </div>
 
   <div class="status rise d1 num" class:ready class:off={!d.heaterOn}>{status}</div>
 
@@ -59,13 +72,12 @@
     <div class="modes rise d2" class:locked={modeLocked} style:--n={modes.length}>
       <span class="thumb" style:transform="translateX({modeIndex * 100}%)"></span>
       {#each modes as m (m.id)}
-        <button type="button" class:on={m.id === d.mode} aria-pressed={m.id === d.mode} disabled={modeLocked}
-          onclick={() => conn.setMode(m.id)}>
+        <button type="button" class:on={m.id === d.mode} aria-pressed={m.id === d.mode} aria-disabled={modeLocked}
+          onclick={() => pickMode(m.id)}>
           <span class="m-label">{m.label}</span><span class="m-sub">{m.sub}</span>
         </button>
       {/each}
     </div>
-    {#if !conn.modeSwitchable}<div class="hint">Boost is switched with the button on the device.</div>{/if}
   {/if}
 
   <HoursCard />
@@ -94,6 +106,17 @@
   .screen {
     position: relative;
     z-index: 1;
+  }
+  .screen.fit {
+    min-height: 100dvh;
+    padding-bottom: calc(var(--sab) + 78px);
+  }
+  .dial-area {
+    flex: 1 1 0;
+    min-height: 168px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .status {
     text-align: center;
@@ -145,9 +168,6 @@
     gap: 1px;
     cursor: pointer;
   }
-  .modes button:disabled {
-    cursor: default;
-  }
   .modes button.on {
     color: var(--navy-deep);
   }
@@ -159,12 +179,6 @@
     font-size: 11px;
     font-weight: 600;
     opacity: 0.8;
-  }
-  .hint {
-    text-align: center;
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: -4px;
   }
   .heater {
     height: 56px;

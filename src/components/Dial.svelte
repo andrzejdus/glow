@@ -13,9 +13,11 @@
     ready: boolean;
     unit: 'C' | 'F';
     offline?: boolean;
+    /** Shrinks the whole dial on short screens. */
+    scale?: number;
     onstep: (delta: number) => void;
   }
-  let { current, target, min, max, heating, ready, unit, offline = false, onstep }: Props = $props();
+  let { current, target, min, max, heating, ready, unit, offline = false, scale = 1, onstep }: Props = $props();
 
   const R = 114;
   const C = 2 * Math.PI * R;
@@ -47,7 +49,7 @@
   }
 </script>
 
-<div class="dial" class:offline>
+<div class="dial" class:offline style:transform="scale({scale})">
   <div class="glow" class:pulse={heating} style:opacity={heating ? 0.35 + 0.65 * warmth : 0}></div>
   {#if ready}<div class="ready-ring"></div>{/if}
   <div class="face"></div>
@@ -90,7 +92,6 @@
     position: relative;
     width: 256px;
     height: 256px;
-    margin: 6px auto 0;
     flex-shrink: 0;
     transition: opacity 0.4s;
   }
