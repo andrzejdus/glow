@@ -57,6 +57,7 @@ export interface DeviceCapabilities {
   pump: boolean;
   battery: boolean;
   boost: boolean;
+  /** The device has a second boost level (Superboost / CRAFTY+ Superbooster), adjustable or not. */
   superBoost: boolean;
   findMy: boolean;
   /** The heater can be switched from the app (false on devices that only heat while powered on). */

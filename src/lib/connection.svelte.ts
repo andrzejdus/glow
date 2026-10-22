@@ -60,7 +60,7 @@ class Connection {
     this.autoConnect = saved.autoConnect;
 
     const demo = new URLSearchParams(location.search).get('demo');
-    if (demo === 'venty' || demo === 'volcano') return this.startDemo(demo);
+    if (demo === 'venty' || demo === 'volcano' || demo === 'crafty') return this.startDemo(demo);
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this.phase === 'idle' && this.native && this.autoConnect && !this.userDisconnect) {
@@ -182,6 +182,7 @@ class Connection {
     await sleep(900);
     if (gen !== this.generation) return;
     await usage.bind(d.id, demoHistory(kind === 'volcano' ? 811 * 60 + 42 : 142 * 60 + 18));
+    this.device = null;
     await this.attach(d, createDemoDriver(kind), gen);
   }
 

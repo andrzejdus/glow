@@ -6,7 +6,7 @@
   import Warmth from '../components/Warmth.svelte';
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, HeatMode } from '../lib/devices/types';
-  import { deltaToUnit, mmss } from '../lib/format';
+  import { deltaToUnit, mmss, toUnit } from '../lib/format';
   import { usage } from '../lib/usage.svelte';
 
   const d = $derived(conn.device as DeviceState);
@@ -16,6 +16,12 @@
   const offset = $derived(d.mode === 'boost' ? d.boostOffset ?? 0 : d.mode === 'superboost' ? d.superBoostOffset ?? 0 : 0);
   const goal = $derived(d.targetTemp === undefined ? undefined : Math.min(d.maxTemp, d.targetTemp + offset));
   const diff = $derived(goal !== undefined && d.currentTemp !== undefined ? goal - d.currentTemp : undefined);
+  // Mode names as each manual has them: CRAFTY+ says Booster / Superbooster.
+  const names = $derived(
+    d.kind === 'crafty'
+      ? { normal: 'Base', boost: 'Booster', superboost: 'Superbooster' }
+      : { normal: 'Normal', boost: 'Boost', superboost: 'Superboost' },
+  );
   const ready = $derived(d.heaterOn && diff !== undefined && Math.abs(diff) < 1);
   const eta = $derived(usage.etaSec(d.currentTemp, goal));
   const status = $derived(
@@ -36,18 +42,26 @@
   const modes = $derived.by(() => {
     if (!caps?.boost) return [];
     const list: { id: HeatMode; label: string; sub: string }[] = [
-      { id: 'normal', label: 'Normal', sub: 'base' },
-      { id: 'boost', label: 'Boost', sub: `+${deltaToUnit(d.boostOffset ?? 0, unit)}°` },
+      { id: 'normal', label: names.normal, sub: d.targetTemp === undefined ? 'base' : `${toUnit(d.targetTemp, unit)}°` },
+      { id: 'boost', label: names.boost, sub: `+${deltaToUnit(d.boostOffset ?? 0, unit)}°` },
     ];
-    if (caps.superBoost) list.push({ id: 'superboost', label: 'Superboost', sub: `+${deltaToUnit(d.superBoostOffset ?? 0, unit)}°` });
+    if (caps.superBoost) {
+      list.push({ id: 'superboost', label: names.superboost, sub: `+${deltaToUnit(d.superBoostOffset ?? 0, unit)}°` });
+    }
     return list;
   });
   const modeIndex = $derived(Math.max(0, modes.findIndex((m) => m.id === d.mode)));
   const modeLocked = $derived(!conn.modeSwitchable || !d.heaterOn);
 
   function pickMode(mode: HeatMode) {
-    if (!conn.modeSwitchable) return conn.say('Boost is switched with the button on the device.');
-    if (!d.heaterOn) return conn.say('Boost works while the heater is on.');
+    if (!conn.modeSwitchable) {
+      return conn.say(
+        d.kind === 'crafty'
+          ? 'Switch on the device: double-click the power button for Booster, triple-click for Superbooster.'
+          : 'Boost is switched with the button on the device.',
+      );
+    }
+    if (!d.heaterOn) return conn.say(`${names.boost} works while the heater is on.`);
     conn.setMode(mode);
   }
 

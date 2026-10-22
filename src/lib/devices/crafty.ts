@@ -211,8 +211,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
       pump: false,
       battery: true,
       boost: true,
-      // Superboost is reported (CRAFTY+) but its offset is fixed, not adjustable.
-      superBoost: false,
+      // CRAFTY+ has a Superbooster (triple click); its offset is fixed at Booster + 15 °C.
+      superBoost: this.firmware?.plus ?? false,
       findMy: this.firmware ? this.firmware.plus : true,
       heaterToggle: !this.legacy,
     };

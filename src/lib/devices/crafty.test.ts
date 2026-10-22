@@ -140,7 +140,7 @@ describe('crafty driver', () => {
         autoShutoff: 120,
       },
     });
-    expect(driver.capabilities).toMatchObject({ heaterToggle: true, findMy: true, boost: true });
+    expect(driver.capabilities).toMatchObject({ heaterToggle: true, findMy: true, boost: true, superBoost: true });
     expect(t.maxInFlight).toBe(1);
   });
 

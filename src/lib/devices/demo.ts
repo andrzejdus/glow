@@ -62,7 +62,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     async start(onChange) {
       emit = onChange;
       onChange({
-        model: isVolcano ? 'VOLCANO HYBRID' : 'VENTY',
+        model: isVolcano ? 'VOLCANO HYBRID' : kind === 'crafty' ? 'CRAFTY+' : 'VENTY',
         serial: isVolcano ? 'VH 4C19E0' : 'VY 08A3F2',
         firmware: isVolcano ? '2.2.7' : '2.4.1',
         firmwareBle: isVolcano ? '1.4.0' : '1.9.0',
@@ -71,7 +71,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
         minTemp: 40,
         maxTemp: isVolcano ? 230 : 210,
         boostOffset: isVolcano ? undefined : offsets.boost,
-        superBoostOffset: isVolcano ? undefined : offsets.superboost,
+        superBoostOffset: isVolcano ? undefined : kind === 'crafty' ? offsets.boost + 15 : offsets.superboost,
         mode: s.mode,
         heaterOn: s.heater,
         pumpOn: isVolcano ? false : undefined,
