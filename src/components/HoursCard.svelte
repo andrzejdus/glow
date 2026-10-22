@@ -1,6 +1,6 @@
 <script lang="ts">
   import { conn } from '../lib/connection.svelte';
-  import { duration, mmss, splitHours } from '../lib/format';
+  import { duration, mmss, splitHours, usageTime } from '../lib/format';
   import { usage } from '../lib/usage.svelte';
 
   const d = $derived(conn.device);
@@ -37,7 +37,7 @@
     <div class="side">
       <div class="live" class:on={usage.heating}><span></span>{usage.heating ? 'COUNTING' : 'PAUSED'}</div>
       <div class="week-label">this week</div>
-      <div class="week num">{thisWeek === null || thisWeek === undefined ? '–' : `+${thisWeek.toFixed(1)} h`}</div>
+      <div class="week num">{thisWeek === null || thisWeek === undefined ? '–' : `+${usageTime(thisWeek)}`}</div>
     </div>
   </div>
   <div class="bars" role="img" aria-label="Hours used per week, last 8 weeks">
@@ -51,9 +51,9 @@
     {/each}
   </div>
   <div class="foot num">
-    <span>Session <strong>{mmss(usage.sessionSec(usage.now))}</strong></span>
-    <span>Avg <strong>{avg === null ? '–' : avg.toFixed(1)} h</strong>/week</span>
-    <span>Auto-off <strong>{autoOff}</strong></span>
+    <div><span>Session</span><strong>{mmss(usage.sessionSec(usage.now))}</strong></div>
+    <div><span>Avg per week</span><strong>{avg === null ? '–' : usageTime(avg)}</strong></div>
+    <div><span>Auto-off</span><strong>{autoOff}</strong></div>
   </div>
 </section>
 
@@ -177,13 +177,30 @@
     margin-top: 12px;
     padding-top: 10px;
     border-top: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .foot div {
     display: flex;
-    justify-content: space-between;
-    gap: 6px;
-    font-size: 12px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .foot div:nth-child(2) {
+    text-align: center;
+  }
+  .foot div:last-child {
+    text-align: right;
+  }
+  .foot span {
+    font-size: 11px;
     color: var(--muted);
+    white-space: nowrap;
   }
   .foot strong {
+    font-size: 13px;
     color: var(--navy);
+    white-space: nowrap;
   }
 </style>

@@ -5,7 +5,7 @@
   import Toggle from '../components/Toggle.svelte';
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
-  import { duration, splitHours } from '../lib/format';
+  import { duration, splitHours, usageTime } from '../lib/format';
   import { usage } from '../lib/usage.svelte';
 
   const d = $derived(conn.device as DeviceState);
@@ -63,7 +63,7 @@
           {#if parts}<span class="h">{parts.h}</span><span class="u">h</span><span class="m">{parts.m}</span><span class="u">m</span>
           {:else}<span class="h">–</span>{/if}
         </div>
-        {#if thisWeek !== null && thisWeek !== undefined}<div class="week num">+{thisWeek.toFixed(1)} h this week</div>{/if}
+        {#if thisWeek !== null && thisWeek !== undefined}<div class="week num">+{usageTime(thisWeek)} this week</div>{/if}
       </div>
     </div>
     <div class="facts">
