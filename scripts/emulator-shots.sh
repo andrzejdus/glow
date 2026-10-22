@@ -38,13 +38,25 @@ shot() {
   adb exec-out screencap -p > "$out/$1.png"
 }
 
+# Waits until a node matching the pattern is on screen (the emulator's software GPU makes
+# the first WebView paint slow).
+wait_for() {
+  for _ in $(seq 1 ${2:-45}); do
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 &&
+      adb shell cat /sdcard/ui.xml 2>/dev/null | grep -qiE "$1" && return 0
+    sleep 2
+  done
+  return 1
+}
+
 adb shell am start -W -n "$pkg/.MainActivity"
-sleep 12
+wait_for 'text="(Ready to connect|Looking for|Choose your)' 60 || echo "connect screen did not appear"
+sleep 2
 shot 1-connect
 # A "turn Bluetooth on" or permission dialog may sit in front of the page.
 tap '^(deny|cancel|no|don.t allow|not now)$' && sleep 3 && shot 1b-connect
 
-tap '^VENTY$' && sleep 7 && shot 2-dashboard
-tap '^Settings$' && sleep 3 && shot 3-settings
+tap '^VENTY$' && wait_for 'HOURS OF OPERATION|Hours of operation' 30 && sleep 3 && shot 2-dashboard
+tap '^Settings$' && wait_for 'Auto-connect on open' 15 && sleep 2 && shot 3-settings
 adb shell am force-stop "$pkg"
 ls -la "$out"
