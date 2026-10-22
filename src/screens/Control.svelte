@@ -1,0 +1,230 @@
+<script lang="ts">
+  import Dial from '../components/Dial.svelte';
+  import Header from '../components/Header.svelte';
+  import HoursCard from '../components/HoursCard.svelte';
+  import Icon from '../components/Icon.svelte';
+  import Warmth from '../components/Warmth.svelte';
+  import { conn } from '../lib/connection.svelte';
+  import type { DeviceState, HeatMode } from '../lib/devices/types';
+  import { deltaToUnit, mmss } from '../lib/format';
+  import { usage } from '../lib/usage.svelte';
+
+  const d = $derived(conn.device as DeviceState);
+  const caps = $derived(conn.caps);
+  const unit = $derived(d.unit ?? 'C');
+  const offline = $derived(conn.phase === 'reconnecting');
+  const offset = $derived(d.mode === 'boost' ? d.boostOffset ?? 0 : d.mode === 'superboost' ? d.superBoostOffset ?? 0 : 0);
+  const goal = $derived(d.targetTemp === undefined ? undefined : Math.min(d.maxTemp, d.targetTemp + offset));
+  const diff = $derived(goal !== undefined && d.currentTemp !== undefined ? goal - d.currentTemp : undefined);
+  const ready = $derived(d.heaterOn && diff !== undefined && Math.abs(diff) < 1);
+  const eta = $derived(usage.etaSec(d.currentTemp, goal));
+  const status = $derived(
+    offline
+      ? 'Waiting for the device…'
+      : !d.heaterOn
+        ? 'Heater off'
+        : ready
+          ? 'Ready - enjoy'
+          : diff !== undefined && diff < 0
+            ? 'Cooling to target'
+            : eta
+              ? `Heating · ready in ${mmss(eta)}`
+              : 'Heating…',
+  );
+  const warmth = $derived(d.heaterOn && d.currentTemp !== undefined ? Math.max(0, Math.min(1, (d.currentTemp - 40) / 170)) : 0);
+
+  const modes = $derived.by(() => {
+    if (!caps?.boost) return [];
+    const list: { id: HeatMode; label: string; sub: string }[] = [
+      { id: 'normal', label: 'Normal', sub: 'base' },
+      { id: 'boost', label: 'Boost', sub: `+${deltaToUnit(d.boostOffset ?? 0, unit)}°` },
+    ];
+    if (caps.superBoost) list.push({ id: 'superboost', label: 'Superboost', sub: `+${deltaToUnit(d.superBoostOffset ?? 0, unit)}°` });
+    return list;
+  });
+  const modeIndex = $derived(Math.max(0, modes.findIndex((m) => m.id === d.mode)));
+  const modeLocked = $derived(!conn.modeSwitchable || !d.heaterOn);
+</script>
+
+<Warmth {warmth} />
+<div class="screen">
+  <Header />
+
+  <Dial current={d.currentTemp} target={goal} min={d.minTemp} max={d.maxTemp} heating={d.heaterOn} {ready} {unit} {offline}
+    onstep={(delta) => conn.setTarget((d.targetTemp ?? d.minTemp) + (unit === 'F' ? delta * 5 / 9 : delta))} />
+
+  <div class="status rise d1 num" class:ready class:off={!d.heaterOn}>{status}</div>
+
+  {#if modes.length}
+    <div class="modes rise d2" class:locked={modeLocked} style:--n={modes.length}>
+      <span class="thumb" style:transform="translateX({modeIndex * 100}%)"></span>
+      {#each modes as m (m.id)}
+        <button type="button" class:on={m.id === d.mode} aria-pressed={m.id === d.mode} disabled={modeLocked}
+          onclick={() => conn.setMode(m.id)}>
+          <span class="m-label">{m.label}</span><span class="m-sub">{m.sub}</span>
+        </button>
+      {/each}
+    </div>
+    {#if !conn.modeSwitchable}<div class="hint">Boost is switched with the button on the device.</div>{/if}
+  {/if}
+
+  <HoursCard />
+
+  {#if caps?.pump}
+    <div class="duo rise d4">
+      <button type="button" class="tile press heat" class:on={d.heaterOn} aria-pressed={d.heaterOn}
+        onclick={() => conn.setHeater(!d.heaterOn)}>
+        <Icon name="flame" size={24} class={d.heaterOn ? 'flicker' : ''} /> {d.heaterOn ? 'Heat on' : 'Heat'}
+      </button>
+      <button type="button" class="tile press air" class:on={d.pumpOn} aria-pressed={!!d.pumpOn}
+        onclick={() => conn.setPump(!d.pumpOn)}>
+        <Icon name="fan" size={24} class={d.pumpOn ? 'spinning' : ''} /> {d.pumpOn ? 'Air on' : 'Air'}
+      </button>
+    </div>
+  {:else if caps?.heaterToggle}
+    <button type="button" class="heater press rise d4" class:on={d.heaterOn} aria-pressed={d.heaterOn}
+      style:--glow={0.25 + 0.3 * warmth} onclick={() => conn.setHeater(!d.heaterOn)}>
+      <Icon name="flame" size={22} class={d.heaterOn ? 'flicker' : ''} />
+      {d.heaterOn ? 'Heater on' : 'Start heating'}
+    </button>
+  {/if}
+</div>
+
+<style>
+  .screen {
+    position: relative;
+    z-index: 1;
+  }
+  .status {
+    text-align: center;
+    margin-top: 4px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--navy);
+    height: 20px;
+  }
+  .status.ready {
+    color: var(--orange-ink);
+  }
+  .status.off {
+    color: var(--muted);
+  }
+  .modes {
+    position: relative;
+    height: 50px;
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: var(--shadow-sm);
+    display: grid;
+    grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+    padding: 4px;
+  }
+  .thumb {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc((100% - 8px) / var(--n));
+    border-radius: 999px;
+    background: var(--orange);
+    box-shadow: 0 6px 16px rgba(255, 102, 0, 0.35);
+    transition: transform 0.35s cubic-bezier(0.3, 1.3, 0.5, 1), opacity 0.3s;
+  }
+  .modes.locked .thumb {
+    opacity: 0.55;
+  }
+  .modes button {
+    position: relative;
+    border: 0;
+    background: none;
+    color: var(--navy);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    cursor: pointer;
+  }
+  .modes button:disabled {
+    cursor: default;
+  }
+  .modes button.on {
+    color: var(--navy-deep);
+  }
+  .m-label {
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .m-sub {
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0.8;
+  }
+  .hint {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: -4px;
+  }
+  .heater {
+    height: 56px;
+    border-radius: 999px;
+    border: 0;
+    cursor: pointer;
+    font-size: 17px;
+    font-weight: 800;
+    background: var(--navy);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(0, 40, 125, 0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .heater.on {
+    background: var(--orange);
+    color: var(--navy-deep);
+    box-shadow: 0 14px 34px rgba(255, 102, 0, var(--glow));
+  }
+  .duo {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .tile {
+    height: 64px;
+    border-radius: 22px;
+    border: 0;
+    background: var(--card);
+    color: var(--navy);
+    box-shadow: var(--shadow-sm);
+    font-size: 15px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .tile.heat.on {
+    background: var(--orange);
+    color: var(--navy-deep);
+    box-shadow: 0 12px 28px rgba(255, 102, 0, 0.4);
+  }
+  .tile.air.on {
+    background: var(--navy);
+    color: #fff;
+    box-shadow: 0 10px 24px rgba(0, 40, 125, 0.25);
+  }
+  :global(.flicker) {
+    animation: flicker 0.9s ease-in-out infinite;
+    transform-origin: 12px 20px;
+  }
+  :global(.spinning .fan) {
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes flicker {
+    0%, 100% { transform: scale(1) translateY(0); }
+    50% { transform: scale(1.08) translateY(-1px); }
+  }
+</style>

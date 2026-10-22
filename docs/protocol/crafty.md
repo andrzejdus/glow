@@ -1,0 +1,125 @@
+# CRAFTY / CRAFTY+ BLE protocol
+
+Driver: `src/lib/devices/crafty.ts`. Derived from the official STORZ & BICKEL web app v3.4.1
+(`crafty.js`, `main.js`, `index.html`). Cross-checked against
+[storz-rs](https://github.com/flakesonnix/storz-rs) (`src/protocol/crafty.rs`) and
+[xythobuz/Volcano-Remote](https://github.com/xythobuz/Volcano-Remote) (`src/crafty.c`): both agree
+on the service/characteristic UUIDs, little-endian uint16 values, °C × 10 temperatures and the
+two-byte zero write to heater on/off. Neither documents charging state.
+
+## Discovery
+
+- Advertised name prefixes the official app filters on: `STORZ&BICKEL` (original CRAFTY) and
+  `Storz&Bickel` (newer units). `S&B` is also in the filter list but belongs to VOLCANO (`S&B VOLCANO`),
+  VENTY (`S&B VY`) and VEAZY (`S&B VZ`); the official app treats *any other* name as a CRAFTY.
+  Glow only claims `STORZ&BICKEL` (case-insensitive).
+- CRAFTY vs CRAFTY+ is not in the name: the official app decides by firmware major version ≥ 3.
+
+## UUIDs
+
+All UUIDs are `0000xxxx-4c45-4b43-4942-265a524f5453`; the table gives `xxxx`.
+
+| Service | Char | Name | Access | Payload |
+|---|---|---|---|---|
+| 0001 | 0011 | Current temperature | read, notify | uint16 LE, °C × 10 |
+| 0001 | 0021 | Target temperature | read, write | uint16 LE, °C × 10 |
+| 0001 | 0031 | Boost offset | read, write | uint16 LE, °C × 10 (offset above target) |
+| 0001 | 0041 | Battery | read, notify | uint16 LE, percent |
+| 0001 | 0051 | LED brightness | read, write | uint16 LE, 0–100 (UI step 10) |
+| 0001 | 0061 | Auto shutoff setting | read, write* | uint16 LE, seconds (UI 30–300, step 30) |
+| 0001 | 0071 | Auto shutoff remaining | read, notify | uint16 LE, seconds |
+| 0001 | 0081 | Heater on | write | `00 00` |
+| 0001 | 0091 | Heater off | write | `00 00` |
+| 0002 | 0032 | Firmware | read | UTF-8, e.g. `V02.51` |
+| 0002 | 0052 | Serial number | read | UTF-8, first 8 chars used |
+| 0002 | 0072 | BLE firmware | read | 3 bytes → `V{b0}.{b1}.{b2}` |
+| 0003 | 0023 | Hours of operation | read | uint16 LE, hours |
+| 0003 | 01e3 | Minutes of operation | read | uint16 LE, minutes (added to hours) |
+| 0003 | 0093 | Project status register | read, notify | uint16 LE bit field (below) |
+| 0003 | 01c3 | Project status register 2 | read, write, notify | uint16 LE bit field (below) |
+| 0003 | 01b3 | Security code | write | uint16 LE unlock code |
+| 0003 | 0083 | System status | read | uint16 LE (analysis only) |
+| 0003 | 0063 | Battery status | read | uint16 LE (analysis only) |
+| 0003 | 0073 | Battery status 2 | read | uint16 LE (analysis only) |
+| 0003 | 01d3 | Factory reset | write | uint8 `00` after code 1000 (not implemented) |
+
+\* The auto shutoff write must be preceded by writing **815** (`2f 03`) to the security code
+characteristic. Factory reset uses code **1000**.
+
+The official app uses Web Bluetooth `writeValue`, i.e. write with response; Glow does the same.
+storz-rs writes without response, so the device seems to accept both.
+
+## Temperatures
+
+- Target range in the app: 40–210 °C. Values are rounded to whole degrees.
+- If a target read decodes above 210, the official app treats it as °F and converts
+  (`(F − 32) / 1.8`). Glow copies that heuristic.
+- Boost offset range 1–99 °C, and the app keeps target + boost ≤ 210 by lowering the boost.
+  Whenever the target is written, the app writes the boost offset right after it (Glow does too).
+- Superboost (CRAFTY+) is target + boost + **15 °C**, fixed; the app cannot change the 15.
+  Glow reports it as `superBoostOffset = boostOffset + 15`, CRAFTY+ only.
+- The CRAFTY has no display, so there is no display unit to read; `unit` stays unset.
+
+## Bit fields
+
+Project status register (`0093`):
+
+| Bit | Meaning |
+|---|---|
+| 4 | Heater active |
+| 5 | Boost mode |
+| 6 | Superboost mode (wins over bit 5) |
+| 3, 13 (`0x2008`) | Error flags (trigger the app's analysis) |
+| 15 | Factory reset recommended |
+
+Project status register 2 (`01c3`), changed by read-modify-write of the cached value, then read back:
+
+| Bit | Meaning |
+|---|---|
+| 0 | Vibration **disabled** |
+| 1 | Charge indicator LED **disabled** |
+| 2 | Target temperature reached (status, the app turns the reading green) |
+| 3 | Find My CRAFTY active (set to start; the device clears it after ~30 s) |
+| 12 | Permanent Bluetooth (the official code calls it `ENABLE_AUTOBLESHUTDOWN`, but the UI and the analysis text show set = Bluetooth always on) |
+
+## Connect sequence (official app)
+
+1. Read target temperature (`0021`).
+2. Read serial (`0052`).
+3. Subscribe to current temperature (`0011`), then read it.
+4. Read boost offset (`0031`).
+5. Read firmware (`0032`). *Legacy* = minor < 51 and major ≤ 2 (e.g. `V02.37`): no Settings tab,
+   no heater control, no BLE firmware, no auto shutoff, no minutes counter, no project-register
+   notifications. Major ≥ 3 → CRAFTY+ (Find My, factory reset).
+6. Subscribe to status register 2 (`01c3`), then read it.
+7. Read hours (`0023`), and minutes (`01e3`) unless legacy.
+8. Read BLE firmware (`0072`) unless legacy.
+9. Read LED brightness (`0051`).
+10. Unless legacy: read auto shutoff (`0061`), subscribe to and read remaining time (`0071`).
+11. Subscribe to battery (`0041`), then read it.
+12. Subscribe to the project status register (`0093`) unless legacy, then read it.
+13. Unless legacy: read system and battery status registers; on error flags, run the analysis.
+
+The official app keeps one GATT operation in flight at a time; Glow puts every operation in one queue.
+
+## Mapping to Glow
+
+- `setHeater` → `0081` / `0091`, refused on legacy firmware (`capabilities.heaterToggle` false there).
+- `setMode` cannot be done: the official app has no write for boost mode, the button on the device
+  switches it. The driver exposes `modeSwitchable: false`; `setMode` resolves only for the current mode.
+- `setBoostOffsets(boost)` → `0031`. `capabilities.superBoost` is false (fixed offset).
+- Settings: `permanentBluetooth` (connection), `chargeIndicator` (battery), `vibration`,
+  `ledBrightness`, `autoShutoff` (device). Legacy firmware hides `permanentBluetooth` and `autoShutoff`.
+- `findMyDevice` → set bit 3 of `01c3` unless already set; CRAFTY+ only.
+- `refresh()` re-reads target, boost, hours/minutes, LED brightness, auto shutoff, battery, and on
+  legacy firmware the project status register.
+
+## Unsure / not implemented
+
+- **Charging**: the official app shows only the battery percentage; no charging flag is decoded.
+  The battery status registers (`0063`, `0073`) probably hold one, but their bits are only used for
+  analysis messages (`0x0003` = charge the device, `0x4100` = let it cool down, `0x0200` error,
+  `0x8000` in register 2 = use another charger). `charging` stays unset.
+- The legacy-firmware check is the official one verbatim; it misclassifies e.g. `V01.60` as non-legacy.
+- Whether the original CRAFTY (firmware 2.x) ever sets the superboost bit is unknown.
+- Left out on purpose: firmware update, factory reset, analysis.
