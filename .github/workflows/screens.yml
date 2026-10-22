@@ -1,10 +1,9 @@
 name: Screens
 
-# Boots real Android emulators (12 and 15), installs a debug build and screenshots the app,
-# so layout and system-bar changes are checked on Android before a release is tagged.
+# Optional check, started by hand (Actions → Screens → Run workflow): boots real Android
+# emulators (12 and 15), installs a debug build and screenshots the app, to see layout and
+# system-bar changes on Android before tagging a release.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
