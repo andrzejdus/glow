@@ -22,20 +22,27 @@
       ? { normal: 'Base', boost: 'Booster', superboost: 'Superbooster' }
       : { normal: 'Normal', boost: 'Boost', superboost: 'Superboost' },
   );
-  const ready = $derived(d.heaterOn && diff !== undefined && Math.abs(diff) < 1);
-  const eta = $derived(usage.etaSec(d.currentTemp, goal));
-  const status = $derived(
-    offline
-      ? 'Waiting for the device…'
-      : !d.heaterOn
-        ? 'Heater off'
-        : ready
-          ? 'Ready - enjoy'
-          : diff !== undefined && diff < 0
-            ? 'Cooling to target'
-            : eta
-              ? `Heating · ready in ${mmss(eta)}`
-              : 'Heating…',
+  // The device's own flag wins (it is what drives the CRAFTY+ LED); otherwise compare temperatures.
+  const reached = $derived(d.heaterOn && (d.tempReached ?? (diff !== undefined && Math.abs(diff) < 1)));
+  const cooling = $derived(d.heaterOn && !reached && diff !== undefined && diff < -2);
+  const eta = $derived(reached || cooling ? null : usage.etaSec(d.currentTemp, goal));
+  const goalText = $derived(goal === undefined ? '' : ` ${toUnit(goal, unit)}°`);
+  const status = $derived.by(() => {
+    if (offline) return 'Waiting for the device…';
+    if (!d.heaterOn) return 'Heater off';
+    if (reached) return d.mode === 'normal' ? 'Temperature reached' : `${names[d.mode]} reached`;
+    if (cooling) return `Cooling to${goalText}`;
+    const to = d.mode === 'normal' ? `Heating to${goalText}` : `Heating to ${names[d.mode]}${goalText}`;
+    return eta ? `${to} · ready in ${mmss(eta)}` : to;
+  });
+  // CRAFTY only: a dot that mirrors the device LED (red heating, green reached; flashing in Booster, fast in Superbooster).
+  const led = $derived(
+    d.kind !== 'crafty' || offline
+      ? null
+      : {
+          color: !d.heaterOn ? 'off' : reached ? 'green' : 'red',
+          blink: d.mode === 'superboost' ? 'fast' : d.mode === 'boost' ? 'slow' : 'steady',
+        },
   );
   const warmth = $derived(d.heaterOn && d.currentTemp !== undefined ? Math.max(0, Math.min(1, (d.currentTemp - 40) / 170)) : 0);
 
@@ -76,11 +83,17 @@
   <Header />
 
   <div class="dial-area" bind:clientHeight={areaH} bind:clientWidth={areaW}>
-  <Dial scale={dialScale} current={d.currentTemp} target={goal} min={d.minTemp} max={d.maxTemp} heating={d.heaterOn} {ready} {unit} {offline}
+  <Dial scale={dialScale} current={d.currentTemp} target={goal} min={d.minTemp} max={d.maxTemp} heating={d.heaterOn} ready={reached} {unit} {offline}
     onstep={(delta) => conn.setTarget((d.targetTemp ?? d.minTemp) + (unit === 'F' ? delta * 5 / 9 : delta))} />
   </div>
 
-  <div class="status rise d1 num" class:ready class:off={!d.heaterOn}>{status}</div>
+  <div class="status rise d1 num" class:ready={reached} class:off={!d.heaterOn}>
+    {#if led}
+      <span class="led {led.color} {led.blink}" role="img"
+        aria-label="Device LED {led.color}{led.blink === 'steady' ? '' : led.blink === 'fast' ? ', flashing fast' : ', flashing'}"></span>
+    {/if}
+    {status}
+  </div>
 
   {#if modes.length}
     <div class="modes rise d2" class:locked={modeLocked} style:--n={modes.length}>
@@ -140,8 +153,41 @@
     color: var(--navy);
     height: 20px;
   }
+  .status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
   .status.ready {
     color: var(--orange-ink);
+  }
+  .led {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: #c9c9c9;
+  }
+  .led.red {
+    background: #e0301e;
+    box-shadow: 0 0 8px rgba(224, 48, 30, 0.6);
+  }
+  .led.green {
+    background: #1f9d55;
+    box-shadow: 0 0 8px rgba(31, 157, 85, 0.6);
+  }
+  .led.off {
+    box-shadow: none;
+  }
+  .led.slow:not(.off) {
+    animation: led 1.2s steps(1, end) infinite;
+  }
+  .led.fast:not(.off) {
+    animation: led 0.4s steps(1, end) infinite;
+  }
+  @keyframes led {
+    50% { opacity: 0.15; }
   }
   .status.off {
     color: var(--muted);

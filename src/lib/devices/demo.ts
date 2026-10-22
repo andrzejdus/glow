@@ -44,7 +44,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     const k = s.heater ? (s.current < g ? 0.06 : 0.2) : 0.01;
     s.current += (g - s.current) * k + (s.heater && s.current < g ? 0.08 : 0);
     if (s.heater) s.minutes += 0.5 / 60;
-    emit({ currentTemp: Math.round(s.current * 10) / 10, operatingMinutes: s.minutes });
+    emit({ currentTemp: Math.round(s.current * 10) / 10, operatingMinutes: s.minutes, tempReached: s.heater && Math.abs(goal() - s.current) < 1 });
   };
 
   return {

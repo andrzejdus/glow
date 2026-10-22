@@ -140,6 +140,7 @@ describe('crafty driver', () => {
         autoShutoff: 120,
       },
     });
+    expect(state.tempReached).toBe(false);
     expect(driver.capabilities).toMatchObject({ heaterToggle: true, findMy: true, boost: true, superBoost: true });
     expect(t.maxInFlight).toBe(1);
   });
@@ -158,6 +159,7 @@ describe('crafty driver', () => {
       heaterOn: false,
       mode: 'superboost',
       autoShutoffRemainingSec: 12,
+      tempReached: true,
       settings: { vibration: false, chargeIndicator: true, permanentBluetooth: false },
     });
   });

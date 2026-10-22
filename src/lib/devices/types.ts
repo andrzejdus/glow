@@ -37,6 +37,11 @@ export interface DeviceState {
   superBoostOffset?: number;
   mode: HeatMode;
   heaterOn: boolean;
+  /**
+   * The device's own "target temperature reached" flag (what turns the CRAFTY+ LED green).
+   * Undefined when the device does not report one; the app then compares the temperatures.
+   */
+  tempReached?: boolean;
   /** VOLCANO air pump. */
   pumpOn?: boolean;
   /** 0–100 */

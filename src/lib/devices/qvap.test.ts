@@ -164,6 +164,19 @@ describe('qvap decoding', () => {
     await driver.stop();
   });
 
+  it("reports the device's setpoint-reached flag from settings byte 14 bit 1", async () => {
+    const on = [...STATUS];
+    on[14] |= 0x02;
+    const off = [...STATUS];
+    off[14] &= ~0x02;
+    const a = await connect('venty', deviceResponder(on));
+    expect(a.state.tempReached).toBe(true);
+    await a.driver.stop();
+    const b = await connect('venty', deviceResponder(off));
+    expect(b.state.tempReached).toBe(false);
+    await b.driver.stop();
+  });
+
   it('reports heater off and normal mode when byte 11 is 0', async () => {
     const off = [...STATUS];
     off[11] = 0;

@@ -256,7 +256,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private onStatus2 = (v: DataView) => {
     this.status2 = readU16(v);
     this._tempReached = (this.status2 & STATUS2_TEMP_REACHED) !== 0;
-    this.emit({ settings: this.currentSettings() });
+    this.emit({ tempReached: this._tempReached, settings: this.currentSettings() });
   };
 
   private currentSettings(): Record<string, boolean | number> {
@@ -300,6 +300,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     await this.subscribe(SVC_SYSTEM, CHR.status2, this.onStatus2);
     this.status2 = readU16(await this.read(SVC_SYSTEM, CHR.status2));
     this._tempReached = (this.status2 & STATUS2_TEMP_REACHED) !== 0;
+    this.emit({ tempReached: this._tempReached });
 
     await this.readOperatingTime();
 

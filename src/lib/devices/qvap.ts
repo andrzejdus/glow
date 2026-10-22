@@ -520,6 +520,7 @@ export class QvapDriver implements DeviceDriver {
       battery: status.battery,
       charging: status.charging,
       heaterOn: status.heaterMode > 0,
+      tempReached: (status.settings & SETTINGS_BIT.setpointReached) !== 0,
       mode,
       autoShutoffRemainingSec: status.autoShutoffRemainingSec,
       unit: status.settings & SETTINGS_BIT.fahrenheit ? 'F' : 'C',
