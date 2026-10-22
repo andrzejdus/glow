@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Battery from '../components/Battery.svelte';
   import Glyph from '../components/Glyph.svelte';
   import Icon from '../components/Icon.svelte';
   import Toggle from '../components/Toggle.svelte';
@@ -48,7 +49,14 @@
 
   <section class="card device rise d1">
     <div class="d-top">
-      <Glyph kind={d.kind} scale={0.9} />
+      {#if conn.caps?.battery && d.battery !== undefined}
+        <div class="cell">
+          <Battery level={d.battery} charging={d.charging} size="lg" />
+          <div class="cell-state" class:charging={d.charging}>{d.charging ? 'Charging' : 'On battery'}</div>
+        </div>
+      {:else}
+        <Glyph kind={d.kind} scale={0.9} />
+      {/if}
       <div>
         <div class="label">Hours of operation</div>
         <div class="life num">
@@ -148,6 +156,20 @@
     display: flex;
     align-items: center;
     gap: 16px;
+  }
+  .cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .cell-state {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .cell-state.charging {
+    color: var(--orange-ink);
   }
   .life {
     display: flex;

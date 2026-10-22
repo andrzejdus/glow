@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Battery from './Battery.svelte';
   import Icon from './Icon.svelte';
   import { conn } from '../lib/connection.svelte';
 
@@ -21,8 +22,7 @@
   </div>
   {#if d && conn.caps?.battery && d.battery !== undefined}
     <div class="pill num" aria-label="Battery {d.battery} percent{d.charging ? ', charging' : ''}">
-      {#if d.charging}<Icon name="bolt" size={14} color="var(--orange-ink)" />{/if}
-      <span class="battery"><span style:width="{d.battery}%"></span></span>{d.battery}%
+      <Battery level={d.battery} charging={d.charging} />{d.battery}%
     </div>
   {/if}
 </header>
@@ -65,18 +65,5 @@
   }
   .pill {
     cursor: default;
-  }
-  .battery {
-    width: 22px;
-    height: 11px;
-    border: 1.5px solid var(--navy);
-    border-radius: 3px;
-    padding: 1.5px;
-    display: inline-flex;
-  }
-  .battery span {
-    background: var(--orange);
-    border-radius: 1px;
-    transition: width 0.6s ease;
   }
 </style>
