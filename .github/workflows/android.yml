@@ -1,0 +1,88 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - run: npm ci
+
+      - run: npx svelte-check --tsconfig ./tsconfig.json
+
+      - run: npm test
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            name="${GITHUB_REF_NAME#v}"
+          else
+            name="$(node -p "require('./package.json').version")-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          # The run number only grows, so every new APK installs over the last one.
+          echo "code=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Web build and sync
+        run: npx vite build && npx cap sync android
+        env:
+          APP_VERSION: ${{ steps.version.outputs.name }}
+
+      - name: Keystore
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/glow-release.p12"
+        env:
+          KEYSTORE_BASE64: ${{ secrets.GLOW_KEYSTORE_BASE64 }}
+
+      - name: Build signed APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+        env:
+          GLOW_KEYSTORE: ${{ runner.temp }}/glow-release.p12
+          GLOW_KEYSTORE_PASSWORD: ${{ secrets.GLOW_KEYSTORE_PASSWORD }}
+          GLOW_VERSION_NAME: ${{ steps.version.outputs.name }}
+          GLOW_VERSION_CODE: ${{ steps.version.outputs.code }}
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk "glow-${{ steps.version.outputs.name }}.apk"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: glow-${{ steps.version.outputs.name }}
+          path: glow-${{ steps.version.outputs.name }}.apk
+
+      - name: GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          gh release create "$GITHUB_REF_NAME" "glow-${{ steps.version.outputs.name }}.apk" \
+            --title "Glow ${{ steps.version.outputs.name }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/glow-release.p12"
