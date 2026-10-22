@@ -6,8 +6,7 @@
   import Warmth from '../components/Warmth.svelte';
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, HeatMode } from '../lib/devices/types';
-  import { deltaToUnit, mmss, toUnit } from '../lib/format';
-  import { usage } from '../lib/usage.svelte';
+  import { deltaToUnit, toUnit } from '../lib/format';
 
   const d = $derived(conn.device as DeviceState);
   const caps = $derived(conn.caps);
@@ -24,20 +23,10 @@
   );
   // The device's own flag wins (it is what drives the CRAFTY+ LED); otherwise compare temperatures.
   const reached = $derived(d.heaterOn && (d.tempReached ?? (diff !== undefined && Math.abs(diff) < 1)));
-  const cooling = $derived(d.heaterOn && !reached && diff !== undefined && diff < -2);
-  const eta = $derived(reached || cooling ? null : usage.etaSec(d.currentTemp, goal));
-  const goalText = $derived(goal === undefined ? '' : ` ${toUnit(goal, unit)}°`);
-  const status = $derived.by(() => {
-    if (offline) return 'Waiting for the device…';
-    if (!d.heaterOn) return 'Heater off';
-    if (reached) return d.mode === 'normal' ? 'Temperature reached' : `${names[d.mode]} reached`;
-    if (cooling) return `Cooling to${goalText}`;
-    const to = d.mode === 'normal' ? `Heating to${goalText}` : `Heating to ${names[d.mode]}${goalText}`;
-    return eta ? `${to} · ready in ${mmss(eta)}` : to;
-  });
-  // CRAFTY only: a dot that mirrors the device LED (red heating, green reached; flashing in Booster, fast in Superbooster).
+  // Just the LED: red while heating, green when ready, grey when off.
+  const status = $derived(offline ? 'Waiting for the device…' : !d.heaterOn ? 'Heater off' : reached ? 'Ready' : 'Heating');
   const led = $derived(
-    d.kind !== 'crafty' || offline
+    offline
       ? null
       : {
           color: !d.heaterOn ? 'off' : reached ? 'green' : 'red',
