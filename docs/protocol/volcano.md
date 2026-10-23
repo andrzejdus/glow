@@ -48,7 +48,8 @@ All writes are write-with-response.
 | Register | Bit | Meaning |
 |---|---|---|
 | 1 | `0x0020` | heater on |
-| 1 | `0x0200` | auto-shutoff countdown active (the app shows the countdown only then) |
+| 1 | `0x0200` | auto-shutoff countdown active (the app shows the countdown only then). One client (SavageNL, live V01.03) reads it as "target reached once this cycle" |
+| 1 | `0x0400` | **unconfirmed**: "setpoint reached" per SavageNL/home-assistant-volcano-hybrid (live V01.03 + firmware decompile); no other client or the official app uses it, so Glow keeps the ±1 °C rule. Device diagnostics shows the register to check it |
 | 1 | `0x2000` | pump on |
 | 1 | `0x4018` (mask) | error bits → the app runs "Analysis" |
 | 2 | `0x0200` | display in °F |

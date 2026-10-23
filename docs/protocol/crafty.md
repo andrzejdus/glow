@@ -66,10 +66,12 @@ Project status register (`0093`):
 
 | Bit | Meaning |
 |---|---|
+| 0, 2 | Came on with the heater (with bit 4) on a CRAFTY+ V03.24 and did not follow the LED; J-Cat/crafty-control and lfuelling/sbcontrol call bits 0+2 "heating" |
 | 4 | Heater active |
 | 5 | Boost mode |
 | 6 | Superboost mode (wins over bit 5) |
-| 8 | **LED green** (ready). Not in the official app; found with Glow's diagnostics, see below. Glow's "Ready" on current firmware |
+| 8 | **LED green** (ready). Not in the official app; found with Glow's diagnostics, see below, and used the same way by gsasouza/sb-crafty-watch-os (`0x0415` heating, `0x0515` reached). Glow's "Ready" on current firmware |
+| 10 | Already on with the heater off (`0x0400`) on a CRAFTY+ V03.24; meaning unknown |
 | 3, 13 (`0x2008`) | Error flags (trigger the app's analysis) |
 | 15 | Factory reset recommended |
 
@@ -164,3 +166,17 @@ it once, on connect, into the auto-off slider. `0071` (notified) is the time lef
 setting shown in Glow dropped on its own while heating, so `0061` seems to count down while the
 heater runs. Glow re-reads `0061` only while the heater is off; Device diagnostics shows both
 values (not yet confirmed on hardware).
+
+## Other characteristics
+
+Not in the official app; three clients (J-Cat/crafty-control, duramson/vo0t, lfuelling/sbcontrol)
+name them alike. Glow shows them in Device diagnostics only, to be confirmed on a device:
+
+| Char | Reported meaning |
+|---|---|
+| `00a3` | charging status: 2 = charging, non-zero = plugged in |
+| `00c3` | mains voltage, mV |
+| `00e3` | battery current, mA (Glow reads it signed) |
+
+The same clients subscribe to battery status `0063`. Glow subscribes too and counts the pushes in
+Device diagnostics; the 3 s poll of `0063` stays until a device shows it notifies.

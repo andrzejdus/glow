@@ -41,10 +41,10 @@ Request `[01 00 …]`. Reply (≥ 15 bytes, ≥ 17 with settings2):
 | Byte | Field | Encoding |
 |---|---|---|
 | 1 | write mask (echo) | |
-| 2–3 | current temperature | uint16, °C ×10 |
+| 2–3 | (current temperature) | uint16, °C ×10 — **not a live reading**: the official app hides it for VENTY/VEAZY (`hideCurrTemperature(true)`), and live-tested clients see `0x8000` ("not available"). Glow ignores it |
 | 4–5 | target temperature (base) | uint16, °C ×10, 40–210 |
 | 6 | boost offset | uint8 °C, 1–99 |
-| 7 | superboost offset | uint8 °C, 1–99 |
+| 7 | superboost offset | uint8 °C, 1–99, **on top of the boost**: superboost = target + boost + this |
 | 8 | battery | % |
 | 9–10 | auto-off countdown | seconds (the app adds the two bytes; Glow reads uint16 LE) |
 | 11 | heater mode | 0 off, 1 normal, 2 boost, 3 superboost |
@@ -127,8 +127,13 @@ this family. Glow offers neither.
   target before writing. Glow treats bytes 4–5 as the base target in every mode and writes
   the base unchanged. It is not confirmed whether the device reports the base or the
   effective target in boost mode.
-- **Effective temperature.** Whether superboost adds `superboost` or
-  `boost + superboost` is unknown. Glow reports the raw offsets and the mode.
+- **Effective temperature (settled).** Superboost = target + boost + superboost byte, capped at
+  210 °C: szv99/storz-bickel-ble and orth4x0r/venty-android, both tested on a real VENTY, and the
+  official app sets both its boost and superboost flags in mode 3. Glow shows offsets from the
+  base and writes byte 7 as (superboost − boost).
+- **Leaving boost.** orth4x0r/venty-android reports (live, 2026-10-11) that mode 1 does not end
+  boost and the heater has to go 0 then 1; szv99 writes mode 1 alone. Glow writes 1 and cycles
+  0 → 1 only if the device still reports boost 1.5 s later.
 - **Accepting a reported target.** The vendor only accepts bytes 4–5 on the first reply
   or when bit 4 (changed on the device) is set. Glow always accepts them, except for 2.5 s
   after its own write unless they match the written value. storz-rs also always reads them.
