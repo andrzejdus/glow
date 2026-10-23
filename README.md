@@ -3,6 +3,16 @@
 An unofficial Android app for STORZ & BICKEL Bluetooth vaporizers: VENTY, VEAZY,
 VOLCANO HYBRID, CRAFTY and CRAFTY+. It is not made or endorsed by STORZ & BICKEL.
 
+<p>
+  <img src="docs/screenshots/connect.png" width="160" alt="Connect screen">
+  <img src="docs/screenshots/venty.png" width="160" alt="VENTY dashboard while heating">
+  <img src="docs/screenshots/crafty.png" width="160" alt="CRAFTY+ dashboard with the heat levels readout">
+  <img src="docs/screenshots/volcano-workflows.png" width="160" alt="VOLCANO workflows">
+  <img src="docs/screenshots/settings.png" width="160" alt="VENTY settings">
+</p>
+
+Screenshots from demo mode (`npm run dev`, `/?demo=venty`, `/?demo=crafty`, `/?demo=volcano`).
+
 - **Reconnects on its own.** The app remembers your device and reconnects when you
   open it, with no Connect button and no device picker. On the first start it asks
   once for the Nearby devices permission and connects to the only device in range.
