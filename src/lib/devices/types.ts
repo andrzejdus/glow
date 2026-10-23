@@ -51,6 +51,8 @@ export interface DeviceState {
   charging?: boolean;
   /** Battery voltage, mV, when the device reports it. */
   batteryVoltage?: number;
+  /** Battery current, mA, as the device reports it (which sign means charging is not known). */
+  batteryCurrent?: number;
   /** Lifetime hours of operation as the device reports it, in minutes. */
   operatingMinutes?: number;
   /** The automatic shutoff setting, seconds. */

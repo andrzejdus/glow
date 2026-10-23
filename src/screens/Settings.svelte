@@ -52,6 +52,8 @@
     if (def.unit === 'min') return value >= 60 ? `${Math.round(value / 6) / 10} h` : `${value} min`;
     return `${value}${def.unit ?? ''}`;
   }
+  // The size only: which sign means charging is not known yet.
+  const amps = (ma: number) => (Math.abs(ma) < 1000 ? `${Math.abs(ma)} mA` : `${(Math.abs(ma) / 1000).toFixed(2)} A`);
   const asNumber = (v: unknown, fallback: number) => (typeof v === 'number' ? v : fallback);
 </script>
 
@@ -71,8 +73,13 @@
             <!-- On the charger at 100 % the battery is full; the bolt stays because it is still plugged in. -->
             <div class="cell-state" class:charging={d.charging}>{d.charging ? (d.battery >= 100 ? 'Charged' : 'Charging') : 'On battery'}</div>
           {/if}
-          {#if d.batteryVoltage !== undefined}
-            <div class="cell-volt num">{(d.batteryVoltage / 1000).toFixed(2)} V</div>
+          {#if d.batteryVoltage !== undefined || d.batteryCurrent !== undefined}
+            <div class="cell-volt num">
+              {[
+                d.batteryVoltage === undefined ? '' : `${(d.batteryVoltage / 1000).toFixed(2)} V`,
+                d.batteryCurrent === undefined ? '' : amps(d.batteryCurrent),
+              ].filter(Boolean).join(' · ')}
+            </div>
           {/if}
         </div>
       {:else}

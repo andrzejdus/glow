@@ -360,7 +360,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
     await this.subscribe(SVC_CONTROL, CHR.battery, this.onBattery);
     this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
-    await this.readBatteryVoltage();
+    await this.readBatteryStats();
 
     if (!this.legacy) await this.subscribe(SVC_SYSTEM, CHR.status, this.onStatus);
     this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
@@ -370,7 +370,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
       // Try notifications too; the 3 s poll stays until diagnostics show the device sends them.
       await this.subscribe(SVC_SYSTEM, CHR.batteryStatus, this.onBatteryStatus).catch(() => undefined);
       await this.readCharger();
-      this.chargerTimer = setInterval(() => pageHidden() || this.readCharger(), CHARGER_POLL_MS);
+      // The current changes quickly, so it is read with the charger while the app is visible.
+      this.chargerTimer = setInterval(() => pageHidden() || this.readCharger().then(() => this.readBatteryStats()), CHARGER_POLL_MS);
       globalThis.document?.addEventListener('visibilitychange', this.onVisible);
     }
   }
@@ -379,11 +380,17 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     if (!pageHidden()) this.readCharger();
   };
 
-  /** 00b3 as J-Cat/crafty-control and duramson/vo0t read it; shown only when plausible for one Li-ion cell. */
-  private async readBatteryVoltage() {
+  /**
+   * 00b3 voltage and 00e3 current, as J-Cat/crafty-control and duramson/vo0t read them; each is
+   * reported only when plausible (one Li-ion cell, at most 10 A).
+   */
+  private async readBatteryStats() {
     const v = await this.read(SVC_SYSTEM, CHR.batteryVoltage).catch(() => null);
     const mv = v ? readU16(v) : 0;
     if (mv >= 2500 && mv <= 4500) this.emit({ batteryVoltage: mv });
+    const c = await this.read(SVC_SYSTEM, CHR.batteryCurrent).catch(() => null);
+    const ma = c ? readI16(c) : undefined;
+    if (ma !== undefined && Math.abs(ma) <= 10000) this.emit({ batteryCurrent: ma });
   }
 
   private async readCharger() {
@@ -531,7 +538,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     }
     this.emit({ settings: this.currentSettings() });
     this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
-    await this.readBatteryVoltage();
+    await this.readBatteryStats();
     // Legacy firmware does not notify the status register.
     if (this.legacy) this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
   }

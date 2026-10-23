@@ -328,9 +328,9 @@ describe('crafty driver', () => {
     await driver.stop();
   });
 
-  it('reports the battery voltage only when it is plausible for one cell', async () => {
-    const ok = await started(craftyPlus({ [U.batteryVoltage]: le16(3639) }));
-    expect(ok.state.batteryVoltage).toBe(3639);
+  it('reports the battery voltage and current only when they are plausible', async () => {
+    const ok = await started(craftyPlus({ [U.batteryVoltage]: le16(3639), [U.batteryCurrent]: le16(0xfea2) }));
+    expect(ok.state).toMatchObject({ batteryVoltage: 3639, batteryCurrent: -350 });
     await ok.driver.stop();
     const odd = await started(craftyPlus({ [U.batteryVoltage]: le16(65535) }));
     expect(odd.state.batteryVoltage).toBeUndefined();

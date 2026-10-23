@@ -67,7 +67,7 @@ built from the protocol and covered by unit tests.
 | Booster / Superbooster | ✓ | ✓ | ✅³ | ✓³ | ✓³ | — |
 | Booster / Superbooster offsets | ✓ | ✓ | ✓⁴ | ✓⁴ | ✓⁴ | — |
 | Battery level | ✓ | ✓ | ✅ | ✓ | ✓ | — |
-| Battery voltage | — | — | ✓⁷ | ✓⁷ | ✓⁷ | — |
+| Battery voltage and current | — | — | ✓⁷ | ✓⁷ | ✓⁷ | — |
 | Charging / charged | ✓ | ✓ | ✅ | ✓⁵ | — | — |
 | Hours of operation, usage per month | ✓ | ✓ | ✅ | ✓ | ✓ | ✓ |
 | Auto-off countdown | ✓ | ✓ | ✓ | ✓ | — | ✓ |
