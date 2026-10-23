@@ -6,7 +6,7 @@
   import Warmth from '../components/Warmth.svelte';
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, HeatMode } from '../lib/devices/types';
-  import { deltaToUnit, toUnit } from '../lib/format';
+  import { toUnit } from '../lib/format';
 
   const d = $derived(conn.device as DeviceState);
   const caps = $derived(conn.caps);
@@ -37,13 +37,14 @@
 
   const modes = $derived.by(() => {
     if (!caps?.boost) return [];
+    // Real temperatures, not offsets: CRAFTY+ counts its Superbooster from the Booster, VENTY from the base.
+    const at = (offset: number | undefined) =>
+      d.targetTemp === undefined || offset === undefined ? '–' : `${toUnit(Math.min(d.maxTemp, d.targetTemp + offset), unit)}°`;
     const list: { id: HeatMode; label: string; sub: string }[] = [
-      { id: 'normal', label: names.normal, sub: d.targetTemp === undefined ? 'base' : `${toUnit(d.targetTemp, unit)}°` },
-      { id: 'boost', label: names.boost, sub: `+${deltaToUnit(d.boostOffset ?? 0, unit)}°` },
+      { id: 'normal', label: names.normal, sub: at(0) },
+      { id: 'boost', label: names.boost, sub: at(d.boostOffset) },
     ];
-    if (caps.superBoost) {
-      list.push({ id: 'superboost', label: names.superboost, sub: `+${deltaToUnit(d.superBoostOffset ?? 0, unit)}°` });
-    }
+    if (caps.superBoost) list.push({ id: 'superboost', label: names.superboost, sub: at(d.superBoostOffset) });
     return list;
   });
   const modeIndex = $derived(Math.max(0, modes.findIndex((m) => m.id === d.mode)));
