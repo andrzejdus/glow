@@ -515,8 +515,9 @@ export class QvapDriver implements DeviceDriver {
       settings.permanentBluetooth = (status.settings2 & SETTINGS2_BIT.permanentBluetooth) !== 0;
     }
 
+    // No currentTemp: a VENTY/VEAZY does not measure it for the app. The official app hides it,
+    // and live-tested clients see 0x8000 ("not available") in bytes 2-3.
     const patch: Partial<DeviceState> = {
-      currentTemp: status.currentTemp,
       battery: status.battery,
       charging: status.charging,
       heaterOn: status.heaterMode > 0,

@@ -23,9 +23,13 @@
   const C = 2 * Math.PI * R;
   const ARC = C * 0.75;
 
+  // VENTY/VEAZY report no live temperature: the dial then shows the target, and the arc fills
+  // up to it once the device says it is ready.
+  const live = $derived(current !== undefined);
   const shown = new Tween(0, { duration: 700, easing: cubicOut });
   $effect(() => {
     if (current !== undefined) shown.target = current;
+    else shown.target = heating && ready && target !== undefined ? target : min;
   });
 
   const frac = (c: number) => Math.max(0, Math.min(1, (c - min) / (max - min)));
@@ -72,11 +76,19 @@
       stroke-width="2.5" />
   </svg>
   <div class="center">
-    <div class="label">Now</div>
-    <div class="now num">
-      {current === undefined ? '–' : toUnit(shown.current, unit)}<span class="unit">°{unit}</span>
-    </div>
-    <div class="target num">Target <strong>{target === undefined ? '–' : toUnit(target, unit)}°{unit}</strong></div>
+    {#if live}
+      <div class="label">Now</div>
+      <div class="now num">
+        {toUnit(shown.current, unit)}<span class="unit">°{unit}</span>
+      </div>
+      <div class="target num">Target <strong>{target === undefined ? '–' : toUnit(target, unit)}°{unit}</strong></div>
+    {:else}
+      <div class="label">Target</div>
+      <div class="now num">
+        {target === undefined ? '–' : toUnit(target, unit)}<span class="unit">°{unit}</span>
+      </div>
+      <div class="target">No live reading on this device</div>
+    {/if}
   </div>
   <button type="button" class="round step left press" aria-label="Lower target" disabled={offline}
     onpointerdown={() => hold(-1)} onpointerup={release} onpointerleave={release} onpointercancel={release}

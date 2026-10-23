@@ -29,7 +29,9 @@
           blink: d.mode === 'superboost' ? 'fast' : d.mode === 'boost' ? 'slow' : 'steady',
         },
   );
-  const warmth = $derived(d.heaterOn && d.currentTemp !== undefined ? Math.max(0, Math.min(1, (d.currentTemp - 40) / 170)) : 0);
+  // Without a live reading (VENTY/VEAZY) the screen warms up once the device is ready.
+  const glowTemp = $derived(d.currentTemp ?? (reached ? goal : undefined));
+  const warmth = $derived(d.heaterOn && glowTemp !== undefined ? Math.max(0, Math.min(1, (glowTemp - 40) / 170)) : 0);
 
   const modes = $derived.by(() => {
     if (!caps?.boost) return [];

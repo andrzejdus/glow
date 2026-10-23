@@ -47,6 +47,8 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     battery: 78,
   };
   const offsets = { boost: 10, superboost: kind === 'crafty' ? 25 : 15 };
+  // Like the real ones, a demo VENTY/VEAZY reports no live temperature, only "ready".
+  const live = kind !== 'venty' && kind !== 'veazy';
   const goal = () => Math.min(isVolcano ? 230 : 210, s.target + (s.mode === 'boost' ? offsets.boost : s.mode === 'superboost' ? offsets.superboost : 0));
 
   const tick = () => {
@@ -54,7 +56,11 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     const k = s.heater ? (s.current < g ? 0.06 : 0.2) : 0.01;
     s.current += (g - s.current) * k + (s.heater && s.current < g ? 0.08 : 0);
     if (s.heater) s.minutes += 0.5 / 60;
-    emit({ currentTemp: Math.round(s.current * 10) / 10, operatingMinutes: s.minutes, tempReached: s.heater && Math.abs(goal() - s.current) < 1 });
+    emit({
+      ...(live ? { currentTemp: Math.round(s.current * 10) / 10 } : {}),
+      operatingMinutes: s.minutes,
+      tempReached: s.heater && Math.abs(goal() - s.current) < 1,
+    });
   };
 
   const driver: DeviceDriver = {
@@ -76,7 +82,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
         serial: isVolcano ? 'VH 4C19E0' : kind === 'crafty' ? 'CP1A7E52' : 'VY 08A3F2',
         firmware: isVolcano ? '2.2.7' : kind === 'crafty' ? 'V03.24' : '2.4.1',
         firmwareBle: isVolcano ? '1.4.0' : kind === 'crafty' ? 'V2.0.3' : '1.9.0',
-        currentTemp: s.current,
+        currentTemp: live ? s.current : undefined,
         targetTemp: s.target,
         minTemp: 40,
         maxTemp: isVolcano ? 230 : 210,

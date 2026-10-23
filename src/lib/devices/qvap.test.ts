@@ -128,7 +128,6 @@ describe('qvap decoding', () => {
       serial: 'VY654321',
       firmware: 'V01.09',
       firmwareBle: 'V00.05',
-      currentTemp: 182.5,
       targetTemp: 185,
       boostOffset: 10,
       superBoostOffset: 15,
@@ -245,6 +244,15 @@ describe('qvap writes', () => {
       pad([0x01, 0x04, 0, 0, 0, 0, 12]),
       pad([0x01, 0x08, 0, 0, 0, 0, 0, 20]),
     ]);
+    await driver.stop();
+  });
+
+  it('never reports the status bytes 2-3 as a temperature (0x8000 on a real VENTY)', async () => {
+    const status = [...STATUS];
+    status[2] = 0x00;
+    status[3] = 0x80;
+    const { driver, state } = await connect('venty', deviceResponder(status));
+    expect(state.currentTemp).toBeUndefined();
     await driver.stop();
   });
 
