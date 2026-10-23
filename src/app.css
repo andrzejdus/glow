@@ -6,6 +6,9 @@
   --orange-soft: #ffd9bf;
   --orange-tint: #ffe8d9;
   --navy: #00287d;
+  /* LED colours, tuned to the palette: a red leaning to the brand orange, a green leaning to the navy. */
+  --led-heat: #ee3f1c;
+  --led-ready: #0f9d76;
   --navy-deep: #001a4d;
   --ink: #373737;
   --bg: #f6f6f6;

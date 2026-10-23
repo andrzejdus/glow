@@ -161,12 +161,12 @@
     background: #c9c9c9;
   }
   .led.red {
-    background: #e0301e;
-    box-shadow: 0 0 8px rgba(224, 48, 30, 0.6);
+    background: var(--led-heat);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--led-heat) 60%, transparent);
   }
   .led.green {
-    background: #1f9d55;
-    box-shadow: 0 0 8px rgba(31, 157, 85, 0.6);
+    background: var(--led-ready);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--led-ready) 60%, transparent);
   }
   .led.off {
     box-shadow: none;

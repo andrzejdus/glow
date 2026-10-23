@@ -53,11 +53,9 @@
 
 <div class="dial" class:offline style:transform="scale({scale})">
   <div class="glow" class:pulse={heating} style:opacity={heating ? 0.35 + 0.65 * warmth : 0}></div>
+  {#if ready}<div class="ready-ring"></div>{/if}
   <div class="face"></div>
-  <!-- Rings like the Connect screen's, in the LED colour: fast while heating, slow when ready. -->
-  <div class="rings {led}" aria-hidden="true">
-    <span></span><span></span><span></span>
-  </div>
+  <div class="tint {led}" aria-hidden="true"></div>
   <svg width="256" height="256" viewBox="0 0 256 256" role="img"
     aria-label="Now {current === undefined ? 'unknown' : toUnit(current, unit)}°{unit}, target {target === undefined ? 'unknown' : toUnit(target, unit)}°{unit}">
     <defs>
@@ -117,6 +115,17 @@
     0%, 100% { transform: scale(0.94); }
     50% { transform: scale(1.06); }
   }
+  .ready-ring {
+    position: absolute;
+    inset: 12px;
+    border-radius: 50%;
+    border: 1.5px solid var(--led-ready);
+    animation: ready 1.9s ease-out infinite;
+  }
+  @keyframes ready {
+    0% { transform: scale(0.85); opacity: 0.6; }
+    100% { transform: scale(1.3); opacity: 0; }
+  }
   .face {
     position: absolute;
     inset: 28px;
@@ -124,44 +133,27 @@
     background: #fff;
     box-shadow: 0 2px 4px rgba(0, 26, 77, 0.04), 0 24px 48px rgba(0, 26, 77, 0.1), inset 0 0 0 1px rgba(0, 40, 125, 0.05);
   }
-  .rings {
+  /* Glows in from the rim of the face, so the numbers stay on white. */
+  .tint {
     position: absolute;
     inset: 28px;
     border-radius: 50%;
-    overflow: hidden;
     pointer-events: none;
-    --led-tint: rgba(224, 48, 30, 0);
-    /* --led-tint does not inherit (it is registered to transition), so the rings take it via color. */
-    color: var(--led-tint);
+    --led-tint: transparent;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0) 46%, var(--led-tint) 100%);
     transition: --led-tint 1.2s ease;
   }
-  .rings span {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 2px solid currentColor;
-    opacity: 0;
+  .tint.heating {
+    --led-tint: color-mix(in srgb, var(--led-heat) 50%, transparent);
+    animation: breathe 1.4s ease-in-out infinite;
   }
-  .rings.heating {
-    --led-tint: #e0301e;
-    --ring: 1.6s;
+  .tint.ready {
+    --led-tint: color-mix(in srgb, var(--led-ready) 45%, transparent);
+    animation: breathe 3.4s ease-in-out infinite;
   }
-  .rings.ready {
-    --led-tint: #1f9d55;
-    --ring: 3.6s;
-  }
-  .rings:not(.off) span {
-    animation: ring var(--ring) cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
-  }
-  .rings:not(.off) span:nth-child(2) {
-    animation-delay: calc(var(--ring) / -3);
-  }
-  .rings:not(.off) span:nth-child(3) {
-    animation-delay: calc(var(--ring) / -1.5);
-  }
-  @keyframes ring {
-    0% { transform: scale(0.35); opacity: 0.7; }
-    100% { transform: scale(1); opacity: 0; }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
   }
   svg {
     position: absolute;
