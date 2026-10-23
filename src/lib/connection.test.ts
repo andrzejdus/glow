@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ble } from './ble/adapter';
 import { conn } from './connection.svelte';
 import type { DeviceDriver, DeviceState } from './devices/types';
 
@@ -55,5 +56,31 @@ describe('demo mode', () => {
     await conn.disconnect();
     expect(conn.target).toBeNull();
     expect(conn.last).toEqual(real);
+  });
+});
+
+describe('searching for the remembered device', () => {
+  it('does not show it as found while the direct connect is still waiting for it', async () => {
+    const phases: string[] = [];
+    const adapter = ble as unknown as Record<string, unknown>;
+    const saved = { init: adapter.init, connect: adapter.connect, scan: adapter.scan, stopScan: adapter.stopScan };
+    adapter.init = async () => {};
+    adapter.connect = async () => {
+      phases.push(conn.phase);
+      await wait(50);
+      throw new Error('out of range');
+    };
+    adapter.scan = async () => {
+      phases.push(conn.phase);
+    };
+    adapter.stopScan = async () => {};
+    try {
+      conn.last = { id: 'AA:BB', name: 'STORZ&BICKEL', kind: 'crafty' };
+      await conn.search();
+      expect(phases).toEqual(['searching', 'searching']);
+      expect(conn.phase).toBe('idle');
+    } finally {
+      Object.assign(adapter, saved);
+    }
   });
 });

@@ -105,7 +105,7 @@ class Connection {
     this.meta.bluetoothMs = performance.now() - t0;
 
     if (!choose && this.last) {
-      if (await this.connectTo(this.last, gen, true, 6000)) return;
+      if (await this.connectTo(this.last, gen, true, 6000, true)) return;
       if (gen !== this.generation) return;
       this.phase = 'searching';
     }
@@ -323,10 +323,14 @@ class Connection {
 
   // Connection internals.
 
-  private async connectTo(d: FoundDevice, gen: number, quiet = false, timeoutMs = 10000): Promise<boolean> {
+  /**
+   * `probe`: a try at the remembered device, which no scan has seen yet. The screen stays on
+   * "searching" until the device answers, so a device out of range is never shown as found.
+   */
+  private async connectTo(d: FoundDevice, gen: number, quiet = false, timeoutMs = 10000, probe = false): Promise<boolean> {
     this.target = d;
     this.meta.rssi = d.rssi;
-    if (this.phase !== 'reconnecting') this.phase = 'connecting';
+    if (this.phase !== 'reconnecting' && !probe) this.phase = 'connecting';
     let transport: BleTransport;
     try {
       transport = await ble.connect(d, () => this.onDisconnect(d, gen), timeoutMs);
@@ -338,6 +342,7 @@ class Connection {
       ble.disconnect(d.id);
       return false;
     }
+    if (this.phase !== 'reconnecting') this.phase = 'connecting';
     try {
       await usage.bind(d.id);
       await this.attach(d, createDriver(d.kind, transport), gen);
