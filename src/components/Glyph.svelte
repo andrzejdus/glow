@@ -52,20 +52,19 @@
       <path d="M16.5 46 Q16.5 44 18.5 44 H45.5 Q47.5 44 47.5 46 L45.5 99 Q45.3 103 41.5 103 H22.5 Q18.7 103 18.5 99 Z" fill="#00287D" />
       <path d="M16.5 46 Q16.5 44 18.5 44 H21 L22.5 103 Q18.7 103 18.5 99 Z" fill="#FFFFFF" opacity="0.08" />
     {:else if k === 'crafty'}
-      <!-- CRAFTY: a ribbed block with a flat mouthpiece on top, a groove down the side, and a base band with the light bar -->
+      <!-- CRAFTY: a ribbed block, flat on top with the mouthpiece flush in it, a groove down the side, and a base band with the light bar -->
       <defs>
         <clipPath id="crafty-{uid}">
           <path d="M9 30 Q9 25 13 25 H51 Q55 25 55 30 V97 Q55 103 49 103 H15 Q9 103 9 97 Z" />
         </clipPath>
       </defs>
-      <rect x="25" y="19" width="16" height="7" rx="1.5" fill="#001A4D" />
-      <rect x="28" y="20" width="10" height="1.6" rx="0.8" fill="#00287D" />
       <g clip-path="url(#crafty-{uid})">
         <rect x="9" y="25" width="46" height="78" fill="#00287D" />
         {#each Array.from({ length: 19 }, (_, i) => 31 + i * 3) as y (y)}
           <rect x="9" {y} width="46" height="1.3" fill="#001A4D" opacity="0.6" />
         {/each}
         <rect x="9" y="25" width="46" height="4" fill="#001A4D" opacity="0.35" />
+        <rect x="25" y="25.8" width="16" height="2" rx="1" fill="#001A4D" />
         <rect x="40.5" y="30" width="1.4" height="58" fill="#FFFFFF" opacity="0.28" />
         <rect x="9" y="25" width="4" height="66" fill="#FFFFFF" opacity="0.08" />
         <rect x="9" y="89" width="46" height="14" fill="#001A4D" />
