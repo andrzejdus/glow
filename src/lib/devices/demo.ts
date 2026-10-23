@@ -36,7 +36,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     minutes: isVolcano ? 811 * 60 + 42 : 142 * 60 + 18,
     battery: 78,
   };
-  const offsets = { boost: 10, superboost: 15 };
+  const offsets = { boost: 10, superboost: kind === 'crafty' ? 25 : 15 };
   const goal = () => Math.min(isVolcano ? 230 : 210, s.target + (s.mode === 'boost' ? offsets.boost : s.mode === 'superboost' ? offsets.superboost : 0));
 
   const tick = () => {
@@ -71,7 +71,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
         minTemp: 40,
         maxTemp: isVolcano ? 230 : 210,
         boostOffset: isVolcano ? undefined : offsets.boost,
-        superBoostOffset: isVolcano ? undefined : kind === 'crafty' ? offsets.boost + 15 : offsets.superboost,
+        superBoostOffset: isVolcano ? undefined : offsets.superboost,
         mode: s.mode,
         heaterOn: s.heater,
         pumpOn: isVolcano ? false : undefined,
@@ -101,6 +101,12 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     async setMode(mode) {
       s.mode = mode;
       emit({ mode });
+    },
+    async setBoostOffsets(boost, superBoost) {
+      offsets.boost = boost;
+      if (kind === 'crafty') offsets.superboost = boost + 15;
+      else if (superBoost !== undefined) offsets.superboost = superBoost;
+      emit({ boostOffset: offsets.boost, superBoostOffset: offsets.superboost });
     },
     async setPump(on) {
       s.pump = on;

@@ -5,7 +5,7 @@
   import Toggle from '../components/Toggle.svelte';
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
-  import { duration, splitHours, usageTime } from '../lib/format';
+  import { deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
   import { usage } from '../lib/usage.svelte';
 
   const d = $derived(conn.device as DeviceState);
@@ -23,8 +23,18 @@
   const groups = $derived(
     (Object.keys(titles) as SettingDef['group'][])
       .map((g) => ({ id: g, title: titles[g], items: conn.settingDefs.filter((s) => s.group === g) }))
-      .filter((g) => g.items.length || g.id === 'connection'),
+      .filter((g) => g.items.length || g.id === 'connection' || (g.id === 'boost' && offsets)),
   );
+
+  // Boost offsets, in °C above the base temperature. CRAFTY has one (the Superbooster follows at +15).
+  const offsets = $derived(conn.offsetsAdjustable && d.boostOffset !== undefined);
+  const crafty = $derived(d.kind === 'crafty');
+  const room = $derived(Math.max(1, Math.min(99, d.maxTemp - (d.targetTemp ?? d.minTemp))));
+  const at = (offset: number | undefined) =>
+    d.targetTemp === undefined || offset === undefined ? '–' : `${toUnit(Math.min(d.maxTemp, d.targetTemp + offset), unit)}°`;
+  const unit = $derived(d.unit ?? 'C');
+  const plus = (v: number | undefined) => (v === undefined ? '–' : `+${deltaToUnit(v, unit)}°`);
+  const fill = (v: number, max: number) => `${((v - 1) / Math.max(1, max - 1)) * 100}%`;
 
   let finding = $state(false);
   function find() {
@@ -94,6 +104,37 @@
             </div>
             <Toggle id="autoConnect" label="Auto-connect on open" on={conn.autoConnect} onchange={(v) => conn.setAutoConnect(v)} />
           </div>
+        {/if}
+        {#if g.id === 'boost' && offsets}
+          <div class="row range">
+            <div class="range-top">
+              <label for="boostOffset" class="name">{crafty ? 'Booster offset' : 'Boost offset'}</label>
+              <span class="value num">{plus(d.boostOffset)}</span>
+            </div>
+            <div class="desc">
+              {#if crafty}
+                Booster {at(d.boostOffset)} · Superbooster {at(d.superBoostOffset)}. The Superbooster is always
+                15 °C above the Booster. Factory setting: +15.
+              {:else}
+                Boost heats to {at(d.boostOffset)}.
+              {/if}
+            </div>
+            <input id="boostOffset" type="range" min="1" max={room} step="1" value={d.boostOffset}
+              style:--fill={fill(d.boostOffset ?? 1, room)}
+              oninput={(e) => conn.setBoostOffset(Number(e.currentTarget.value))} />
+          </div>
+          {#if !crafty && conn.caps?.superBoost && d.superBoostOffset !== undefined}
+            <div class="row range">
+              <div class="range-top">
+                <label for="superBoostOffset" class="name">Superboost offset</label>
+                <span class="value num">{plus(d.superBoostOffset)}</span>
+              </div>
+              <div class="desc">Superboost heats to {at(d.superBoostOffset)}.</div>
+              <input id="superBoostOffset" type="range" min="1" max={room} step="1" value={d.superBoostOffset}
+                style:--fill={fill(d.superBoostOffset, room)}
+                oninput={(e) => conn.setSuperBoostOffset(Number(e.currentTarget.value))} />
+            </div>
+          {/if}
         {/if}
         {#each g.items as s (s.key)}
           {#if s.type === 'toggle'}

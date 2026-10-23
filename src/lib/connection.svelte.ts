@@ -38,6 +38,8 @@ class Connection {
   settingDefs = $state.raw<SettingDef[]>([]);
   /** False on CRAFTY: boost is switched with the button on the device only. */
   modeSwitchable = $state(true);
+  /** The boost offsets can be written (VENTY/VEAZY: both, CRAFTY: one common Booster offset). */
+  offsetsAdjustable = $state(false);
   target = $state<FoundDevice | null>(null);
   last = $state<FoundDevice | null>(null);
   autoConnect = $state(true);
@@ -242,6 +244,23 @@ class Connection {
     this.later(`setting:${key}`, typeof value === 'number' ? 300 : 0, () => this.driver?.setSetting(key, value));
   }
 
+  setBoostOffset(boost: number) {
+    const d = this.device;
+    if (!d) return;
+    d.boostOffset = boost;
+    // CRAFTY+: the Superbooster always sits 15 °C above the Booster.
+    if (d.kind === 'crafty' && d.superBoostOffset !== undefined) d.superBoostOffset = boost + 15;
+    this.later('boost', 300, () => this.driver?.setBoostOffsets?.(boost));
+  }
+
+  setSuperBoostOffset(superBoost: number) {
+    const d = this.device;
+    if (!d || d.boostOffset === undefined) return;
+    d.superBoostOffset = superBoost;
+    const boost = d.boostOffset;
+    this.later('superboost', 300, () => this.driver?.setBoostOffsets?.(boost, superBoost));
+  }
+
   findMy() {
     tap();
     this.run(() => this.driver?.findMyDevice?.());
@@ -314,6 +333,7 @@ class Connection {
     this.caps = { ...driver.capabilities };
     this.settingDefs = driver.settingDefs;
     this.modeSwitchable = (driver as { modeSwitchable?: boolean }).modeSwitchable !== false;
+    this.offsetsAdjustable = typeof driver.setBoostOffsets === 'function';
     this.meta.values = Object.keys(this.device?.settings ?? {}).length;
     this.last = { id: d.id, name: d.name, kind: d.kind };
     if (!this.demo) this.persist();
