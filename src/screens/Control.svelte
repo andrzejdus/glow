@@ -44,16 +44,9 @@
     return list;
   });
   const modeIndex = $derived(Math.max(0, modes.findIndex((m) => m.id === d.mode)));
-  const modeLocked = $derived(!conn.modeSwitchable || !d.heaterOn);
+  const modeLocked = $derived(!d.heaterOn);
 
   function pickMode(mode: HeatMode) {
-    if (!conn.modeSwitchable) {
-      return conn.say(
-        d.kind === 'crafty'
-          ? 'Switch on the device: double-click the power button for Booster, triple-click for Superbooster.'
-          : 'Booster is switched with the button on the device.',
-      );
-    }
     if (!d.heaterOn) return conn.say(`${names.boost} works while the heater is on.`);
     conn.setMode(mode);
   }
@@ -81,7 +74,18 @@
     {status}
   </div>
 
-  {#if modes.length}
+  {#if modes.length && !conn.modeSwitchable}
+    <!-- CRAFTY: the app cannot switch levels (the device button does), so this is a readout, not a control. -->
+    <div class="levels rise d2" role="group" aria-label="Heat levels, switched with the button on the device">
+      {#each modes as m, i (m.id)}
+        {#if i > 0}<span class="sep" aria-hidden="true">›</span>{/if}
+        <div class="level" class:on={m.id === d.mode} aria-current={m.id === d.mode ? 'true' : undefined}>
+          <span class="l-label">{m.label}</span>
+          <span class="l-temp num">{m.sub}</span>
+        </div>
+      {/each}
+    </div>
+  {:else if modes.length}
     <div class="modes rise d2" class:locked={modeLocked} style:--n={modes.length}>
       <span class="thumb" style:transform="translateX({modeIndex * 100}%)"></span>
       {#each modes as m (m.id)}
@@ -216,6 +220,42 @@
   }
   .modes button.on {
     color: var(--navy-deep);
+  }
+  .levels {
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  .level {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    color: #9a9a9a;
+    transition: color 0.3s ease;
+  }
+  .level.on {
+    color: var(--navy);
+  }
+  .l-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .level.on .l-label {
+    color: var(--orange-ink);
+  }
+  .l-temp {
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .sep {
+    font-size: 18px;
+    color: #c4c4c4;
+    margin-top: 10px;
   }
   .m-label {
     font-size: 13px;

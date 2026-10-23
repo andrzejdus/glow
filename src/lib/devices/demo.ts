@@ -47,7 +47,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     emit({ currentTemp: Math.round(s.current * 10) / 10, operatingMinutes: s.minutes, tempReached: s.heater && Math.abs(goal() - s.current) < 1 });
   };
 
-  return {
+  const driver: DeviceDriver = {
     kind,
     capabilities: {
       pump: isVolcano,
@@ -117,4 +117,6 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     },
     async findMyDevice() {},
   };
+  // Like the real CRAFTY+, the demo switches levels only with the (imaginary) device button.
+  return kind === 'crafty' ? Object.assign(driver, { modeSwitchable: false as const }) : driver;
 }
