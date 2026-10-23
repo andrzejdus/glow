@@ -58,22 +58,33 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.GLOW_KEYSTORE_BASE64 }}
 
-      - name: Build signed APK
+      - name: Build signed APK and App Bundle
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        # Both use the release signing config: the APK for GitHub releases
+        # (Obtainium), the bundle for Google Play.
+        run: ./gradlew assembleRelease bundleRelease --no-daemon
         env:
           GLOW_KEYSTORE: ${{ runner.temp }}/glow-release.p12
           GLOW_KEYSTORE_PASSWORD: ${{ secrets.GLOW_KEYSTORE_PASSWORD }}
           GLOW_VERSION_NAME: ${{ steps.version.outputs.name }}
           GLOW_VERSION_CODE: ${{ steps.version.outputs.code }}
 
-      - name: Name the APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk "glow-${{ steps.version.outputs.name }}.apk"
+      - name: Name the APK and bundle
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk "glow-${{ steps.version.outputs.name }}.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "glow-${{ steps.version.outputs.name }}.aab"
 
       - uses: actions/upload-artifact@v7
         with:
           name: glow-${{ steps.version.outputs.name }}
           path: glow-${{ steps.version.outputs.name }}.apk
+
+      # A separate artifact, and never a release asset: Obtainium expects the
+      # single glow-X.Y.Z.apk on each GitHub release.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: glow-${{ steps.version.outputs.name }}-aab
+          path: glow-${{ steps.version.outputs.name }}.aab
 
       - name: GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
