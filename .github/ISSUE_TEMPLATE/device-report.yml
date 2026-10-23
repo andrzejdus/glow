@@ -84,7 +84,7 @@ body:
     attributes:
       label: Diagnostics log
       description: |
-        CRAFTY only for now: Settings → Device diagnostics. Use the device, tap Mark now when it does something visible (the LED turns green, the charger goes in), then Copy log and paste it here. Leave empty on other models.
+        CRAFTY and VOLCANO HYBRID for now: Settings → Device diagnostics. Use the device, tap Mark now when it does something visible (the LED turns green, the charger goes in), then Copy log and paste it here. Leave empty on other models.
       render: text
 
   - type: input

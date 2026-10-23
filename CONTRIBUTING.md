@@ -18,10 +18,10 @@ You need no development setup for this.
    [support table](README.md#supported-devices) for your model.
 3. Note the firmware: **Settings**, the card at the top lists Serial, Firmware and BLE (Bootloader
    on VENTY and VEAZY). The Glow version is at the bottom of Settings.
-4. On a CRAFTY: **Settings → Device diagnostics**. Leave it open, use the device (heat up, plug
+4. On a CRAFTY or VOLCANO HYBRID: **Settings → Device diagnostics**. Leave it open, use the device (heat up, plug
    in the charger, press its button), tap **Mark now** the moment the device does something
-   visible, such as the LED turning green, then **Copy log**. Other models have no diagnostics
-   screen yet; a driver gets one by implementing `diagnostics()` (see `crafty.ts`).
+   visible, such as the LED turning green, then **Copy log**. VENTY and VEAZY have no
+   diagnostics screen yet; a driver gets one by implementing `diagnostics()` (see `crafty.ts`).
 5. Open a [device report](../../issues/new?template=device-report.yml) and paste what you found.
 
 If Glow does not find your device at all, say what name it shows in Android's Bluetooth settings
@@ -97,7 +97,7 @@ key, so uninstall Glow debug before installing one from another run.
   (`setPump`, `findMyDevice`, `refresh`, `diagnostics`). The UI shows only what the driver offers.
 - A new device family is a new module listed in `registry.ts`, with its `DeviceKind` in
   `types.ts` and its advertised-name prefixes and service UUIDs in the module.
-- A `diagnostics()` for VENTY, VEAZY or VOLCANO would help testers of those models a lot: it only
+- A `diagnostics()` for VENTY and VEAZY would help testers of those models a lot: it only
   lists raw registers, and the Diagnostics screen does the rest.
 - Put the bytes you captured into a test: what the device sent, and what Glow should write back.
   The existing tests show how to feed a fake transport and assert on its reads and writes.
