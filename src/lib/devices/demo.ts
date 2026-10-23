@@ -93,6 +93,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
         heaterOn: s.heater,
         pumpOn: isVolcano ? false : undefined,
         battery: isVolcano ? undefined : s.battery,
+        batteryVoltage: kind === 'crafty' ? 3639 : undefined,
         charging: false,
         operatingMinutes: s.minutes,
         autoShutoffSec: isVolcano ? 1800 : 120,

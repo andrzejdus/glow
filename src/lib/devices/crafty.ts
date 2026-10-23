@@ -38,6 +38,7 @@ const CHR = {
   systemStatus: uuid(0x83),
   // Not in the official app; named alike by J-Cat/crafty-control, duramson/vo0t and lfuelling/sbcontrol.
   chargingStatus: uuid(0xa3),
+  batteryVoltage: uuid(0xb3),
   mainsVoltage: uuid(0xc3),
   batteryCurrent: uuid(0xe3),
   securityCode: uuid(0x1b3),
@@ -359,6 +360,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
     await this.subscribe(SVC_CONTROL, CHR.battery, this.onBattery);
     this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
+    await this.readBatteryVoltage();
 
     if (!this.legacy) await this.subscribe(SVC_SYSTEM, CHR.status, this.onStatus);
     this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
@@ -376,6 +378,13 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private onVisible = () => {
     if (!pageHidden()) this.readCharger();
   };
+
+  /** 00b3 as J-Cat/crafty-control and duramson/vo0t read it; shown only when plausible for one Li-ion cell. */
+  private async readBatteryVoltage() {
+    const v = await this.read(SVC_SYSTEM, CHR.batteryVoltage).catch(() => null);
+    const mv = v ? readU16(v) : 0;
+    if (mv >= 2500 && mv <= 4500) this.emit({ batteryVoltage: mv });
+  }
 
   private async readCharger() {
     const v = await this.read(SVC_SYSTEM, CHR.batteryStatus).catch(() => null);
@@ -495,6 +504,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
       ['Auto-off left', SVC_CONTROL, CHR.autoShutoffRemaining, 's', true],
       // Other clients read these as the charger state (2 = charging), mains voltage and battery current.
       ['Charging status', SVC_SYSTEM, CHR.chargingStatus],
+      ['Battery voltage', SVC_SYSTEM, CHR.batteryVoltage, 'mV', true],
       ['Mains voltage', SVC_SYSTEM, CHR.mainsVoltage, 'mV', true],
       ['Battery current', SVC_SYSTEM, CHR.batteryCurrent, 'mA', true, true],
     ];
@@ -521,6 +531,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     }
     this.emit({ settings: this.currentSettings() });
     this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
+    await this.readBatteryVoltage();
     // Legacy firmware does not notify the status register.
     if (this.legacy) this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
   }

@@ -175,6 +175,7 @@ name them alike. Glow shows them in Device diagnostics only, to be confirmed on 
 | Char | Reported meaning |
 |---|---|
 | `00a3` | charging status: 2 = charging, non-zero = plugged in |
+| `00b3` | battery voltage, mV (vo0t's screenshot of a CRAFTY+: 3639 mV). Glow shows it in Settings when it is 2.5–4.5 V |
 | `00c3` | mains voltage, mV |
 | `00e3` | battery current, mA (Glow reads it signed) |
 

@@ -71,6 +71,9 @@
             <!-- On the charger at 100 % the battery is full; the bolt stays because it is still plugged in. -->
             <div class="cell-state" class:charging={d.charging}>{d.charging ? (d.battery >= 100 ? 'Charged' : 'Charging') : 'On battery'}</div>
           {/if}
+          {#if d.batteryVoltage !== undefined}
+            <div class="cell-volt num">{(d.batteryVoltage / 1000).toFixed(2)} V</div>
+          {/if}
         </div>
       {:else}
         <Glyph kind={d.kind} scale={0.9} />
@@ -220,6 +223,12 @@
     font-size: 11px;
     font-weight: 700;
     color: var(--muted);
+  }
+  .cell-volt {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-top: -2px;
   }
   .cell-state.charging {
     color: var(--orange-ink);

@@ -328,6 +328,15 @@ describe('crafty driver', () => {
     await driver.stop();
   });
 
+  it('reports the battery voltage only when it is plausible for one cell', async () => {
+    const ok = await started(craftyPlus({ [U.batteryVoltage]: le16(3639) }));
+    expect(ok.state.batteryVoltage).toBe(3639);
+    await ok.driver.stop();
+    const odd = await started(craftyPlus({ [U.batteryVoltage]: le16(65535) }));
+    expect(odd.state.batteryVoltage).toBeUndefined();
+    await odd.driver.stop();
+  });
+
   it('leaves charging unknown when the battery status cannot be read', async () => {
     const { driver, state } = await started(craftyPlus());
     expect(state.charging).toBeUndefined();
@@ -360,6 +369,7 @@ describe('crafty driver', () => {
       ['0x0061', 120],
       ['0x0071', 95],
       ['0x00a3', null],
+      ['0x00b3', null],
       ['0x00c3', null],
       ['0x00e3', null],
       ['notify 0x0063', 0],
