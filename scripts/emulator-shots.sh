@@ -6,7 +6,8 @@ set -uo pipefail
 
 out=${1:-shots}
 mkdir -p "$out"
-pkg=pl.gogoad.glow
+# The debug build is its own app (applicationIdSuffix ".debug"); its activity keeps the release class name.
+pkg=pl.gogoad.glow.debug
 
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 for p in BLUETOOTH_SCAN BLUETOOTH_CONNECT ACCESS_FINE_LOCATION; do
@@ -49,7 +50,7 @@ wait_for() {
   return 1
 }
 
-adb shell am start -W -n "$pkg/.MainActivity"
+adb shell am start -W -n "$pkg/pl.gogoad.glow.MainActivity"
 wait_for 'text="(Ready to connect|Looking for|Choose your)' 60 || echo "connect screen did not appear"
 sleep 2
 shot 1-connect
