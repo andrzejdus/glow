@@ -66,7 +66,7 @@
       {#if conn.caps?.battery && d.battery !== undefined}
         <div class="cell">
           <Battery level={d.battery} charging={d.charging} size="lg" />
-          <!-- CRAFTY does not report the charger, so it gets no state rather than a wrong one. -->
+          <!-- Older CRAFTY firmware does not report the charger, so it gets no state rather than a wrong one. -->
           {#if d.charging !== undefined}
             <div class="cell-state" class:charging={d.charging}>{d.charging ? 'Charging' : 'On battery'}</div>
           {/if}

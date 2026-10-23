@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { BleTransport } from '../ble/transport';
 import { CRAFTY_UUIDS as U, crafty, parseFirmware } from './crafty';
 import type { DeviceState } from './types';
@@ -256,6 +256,32 @@ describe('crafty driver', () => {
     expect(driver.capabilities.heaterToggle).toBe(false);
     expect(driver.settingDefs.map((d) => d.key)).not.toContain('autoShutoff');
     await expect(driver.setHeater(true)).rejects.toThrow();
+  });
+
+  it('reports the charger from battery status bit 7, polled', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const t = craftyPlus({ [U.batteryStatus]: le16(0x0050) }); // unplugged, as read on a CRAFTY+
+      const { driver, state } = await started(t);
+      expect(state.charging).toBe(false);
+      t.values.set(U.batteryStatus, le16(0x80d4)); // charger plugged in
+      vi.advanceTimersByTime(3000);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(state.charging).toBe(true);
+      await driver.stop();
+      t.values.set(U.batteryStatus, le16(0x0050));
+      vi.advanceTimersByTime(3000);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(t.ops.filter((o) => o.chr === U.batteryStatus)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves charging unknown when the battery status cannot be read', async () => {
+    const { driver, state } = await started(craftyPlus());
+    expect(state.charging).toBeUndefined();
+    await driver.stop();
   });
 
   it('reads the raw registers for diagnostics, a failed read as null', async () => {

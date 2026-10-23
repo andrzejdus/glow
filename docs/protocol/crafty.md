@@ -5,7 +5,7 @@ Driver: `src/lib/devices/crafty.ts`. Derived from the official STORZ & BICKEL we
 [storz-rs](https://github.com/flakesonnix/storz-rs) (`src/protocol/crafty.rs`) and
 [xythobuz/Volcano-Remote](https://github.com/xythobuz/Volcano-Remote) (`src/crafty.c`): both agree
 on the service/characteristic UUIDs, little-endian uint16 values, °C × 10 temperatures and the
-two-byte zero write to heater on/off. Neither documents charging state.
+two-byte zero write to heater on/off. Neither documents charging state (see Charger below).
 
 ## Discovery
 
@@ -123,3 +123,20 @@ The official app keeps one GATT operation in flight at a time; Glow puts every o
 - The legacy-firmware check is the official one verbatim; it misclassifies e.g. `V01.60` as non-legacy.
 - Whether the original CRAFTY (firmware 2.x) ever sets the superboost bit is unknown.
 - Left out on purpose: firmware update, factory reset, analysis.
+
+## Charger
+
+Not documented anywhere; found with Glow's Device diagnostics on a CRAFTY+ (firmware V03.24,
+BLE V2.0.3, battery 99–100 %), pulling the charger out and plugging it back in. These bits all
+changed together, within the same 1 s reading:
+
+| Register | Unplugged | Plugged in | Bits |
+|---|---|---|---|
+| Battery status `0063` | `0x0050` | `0x80d4` | 2, 7, 15 |
+| Battery status 2 `0073` | `0x0000` | `0x2000` | 13 |
+| System status `0083` | `0x2404` | `0x2405` | 0 |
+
+Glow reads battery status bit 7 as "charger connected", polled every 3 s (the register is not
+notified), current firmware only. Battery % moved 99 → 100 a few seconds after plugging in.
+Still open: whether one of these bits means "charging" rather than "charger connected", i.e. drops
+when the battery is full; this test ran at 99–100 %, so it cannot tell.

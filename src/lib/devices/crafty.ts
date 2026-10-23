@@ -53,6 +53,14 @@ const STATUS2_TEMP_REACHED = 1 << 2;
 const STATUS2_FIND_DEVICE = 1 << 3;
 const STATUS2_PERMANENT_BLE = 1 << 12;
 
+/**
+ * Battery status (0x63), undocumented. On a CRAFTY+ (V03.24) bits 2, 7 and 15 came on with the charger
+ * plugged in and went off when it was pulled, together with bit 13 of battery status 2 and bit 0 of
+ * the system status. Glow reads bit 7. The register is not notified, so it is polled.
+ */
+const BATTERY_STATUS_CHARGER = 1 << 7;
+const CHARGER_POLL_MS = 3000;
+
 /** Written to the security-code characteristic right before the auto shutoff value. */
 const SECURITY_CODE_AUTO_SHUTOFF = 815;
 
@@ -201,6 +209,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private ledBrightness = 100;
   private mode: HeatMode = 'normal';
   private _tempReached = false;
+  private chargerTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly ble: BleTransport) {}
 
@@ -331,6 +340,17 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
     if (!this.legacy) await this.subscribe(SVC_SYSTEM, CHR.status, this.onStatus);
     this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
+
+    // The official app reads the battery status only on current firmware, so legacy units get no charging state.
+    if (!this.legacy) {
+      await this.readCharger();
+      this.chargerTimer = setInterval(() => this.readCharger(), CHARGER_POLL_MS);
+    }
+  }
+
+  private async readCharger() {
+    const v = await this.read(SVC_SYSTEM, CHR.batteryStatus).catch(() => null);
+    if (v) this.emit({ charging: (readU16(v) & BATTERY_STATUS_CHARGER) !== 0 });
   }
 
   private async readOperatingTime() {
@@ -340,6 +360,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   }
 
   async stop(): Promise<void> {
+    clearInterval(this.chargerTimer);
     const subs = this.subscribed;
     this.subscribed = [];
     for (const [service, chr] of subs) {
