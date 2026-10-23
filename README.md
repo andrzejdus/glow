@@ -61,12 +61,13 @@ built from the protocol and covered by unit tests.
 | | VENTY | VEAZY | CRAFTY+ | CRAFTY ≥ V02.51 | CRAFTY < V02.51 | VOLCANO HYBRID |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | Auto-connect | ✓ | ✓ | ✅ | ✓ | ✓ | ✓ |
-| Temperature and target | ✓ | ✓ | ✅ | ✓ | ✓ | ✓ |
+| Temperature and target | ✓⁶ | ✓⁶ | ✅ | ✓ | ✓ | ✓ |
 | Heater on / off from the app | ✓ | ✓ | ✅ | ✓ | —¹ | ✓ |
 | Status mirrors the LED | ✓ | ✓ | ✅ | ✓ | ✓ | ✓² |
 | Booster / Superbooster | ✓ | ✓ | ✅³ | ✓³ | ✓³ | — |
 | Booster / Superbooster offsets | ✓ | ✓ | ✓⁴ | ✓⁴ | ✓⁴ | — |
 | Battery level | ✓ | ✓ | ✅ | ✓ | ✓ | — |
+| Battery voltage | — | — | ✓⁷ | ✓⁷ | ✓⁷ | — |
 | Charging / charged | ✓ | ✓ | ✅ | ✓⁵ | — | — |
 | Hours of operation, usage per month | ✓ | ✓ | ✅ | ✓ | ✓ | ✓ |
 | Auto-off countdown | ✓ | ✓ | ✓ | ✓ | — | ✓ |
@@ -74,18 +75,20 @@ built from the protocol and covered by unit tests.
 | Workflows (Flow 1–3, Balloon) | — | — | — | — | — | ✓ |
 | Find My | ✓ | ✓ | ✓ | — | — | — |
 | Device settings | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Device diagnostics | — | — | ✅ | ✓ | ✓ | — |
+| Device diagnostics | — | — | ✅ | ✓ | ✓ | ✓ |
 
 <sub>
 ¹ Only with the device's own button. ·
 ² No ready flag; ready means within 1 °C of the target. ·
 ³ A readout: CRAFTY switches levels only with its own button; older CRAFTY has no Superbooster. ·
 ⁴ The Booster offset only; the CRAFTY+ Superbooster is always 15 °C above it. ·
-⁵ Uses the bit found on a CRAFTY+, not yet confirmed on this firmware.
+⁵ Uses the bit found on a CRAFTY+, not yet confirmed on this firmware. ·
+⁶ The target only: VENTY and VEAZY give the app no live temperature, so the dial shows the target and Ready. ·
+⁷ Read the way other open-source clients do, shown only when plausible; not yet confirmed on a device.
 </sub>
 
-**Not supported:** MIGHTY and MIGHTY+. The official web app that Glow's drivers are based on has
-no protocol for them.
+**Not supported:** MIGHTY and MIGHTY+. They have no Bluetooth: STORZ & BICKEL lists the app
+connection only for VOLCANO HYBRID, VENTY, CRAFTY+ and VEAZY.
 
 ## Help test your device
 
