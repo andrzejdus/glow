@@ -77,8 +77,11 @@ class Usage {
   /** Lifetime seconds, counting on between device readings while the heater runs. */
   lifetimeSec(now = this.now): number | null {
     if (!this.reading) return null;
-    const extra = this.heating ? Math.max(0, now - this.reading.t) / 1000 : 0;
-    const value = this.reading.m * 60 + Math.min(extra, 120);
+    // The device counts whole minutes of heating. Between its ticks, add the seconds heated since
+    // the last tick, counted from when the heater came on if that was later, and never a full minute.
+    const since = Math.max(this.reading.t, this.sessionStart ?? now);
+    const extra = this.heating ? Math.max(0, now - since) / 1000 : 0;
+    const value = this.reading.m * 60 + Math.min(extra, 59);
     this.shown = Math.max(this.shown, value);
     return this.shown;
   }
@@ -124,8 +127,12 @@ class Usage {
 
   private record(m: number, t: number) {
     const snaps = this.snaps.filter((s) => s.t > t - KEEP);
+    // Keep the first and the latest reading of each hour: the first one is where a month's
+    // count starts when Glow was first connected in the middle of it.
+    const hour = (x: Snap | undefined) => (x ? Math.floor(x.t / HOUR) : -1);
     const last = snaps[snaps.length - 1];
-    if (last && Math.floor(last.t / HOUR) === Math.floor(t / HOUR)) snaps[snaps.length - 1] = { t, m };
+    const before = snaps[snaps.length - 2];
+    if (hour(last) === Math.floor(t / HOUR) && hour(before) === hour(last)) snaps[snaps.length - 1] = { t, m };
     else snaps.push({ t, m });
     this.snaps = snaps;
     clearTimeout(this.saveTimer);
