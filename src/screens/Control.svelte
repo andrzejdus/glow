@@ -15,12 +15,8 @@
   const offset = $derived(d.mode === 'boost' ? d.boostOffset ?? 0 : d.mode === 'superboost' ? d.superBoostOffset ?? 0 : 0);
   const goal = $derived(d.targetTemp === undefined ? undefined : Math.min(d.maxTemp, d.targetTemp + offset));
   const diff = $derived(goal !== undefined && d.currentTemp !== undefined ? goal - d.currentTemp : undefined);
-  // Mode names as each manual has them: CRAFTY+ says Booster / Superbooster.
-  const names = $derived(
-    d.kind === 'crafty'
-      ? { normal: 'Base', boost: 'Booster', superboost: 'Superbooster' }
-      : { normal: 'Normal', boost: 'Boost', superboost: 'Superboost' },
-  );
+  // The names STORZ & BICKEL's manuals and support pages use for every device.
+  const names = { normal: 'Base', boost: 'Booster', superboost: 'Superbooster' };
   // The device's own flag wins (it is what drives the CRAFTY+ LED); otherwise compare temperatures.
   const reached = $derived(d.heaterOn && (d.tempReached ?? (diff !== undefined && Math.abs(diff) < 1)));
   // Just the LED: red while heating, green when ready, grey when off.
@@ -55,7 +51,7 @@
       return conn.say(
         d.kind === 'crafty'
           ? 'Switch on the device: double-click the power button for Booster, triple-click for Superbooster.'
-          : 'Boost is switched with the button on the device.',
+          : 'Booster is switched with the button on the device.',
       );
     }
     if (!d.heaterOn) return conn.say(`${names.boost} works while the heater is on.`);

@@ -35,8 +35,8 @@
     d.targetTemp === undefined || offset === undefined ? '–' : `${toUnit(Math.min(d.maxTemp, d.targetTemp + offset), unit)}°`;
   const unit = $derived(d.unit ?? 'C');
   const plus = (v: number | undefined) => (v === undefined ? '–' : `+${deltaToUnit(v, unit)}°`);
-  // Factory offsets (S&B support): CRAFTY+ Booster +15; VENTY and VEAZY Boost +15, Superboost +30 from base.
-  const factory = $derived(crafty ? { boost: 15 } : { boost: 15, superBoost: 30 });
+  // Factory offsets from base (S&B support): Booster +15, Superbooster +30 on CRAFTY+, VENTY and VEAZY.
+  const factory = { boost: 15, superBoost: 30 };
 
   let finding = $state(false);
   function find() {
@@ -110,32 +110,29 @@
         {#if g.id === 'boost' && offsets}
           <div class="row range">
             <div class="range-top">
-              <label for="boostOffset" class="name">{crafty ? 'Booster offset' : 'Boost offset'}</label>
+              <label for="boostOffset" class="name">Booster offset</label>
               <span class="value num">{plus(d.boostOffset)}</span>
             </div>
             <div class="temps num">
-              <span class="temp"><span>{crafty ? 'Booster' : 'Boost'}</span><strong>{at(d.boostOffset)}</strong></span>
-              {#if crafty}
-                <span class="temp"><span>Superbooster</span><strong>{at(d.superBoostOffset)}</strong></span>
-              {/if}
+              <span class="temp"><span>Booster</span><strong>{at(d.boostOffset)}</strong></span>
             </div>
-            {#if crafty}
-              <div class="desc">The Superbooster is always 15 °C above the Booster.</div>
-            {/if}
             <Slider id="boostOffset" min={1} max={room} step={1} value={d.boostOffset ?? 1} defaultValue={factory.boost}
               onchange={(v) => conn.setBoostOffset(v)} />
           </div>
-          {#if !crafty && conn.caps?.superBoost && d.superBoostOffset !== undefined}
-            <div class="row range">
+          {#if conn.caps?.superBoost && d.superBoostOffset !== undefined}
+            <div class="row range" class:fixed={crafty}>
               <div class="range-top">
-                <label for="superBoostOffset" class="name">Superboost offset</label>
+                <label for="superBoostOffset" class="name">Superbooster offset</label>
                 <span class="value num">{plus(d.superBoostOffset)}</span>
               </div>
               <div class="temps num">
-                <span class="temp"><span>Superboost</span><strong>{at(d.superBoostOffset)}</strong></span>
+                <span class="temp"><span>Superbooster</span><strong>{at(d.superBoostOffset)}</strong></span>
               </div>
-              <Slider id="superBoostOffset" min={1} max={room} step={1} value={d.superBoostOffset} defaultValue={factory.superBoost}
-                onchange={(v) => conn.setSuperBoostOffset(v)} />
+              {#if crafty}
+                <div class="desc">Fixed on CRAFTY+: always 15 °C above the Booster, so it follows the Booster offset.</div>
+              {/if}
+              <Slider id="superBoostOffset" min={1} max={room} step={1} value={Math.min(room, d.superBoostOffset)}
+                defaultValue={factory.superBoost} disabled={crafty} onchange={(v) => conn.setSuperBoostOffset(v)} />
             </div>
           {/if}
         {/if}
@@ -348,6 +345,13 @@
     line-height: 1.35;
     color: var(--muted);
     margin-top: 3px;
+  }
+  .fixed .name,
+  .fixed .value {
+    color: var(--muted);
+  }
+  .fixed .temp {
+    filter: grayscale(1);
   }
   .temps {
     display: flex;

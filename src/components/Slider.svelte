@@ -9,9 +9,11 @@
     value: number;
     /** The factory value: drawn as a line on the track, and the thumb is pulled onto it. */
     defaultValue?: number;
+    /** Shown but not adjustable, in black and white. */
+    disabled?: boolean;
     onchange: (value: number) => void;
   }
-  let { id, min, max, step, value, defaultValue, onchange }: Props = $props();
+  let { id, min, max, step, value, defaultValue, disabled = false, onchange }: Props = $props();
 
   /** How far either side of the factory value the thumb is pulled onto it, in steps. */
   const PULL = 0.75;
@@ -33,10 +35,10 @@
   }
 </script>
 
-<div class="slider" class:at-default={hasDefault && value === defaultValue}
+<div class="slider" class:disabled class:at-default={hasDefault && value === defaultValue}
   style:--p={frac(value)} style:--d={hasDefault ? frac(defaultValue as number) : -1}>
   {#if hasDefault}<span class="tick" aria-hidden="true"></span>{/if}
-  <input {id} type="range" {min} {max} step={step / 10} {value} oninput={input}
+  <input {id} type="range" {min} {max} step={step / 10} {value} {disabled} oninput={input}
     aria-valuetext={hasDefault && value === defaultValue ? `${value}, factory setting` : String(value)} />
 </div>
 
@@ -102,5 +104,15 @@
   }
   input:active::-webkit-slider-thumb {
     transform: scale(1.1);
+  }
+  .slider.disabled {
+    filter: grayscale(1);
+    opacity: 0.6;
+  }
+  .slider.disabled input::-webkit-slider-thumb {
+    box-shadow: 0 0 0 1.5px #9a9a9a;
+  }
+  .slider.disabled input {
+    transition: none;
   }
 </style>
