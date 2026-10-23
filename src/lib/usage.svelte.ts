@@ -3,7 +3,7 @@ import { load, save } from './prefs';
 
 // Hours of operation. The device only reports its lifetime total, so Glow keeps
 // a snapshot of it every time it is connected (one per hour at most) and works
-// out the weekly usage from those snapshots.
+// out the monthly usage from those snapshots.
 
 interface Snap {
   /** epoch ms */
@@ -12,15 +12,14 @@ interface Snap {
   m: number;
 }
 
-export interface WeekBar {
+export interface UsageBar {
   label: string;
   hours: number | null;
   current: boolean;
 }
 
 const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
-const KEEP = 400 * DAY;
+const KEEP = 400 * 24 * HOUR;
 
 class Usage {
   now = $state(Date.now());
@@ -97,18 +96,19 @@ class Usage {
     return Math.ceil(left / this.rate);
   }
 
-  weeks(count = 8, now = this.now): WeekBar[] {
+  /** Usage per calendar month, oldest first, the current month last. */
+  months(count = 8, now = this.now): UsageBar[] {
     const live = this.lifetimeSec(now);
-    const start = startOfIsoWeek(now);
-    const bars: WeekBar[] = [];
+    const today = new Date(now);
+    const bars: UsageBar[] = [];
     for (let i = count - 1; i >= 0; i--) {
-      const from = start - i * 7 * DAY;
-      const to = from + 7 * DAY;
+      const from = new Date(today.getFullYear(), today.getMonth() - i, 1).getTime();
+      const to = new Date(today.getFullYear(), today.getMonth() - i + 1, 1).getTime();
       const current = i === 0;
       const end = current && live !== null ? live / 60 : this.at(to);
       const begin = this.at(from) ?? this.snaps.find((s) => s.t >= from && s.t < to)?.m;
       const hours = end === undefined || begin === undefined ? null : Math.max(0, end - begin) / 60;
-      bars.push({ label: current ? 'Now' : `W${isoWeek(from)}`, hours, current });
+      bars.push({ label: new Date(from).toLocaleString('en', { month: 'short' }), hours, current });
     }
     return bars;
   }
@@ -134,33 +134,17 @@ class Usage {
   }
 }
 
-export function startOfIsoWeek(t: number): number {
-  const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
-  const day = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - day);
-  return d.getTime();
-}
-
-export function isoWeek(t: number): number {
-  const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-  const firstThursday = new Date(d.getFullYear(), 0, 4);
-  return 1 + Math.round(((d.getTime() - firstThursday.getTime()) / DAY - 3 + ((firstThursday.getDay() + 6) % 7)) / 7);
-}
-
-/** Made-up history for demo mode only. */
+/** Made-up history for demo mode only: hours per month, the current month last. */
 export function demoHistory(minutesNow: number): Snap[] {
-  const weekly = [1.2, 2.8, 1.9, 3.4, 2.2, 2.9, 1.6];
-  const start = startOfIsoWeek(Date.now());
+  const monthly = [6.1, 8.4, 7.2, 10.5, 9.1, 11.3, 8.8];
+  const today = new Date();
   const snaps: Snap[] = [];
-  let m = minutesNow - 2.4 * 60 - weekly.reduce((a, b) => a + b, 0) * 60;
-  for (let i = 0; i < weekly.length; i++) {
-    snaps.push({ t: start - (weekly.length - i) * 7 * DAY - 60_000, m });
-    m += weekly[i] * 60;
+  let m = minutesNow - 4.2 * 60 - monthly.reduce((a, b) => a + b, 0) * 60;
+  for (let i = 0; i < monthly.length; i++) {
+    snaps.push({ t: new Date(today.getFullYear(), today.getMonth() - monthly.length + i, 1).getTime() - 60_000, m });
+    m += monthly[i] * 60;
   }
-  snaps.push({ t: start - 60_000, m });
+  snaps.push({ t: new Date(today.getFullYear(), today.getMonth(), 1).getTime() - 60_000, m });
   return snaps;
 }
 

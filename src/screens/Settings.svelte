@@ -11,8 +11,8 @@
   const d = $derived(conn.device as DeviceState);
   const life = $derived(usage.lifetimeSec(usage.now));
   const parts = $derived(life === null ? null : splitHours(life));
-  const weeks = $derived(usage.weeks(8, usage.now));
-  const thisWeek = $derived(weeks[weeks.length - 1]?.hours);
+  const months = $derived(usage.months(8, usage.now));
+  const thisMonth = $derived(months[months.length - 1]?.hours);
 
   const titles: Record<SettingDef['group'], string> = {
     connection: 'Connection',
@@ -63,7 +63,7 @@
           {#if parts}<span class="h">{parts.h}</span><span class="u">h</span><span class="m">{parts.m}</span><span class="u">m</span>
           {:else}<span class="h">–</span>{/if}
         </div>
-        {#if thisWeek !== null && thisWeek !== undefined}<div class="week num">+{usageTime(thisWeek)} this week</div>{/if}
+        {#if thisMonth !== null && thisMonth !== undefined}<div class="week num">+{usageTime(thisMonth)} this month</div>{/if}
       </div>
     </div>
     <div class="facts">

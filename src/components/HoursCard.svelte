@@ -6,10 +6,10 @@
   const d = $derived(conn.device);
   const life = $derived(usage.lifetimeSec(usage.now));
   const parts = $derived(life === null ? null : splitHours(life));
-  const weeks = $derived(usage.weeks(8, usage.now));
-  const max = $derived(Math.max(3.5, ...weeks.map((w) => w.hours ?? 0)));
-  const thisWeek = $derived(weeks[weeks.length - 1]?.hours);
-  const known = $derived(weeks.filter((w) => w.hours !== null && !w.current));
+  const months = $derived(usage.months(8, usage.now));
+  const max = $derived(Math.max(3.5, ...months.map((w) => w.hours ?? 0)));
+  const thisMonth = $derived(months[months.length - 1]?.hours);
+  const known = $derived(months.filter((w) => w.hours !== null && !w.current));
   const avg = $derived(known.length ? known.reduce((a, w) => a + (w.hours ?? 0), 0) / known.length : null);
   const autoOff = $derived(
     d?.autoShutoffRemainingSec !== undefined
@@ -36,12 +36,12 @@
     </div>
     <div class="side">
       <div class="live" class:on={usage.heating}><span></span>{usage.heating ? 'COUNTING' : 'PAUSED'}</div>
-      <div class="week-label">this week</div>
-      <div class="week num">{thisWeek === null || thisWeek === undefined ? '–' : `+${usageTime(thisWeek)}`}</div>
+      <div class="week-label">this month</div>
+      <div class="week num">{thisMonth === null || thisMonth === undefined ? '–' : `+${usageTime(thisMonth)}`}</div>
     </div>
   </div>
-  <div class="bars" role="img" aria-label="Hours used per week, last 8 weeks">
-    {#each weeks as w, i (w.label)}
+  <div class="bars" role="img" aria-label="Hours used per month, last 8 months">
+    {#each months as w, i (w.label)}
       <div class="col">
         <div class="bar" class:current={w.current} class:empty={w.hours === null}
           style:height="{w.hours === null ? 4 : Math.max(6, Math.round((w.hours / max) * 44))}px"
@@ -52,7 +52,7 @@
   </div>
   <div class="foot num">
     <div><span>Session</span><strong>{mmss(usage.sessionSec(usage.now))}</strong></div>
-    <div><span>Avg per week</span><strong>{avg === null ? '–' : usageTime(avg)}</strong></div>
+    <div><span>Avg per month</span><strong>{avg === null ? '–' : usageTime(avg)}</strong></div>
     <div><span>Auto-off</span><strong>{autoOff}</strong></div>
   </div>
 </section>
