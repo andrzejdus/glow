@@ -16,6 +16,16 @@ const portableSettings: SettingDef[] = [
   { key: 'autoShutoff', group: 'device', label: 'Automatic shutoff', type: 'range', min: 30, max: 300, step: 10, unit: 's', defaultValue: 120 },
 ];
 
+// The CRAFTY+ list, as its driver shows it.
+const craftySettings: SettingDef[] = [
+  { key: 'permanentBluetooth', group: 'connection', label: 'Permanent Bluetooth', type: 'toggle',
+    description: 'Keeps the device ready to connect at any time. Uses a little battery, even while it is off.' },
+  { key: 'chargeIndicator', group: 'battery', label: 'Charge indicator lamp', type: 'toggle' },
+  { key: 'vibration', group: 'device', label: 'Vibration', type: 'toggle' },
+  { key: 'ledBrightness', group: 'device', label: 'LED brightness', type: 'range', min: 0, max: 100, step: 10, unit: '%' },
+  { key: 'autoShutoff', group: 'device', label: 'Automatic shutoff', type: 'range', min: 30, max: 300, step: 30, unit: 's', defaultValue: 120 },
+];
+
 const volcanoSettings: SettingDef[] = [
   { key: 'vibration', group: 'device', label: 'Vibration', type: 'toggle' },
   { key: 'displayOnCooling', group: 'device', label: 'Display on cooling', type: 'toggle' },
@@ -57,15 +67,15 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
       findMy: !isVolcano,
       heaterToggle: true,
     },
-    settingDefs: isVolcano ? volcanoSettings : portableSettings,
+    settingDefs: isVolcano ? volcanoSettings : kind === 'crafty' ? craftySettings : portableSettings,
 
     async start(onChange) {
       emit = onChange;
       onChange({
         model: isVolcano ? 'VOLCANO HYBRID' : kind === 'crafty' ? 'CRAFTY+' : 'VENTY',
-        serial: isVolcano ? 'VH 4C19E0' : 'VY 08A3F2',
-        firmware: isVolcano ? '2.2.7' : '2.4.1',
-        firmwareBle: isVolcano ? '1.4.0' : '1.9.0',
+        serial: isVolcano ? 'VH 4C19E0' : kind === 'crafty' ? 'CP1A7E52' : 'VY 08A3F2',
+        firmware: isVolcano ? '2.2.7' : kind === 'crafty' ? 'V03.24' : '2.4.1',
+        firmwareBle: isVolcano ? '1.4.0' : kind === 'crafty' ? 'V2.0.3' : '1.9.0',
         currentTemp: s.current,
         targetTemp: s.target,
         minTemp: 40,
@@ -82,8 +92,10 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
         unit: 'C',
         settings: isVolcano
           ? { vibration: true, displayOnCooling: false, brightness: 70, autoShutoff: 1800 }
-          : { permanentBluetooth: true, chargeOptimization: false, chargeLimit: true, permanentBoost: false,
-              vibration: true, brightness: 70, autoShutoff: 120 },
+          : kind === 'crafty'
+            ? { permanentBluetooth: true, chargeIndicator: true, vibration: true, ledBrightness: 70, autoShutoff: 120 }
+            : { permanentBluetooth: true, chargeOptimization: false, chargeLimit: true, permanentBoost: false,
+                vibration: true, brightness: 70, autoShutoff: 120 },
       });
       timer = setInterval(tick, 500);
     },
