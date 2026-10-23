@@ -111,10 +111,10 @@
       </button>
     </div>
   {:else if caps?.heaterToggle}
-    <button type="button" class="heater press rise d4" class:on={d.heaterOn} aria-pressed={d.heaterOn}
-      style:--glow={0.25 + 0.3 * warmth} onclick={() => conn.setHeater(!d.heaterOn)}>
-      <Icon name="flame" size={22} class={d.heaterOn ? 'flicker' : ''} />
-      {d.heaterOn ? 'Heater on' : 'Start heating'}
+    <!-- The VOLCANO Heat tile, full width. -->
+    <button type="button" class="tile press heat rise d4" class:on={d.heaterOn} aria-pressed={d.heaterOn}
+      onclick={() => conn.setHeater(!d.heaterOn)}>
+      <Icon name="flame" size={24} class={d.heaterOn ? 'flicker' : ''} /> {d.heaterOn ? 'Heat on' : 'Heat'}
     </button>
   {/if}
 </div>
@@ -265,26 +265,6 @@
     font-size: 11px;
     font-weight: 600;
     opacity: 0.8;
-  }
-  .heater {
-    height: 56px;
-    border-radius: 999px;
-    border: 0;
-    cursor: pointer;
-    font-size: 17px;
-    font-weight: 800;
-    background: var(--navy);
-    color: #fff;
-    box-shadow: 0 8px 20px rgba(0, 40, 125, 0.18);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-  }
-  .heater.on {
-    background: var(--orange);
-    color: var(--navy-deep);
-    box-shadow: 0 14px 34px rgba(255, 102, 0, var(--glow));
   }
   .duo {
     display: grid;
