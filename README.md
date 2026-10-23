@@ -20,7 +20,7 @@ VOLCANO HYBRID, CRAFTY and CRAFTY+. It is not made or endorsed by STORZ & BICKEL
   the Booster/Superbooster offsets. Sliders mark the factory value where STORZ & BICKEL
   documents one. Firmware update, factory reset and analysis are left out on purpose.
 - **Demo mode** (Connect screen: "Try without a device") simulates a VENTY or a
-  VOLCANO; a CRAFTY demo is at `/?demo=crafty` in a browser.
+  VOLCANO.
 
 ## Install
 
