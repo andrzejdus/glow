@@ -183,3 +183,10 @@ a {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Lets the dial's inner glow fade between LED colours (a plain custom property cannot transition). */
+@property --led-tint {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: rgba(0, 0, 0, 0);
+}

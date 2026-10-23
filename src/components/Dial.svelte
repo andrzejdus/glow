@@ -30,6 +30,8 @@
 
   const frac = (c: number) => Math.max(0, Math.min(1, (c - min) / (max - min)));
   const warmth = $derived(heating ? frac(shown.current) : 0);
+  // The LED inside the dial: red while heating, green when ready, nothing while off or offline.
+  const led = $derived(offline || !heating ? 'off' : ready ? 'ready' : 'heating');
   const angle = $derived(((135 + 270 * frac(target ?? min)) * Math.PI) / 180);
 
   // Press and hold repeats the step.
@@ -53,6 +55,7 @@
   <div class="glow" class:pulse={heating} style:opacity={heating ? 0.35 + 0.65 * warmth : 0}></div>
   {#if ready}<div class="ready-ring"></div>{/if}
   <div class="face"></div>
+  <div class="tint {led}" aria-hidden="true"></div>
   <svg width="256" height="256" viewBox="0 0 256 256" role="img"
     aria-label="Now {current === undefined ? 'unknown' : toUnit(current, unit)}°{unit}, target {target === undefined ? 'unknown' : toUnit(target, unit)}°{unit}">
     <defs>
@@ -116,7 +119,7 @@
     position: absolute;
     inset: 12px;
     border-radius: 50%;
-    border: 1.5px solid var(--orange);
+    border: 1.5px solid #1f9d55;
     animation: ready 1.9s ease-out infinite;
   }
   @keyframes ready {
@@ -129,6 +132,28 @@
     border-radius: 50%;
     background: #fff;
     box-shadow: 0 2px 4px rgba(0, 26, 77, 0.04), 0 24px 48px rgba(0, 26, 77, 0.1), inset 0 0 0 1px rgba(0, 40, 125, 0.05);
+  }
+  /* Glows in from the rim of the face, so the numbers stay on white. */
+  .tint {
+    position: absolute;
+    inset: 28px;
+    border-radius: 50%;
+    pointer-events: none;
+    --led-tint: rgba(224, 48, 30, 0);
+    background: radial-gradient(circle, rgba(255, 255, 255, 0) 40%, var(--led-tint) 100%);
+    transition: --led-tint 1.2s ease;
+  }
+  .tint.heating {
+    --led-tint: rgba(224, 48, 30, 0.55);
+    animation: breathe 1.4s ease-in-out infinite;
+  }
+  .tint.ready {
+    --led-tint: rgba(31, 157, 85, 0.5);
+    animation: breathe 3.4s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
   }
   svg {
     position: absolute;
