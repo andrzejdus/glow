@@ -156,3 +156,11 @@ Mark at each LED change (green, red, green, red, green between 187 and 189 °C):
   both colours.
 - Battery status (`0063`) bit 5 came on with the heater and went on and off near the target, close
   to but not in step with the LED; likely heater power.
+
+## Auto-off
+
+The official app names `0061` `characteristicautoOffCountdown` but uses it as the setting: it reads
+it once, on connect, into the auto-off slider. `0071` (notified) is the time left. On a CRAFTY+ the
+setting shown in Glow dropped on its own while heating, so `0061` seems to count down while the
+heater runs. Glow re-reads `0061` only while the heater is off; Device diagnostics shows both
+values (not yet confirmed on hardware).

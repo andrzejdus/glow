@@ -322,6 +322,18 @@ describe('crafty driver', () => {
     await driver.stop();
   });
 
+  it('does not re-read the auto-off setting while heating, where it counts down', async () => {
+    const t = craftyPlus(); // the heater is on (status bit 4)
+    const { driver, state } = await started(t);
+    t.values.set(U.autoShutoff, le16(87));
+    await driver.refresh!();
+    expect(t.ops.some((o) => o.chr === U.autoShutoff)).toBe(false);
+    expect(state.settings?.autoShutoff).toBe(120);
+    t.push(U.status, le16(0)); // heater off
+    await driver.refresh!();
+    expect(t.ops.filter((o) => o.chr === U.autoShutoff)).toHaveLength(1);
+  });
+
   it('reads the raw registers for diagnostics, a failed read as null', async () => {
     const t = craftyPlus({ [U.batteryStatus]: le16(0x0050), [U.systemStatus]: le16(0x0001) });
     const { driver } = await started(t);
@@ -333,6 +345,8 @@ describe('crafty driver', () => {
       ['0x0063', 0x0050],
       ['0x0073', null],
       ['0x0041', 83],
+      ['0x0061', 120],
+      ['0x0071', 95],
     ]);
   });
 

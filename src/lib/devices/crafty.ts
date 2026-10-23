@@ -468,18 +468,20 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
   async diagnostics(): Promise<DiagnosticValue[]> {
     // The official app reads the last three only for its analysis; their bits are undocumented.
-    const registers: [string, string, string][] = [
+    const registers: [string, string, string, string?, boolean?][] = [
       ['Project status', SVC_SYSTEM, CHR.status],
       ['Project status 2', SVC_SYSTEM, CHR.status2],
       ['System status', SVC_SYSTEM, CHR.systemStatus],
       ['Battery status', SVC_SYSTEM, CHR.batteryStatus],
       ['Battery status 2', SVC_SYSTEM, CHR.batteryStatus2],
-      ['Battery %', SVC_CONTROL, CHR.battery],
+      ['Battery', SVC_CONTROL, CHR.battery, '%'],
+      ['Auto-off setting', SVC_CONTROL, CHR.autoShutoff, 's'],
+      ['Auto-off left', SVC_CONTROL, CHR.autoShutoffRemaining, 's', true],
     ];
     const out: DiagnosticValue[] = [];
-    for (const [label, service, chr] of registers) {
+    for (const [label, service, chr, unit, quiet] of registers) {
       const value = await this.read(service, chr).then(readU16, () => null);
-      out.push({ label, source: `0x${chr.slice(4, 8)}`, value });
+      out.push({ label, source: `0x${chr.slice(4, 8)}`, value, unit, quiet });
     }
     return out;
   }
@@ -490,7 +492,9 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.emit({ targetTemp: this.target, ...this.boostPatch() });
     await this.readOperatingTime();
     this.ledBrightness = readU16(await this.read(SVC_CONTROL, CHR.ledBrightness));
-    if (!this.legacy) {
+    // The official app reads the auto-off setting once and calls it "autoOffCountdown": it seems to
+    // count down while heating, which made the setting drop on its own. Re-read it only while the heater is off.
+    if (!this.legacy && !(this.status & STATUS_HEATER_ACTIVE)) {
       this.autoShutoff = readU16(await this.read(SVC_CONTROL, CHR.autoShutoff));
       this.emit({ autoShutoffSec: this.autoShutoff });
     }

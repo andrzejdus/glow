@@ -67,6 +67,10 @@ export interface DiagnosticValue {
   source: string;
   /** Unsigned 16-bit value; null when the read failed. */
   value: number | null;
+  /** Set for a plain number (shown with this unit, no bits), e.g. "%" or "s". */
+  unit?: string;
+  /** Changes all the time (a countdown): shown, but not written to the change log. */
+  quiet?: boolean;
 }
 
 export interface DeviceCapabilities {

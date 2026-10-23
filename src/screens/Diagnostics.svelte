@@ -7,7 +7,7 @@
   let { onclose }: { onclose: () => void } = $props();
 
   /** A register change, or a mark the user set ("the LED just turned green"); both with the temperatures then. */
-  type Change = { time: string; label: string; source: string; from: number | null; to: number | null; temps: string; mark?: boolean; regs?: string };
+  type Change = { time: string; label: string; source: string; from: number | null; to: number | null; temps: string; mark?: boolean; regs?: string; unit?: string };
 
   let rows = $state<DiagnosticValue[]>([]);
   /** The values bits are compared against; set by the first reading and by "Mark as baseline". */
@@ -22,6 +22,8 @@
     const c = d?.currentTemp === undefined ? '–' : `${d.currentTemp.toFixed(1)} °C`;
     return `${c}, target ${d?.targetTemp ?? '–'} °C${d?.mode && d.mode !== 'normal' ? ` (${d.mode})` : ''}`;
   };
+  /** A number with a unit as it is, a register as hex. */
+  const show = (v: number | null, unit?: string) => (unit ? (v === null ? '–' : `${v} ${unit}`) : hex(v));
   const hex = (v: number | null) => (v === null ? '–' : `0x${v.toString(16).padStart(4, '0')}`);
   const bit = (v: number | null, i: number) => (v === null ? '·' : (v >> i) & 1 ? '1' : '0');
   const changed = (source: string, v: number | null, i: number) => {
@@ -48,8 +50,8 @@
           const before = new Map(rows.map((r) => [r.source, r.value]));
           for (const r of next) {
             if (!(r.source in baseline)) baseline[r.source] = r.value;
-            if (before.has(r.source) && before.get(r.source) !== r.value) {
-              log = [{ time, label: r.label, source: r.source, from: before.get(r.source)!, to: r.value, temps: temps() }, ...log].slice(0, 200);
+            if (!r.quiet && before.has(r.source) && before.get(r.source) !== r.value) {
+              log = [{ time, label: r.label, source: r.source, from: before.get(r.source)!, to: r.value, temps: temps(), unit: r.unit }, ...log].slice(0, 200);
             }
           }
           rows = next;
@@ -65,7 +67,7 @@
   function mark() {
     tap();
     // Every register's value at that moment, so a bit that did not change is in the log too.
-    const regs = rows.map((r) => `${r.source}=${hex(r.value)}`).join(' ');
+    const regs = rows.map((r) => `${r.source}=${show(r.value, r.unit)}`).join(' ');
     log = [{ time: clock(), label: 'Marked', source: '', from: null, to: null, temps: temps(), mark: true, regs }, ...log].slice(0, 200);
   }
 
@@ -80,14 +82,14 @@
       `Glow ${__APP_VERSION__} · ${d?.model ?? ''} firmware ${d?.firmware ?? '–'} BLE ${d?.firmwareBle ?? '–'}`,
       `Battery ${d?.battery ?? '–'} %`,
       '',
-      ...rows.map((r) => `${r.label} ${r.source}: ${hex(r.value)} (baseline ${hex(baseline[r.source] ?? null)})`),
+      ...rows.map((r) => `${r.label} ${r.source}: ${show(r.value, r.unit)} (baseline ${show(baseline[r.source] ?? null, r.unit)})`),
       '',
       'Changes, newest first:',
       ...(log.length
         ? log.map((c) =>
             c.mark
               ? `${c.time} MARKED at ${c.temps}; ${c.regs}`
-              : `${c.time} ${c.label} ${c.source}: ${hex(c.from)} → ${hex(c.to)} ${flips(c.from, c.to)} at ${c.temps}`,
+              : `${c.time} ${c.label} ${c.source}: ${show(c.from, c.unit)} → ${show(c.to, c.unit)} ${c.unit ? '' : flips(c.from, c.to)} at ${c.temps}`,
           )
         : ['none']),
     ].join('\n');
@@ -138,9 +140,9 @@
           <div class="r-top">
             <span class="r-label">{r.label}</span>
             <span class="r-src num">{r.source}</span>
-            <span class="r-hex num">{r.label === 'Battery %' ? `${r.value ?? '–'} %` : hex(r.value)}</span>
+            <span class="r-hex num">{show(r.value, r.unit)}</span>
           </div>
-          {#if r.label !== 'Battery %'}
+          {#if !r.unit}
             <span class="cells num">
               {#each bits as i (i)}<span class:hi={changed(r.source, r.value, i)} class:one={bit(r.value, i) === '1'}>{bit(r.value, i)}</span>{/each}
             </span>
@@ -166,8 +168,8 @@
             {#if c.mark}
               <span class="c-what">Marked</span>
             {:else}
-              <span class="c-what">{c.label} {hex(c.from)} → {hex(c.to)}</span>
-              <span class="c-bits">{flips(c.from, c.to)}</span>
+              <span class="c-what">{c.label} {show(c.from, c.unit)} → {show(c.to, c.unit)}</span>
+              {#if !c.unit}<span class="c-bits">{flips(c.from, c.to)}</span>{/if}
             {/if}
             <span class="c-temps">{c.temps}</span>
           </div>
