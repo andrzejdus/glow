@@ -242,9 +242,10 @@
   .float {
     animation: float 3.2s ease-in-out infinite;
   }
+  /* Equal travel above and below, so the middle of the motion is the centre of the circle. */
   @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
+    0%, 100% { transform: translateY(3px); }
+    50% { transform: translateY(-3px); }
   }
   .copy {
     text-align: center;
