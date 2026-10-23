@@ -1,4 +1,4 @@
-import type { DeviceDriver, DeviceKind, DeviceState, HeatMode, SettingDef } from './types';
+import type { DeviceDriver, DeviceKind, DeviceState, DiagnosticValue, HeatMode, SettingDef } from './types';
 
 // A simulated device: lets the app be tried, and checked, without hardware.
 
@@ -117,6 +117,15 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     },
     async findMyDevice() {},
   };
+  // Plausible CRAFTY registers; an imaginary charger flips bit 6 of the battery status every 10 s.
+  const diagnostics = async (): Promise<DiagnosticValue[]> => [
+    { label: 'Project status', source: '0x0093', value: (s.heater ? 0x10 : 0) | (s.mode === 'boost' ? 0x20 : s.mode === 'superboost' ? 0x40 : 0) },
+    { label: 'Project status 2', source: '0x01c3', value: 0x1000 | (s.heater && Math.abs(goal() - s.current) < 1 ? 0x04 : 0) },
+    { label: 'System status', source: '0x0083', value: 0x0001 },
+    { label: 'Battery status', source: '0x0063', value: 0x0010 | (Math.floor(Date.now() / 10000) % 2 ? 0x40 : 0) },
+    { label: 'Battery status 2', source: '0x0073', value: 0x0200 },
+    { label: 'Battery %', source: '0x0041', value: s.battery },
+  ];
   // Like the real CRAFTY+, the demo switches levels only with the (imaginary) device button.
-  return kind === 'crafty' ? Object.assign(driver, { modeSwitchable: false as const }) : driver;
+  return kind === 'crafty' ? Object.assign(driver, { modeSwitchable: false as const, diagnostics }) : driver;
 }

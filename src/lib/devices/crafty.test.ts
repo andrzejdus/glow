@@ -258,6 +258,20 @@ describe('crafty driver', () => {
     await expect(driver.setHeater(true)).rejects.toThrow();
   });
 
+  it('reads the raw registers for diagnostics, a failed read as null', async () => {
+    const t = craftyPlus({ [U.batteryStatus]: le16(0x0050), [U.systemStatus]: le16(0x0001) });
+    const { driver } = await started(t);
+    const regs = await driver.diagnostics!();
+    expect(regs.map((r) => [r.source, r.value])).toEqual([
+      ['0x0093', 0x30],
+      ['0x01c3', 0b0001_0000_0000_0010],
+      ['0x0083', 0x0001],
+      ['0x0063', 0x0050],
+      ['0x0073', null],
+      ['0x0041', 83],
+    ]);
+  });
+
   it('refreshes and stops', async () => {
     const t = craftyPlus();
     const { driver, state } = await started(t);

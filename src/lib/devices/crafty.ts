@@ -4,6 +4,7 @@ import type {
   DeviceDriver,
   DeviceKind,
   DeviceState,
+  DiagnosticValue,
   DriverModule,
   HeatMode,
   SettingDef,
@@ -32,6 +33,9 @@ const CHR = {
   firmwareBle: uuid(0x72),
   useHours: uuid(0x23),
   status: uuid(0x93),
+  batteryStatus: uuid(0x63),
+  batteryStatus2: uuid(0x73),
+  systemStatus: uuid(0x83),
   securityCode: uuid(0x1b3),
   status2: uuid(0x1c3),
   useMinutes: uuid(0x1e3),
@@ -419,6 +423,24 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     if (this.firmware && !this.firmware.plus) throw new Error('Find My CRAFTY needs a CRAFTY+');
     if (this.status2 & STATUS2_FIND_DEVICE) return;
     await this.writeStatus2Bit(STATUS2_FIND_DEVICE, true);
+  }
+
+  async diagnostics(): Promise<DiagnosticValue[]> {
+    // The official app reads the last three only for its analysis; their bits are undocumented.
+    const registers: [string, string, string][] = [
+      ['Project status', SVC_SYSTEM, CHR.status],
+      ['Project status 2', SVC_SYSTEM, CHR.status2],
+      ['System status', SVC_SYSTEM, CHR.systemStatus],
+      ['Battery status', SVC_SYSTEM, CHR.batteryStatus],
+      ['Battery status 2', SVC_SYSTEM, CHR.batteryStatus2],
+      ['Battery %', SVC_CONTROL, CHR.battery],
+    ];
+    const out: DiagnosticValue[] = [];
+    for (const [label, service, chr] of registers) {
+      const value = await this.read(service, chr).then(readU16, () => null);
+      out.push({ label, source: `0x${chr.slice(4, 8)}`, value });
+    }
+    return out;
   }
 
   async refresh(): Promise<void> {

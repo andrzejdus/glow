@@ -4,7 +4,7 @@ import type { BleTransport } from './ble/transport';
 import { withTimeout } from './ble/util';
 import { createDemoDriver } from './devices/demo';
 import { createDriver, modelNames } from './devices/registry';
-import type { DeviceCapabilities, DeviceDriver, DeviceKind, DeviceState, HeatMode, SettingDef } from './devices/types';
+import type { DeviceCapabilities, DeviceDriver, DeviceKind, DeviceState, DiagnosticValue, HeatMode, SettingDef } from './devices/types';
 import { load, save } from './prefs';
 import { demoHistory, usage } from './usage.svelte';
 
@@ -40,6 +40,8 @@ class Connection {
   modeSwitchable = $state(true);
   /** The boost offsets can be written (VENTY/VEAZY: both, CRAFTY: one common Booster offset). */
   offsetsAdjustable = $state(false);
+  /** The driver can show its raw registers (Settings › Device diagnostics). */
+  diagnosable = $state(false);
   target = $state<FoundDevice | null>(null);
   last = $state<FoundDevice | null>(null);
   autoConnect = $state(true);
@@ -314,6 +316,11 @@ class Connection {
     op()?.catch((e: unknown) => this.say(e instanceof Error ? e.message : String(e)));
   }
 
+  /** Fresh raw registers for the diagnostics screen; empty when not connected. */
+  async diagnostics(): Promise<DiagnosticValue[]> {
+    return (await this.driver?.diagnostics?.()) ?? [];
+  }
+
   say(text: string) {
     this.toast = text;
     setTimeout(() => {
@@ -377,6 +384,7 @@ class Connection {
     this.settingDefs = driver.settingDefs;
     this.modeSwitchable = (driver as { modeSwitchable?: boolean }).modeSwitchable !== false;
     this.offsetsAdjustable = typeof driver.setBoostOffsets === 'function';
+    this.diagnosable = typeof driver.diagnostics === 'function';
     this.meta.values = Object.keys(this.device?.settings ?? {}).length;
     // A demo device is never remembered, or Connect would try to reach it afterwards.
     if (!this.demo) {

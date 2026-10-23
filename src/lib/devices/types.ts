@@ -60,6 +60,15 @@ export interface DeviceState {
   settings: Record<string, boolean | number>;
 }
 
+/** One raw register on the diagnostics screen. */
+export interface DiagnosticValue {
+  label: string;
+  /** Where it comes from, e.g. the characteristic "0x0063". */
+  source: string;
+  /** Unsigned 16-bit value; null when the read failed. */
+  value: number | null;
+}
+
 export interface DeviceCapabilities {
   pump: boolean;
   battery: boolean;
@@ -88,6 +97,8 @@ export interface DeviceDriver {
   findMyDevice?(): Promise<void>;
   /** Re-read values the device does not notify (hours of operation, battery…). Called every ~30 s. */
   refresh?(): Promise<void>;
+  /** Raw registers, read fresh, for working out what undocumented bits mean (CRAFTY charging). */
+  diagnostics?(): Promise<DiagnosticValue[]>;
 }
 
 /** What each driver module exports next to its driver class. */

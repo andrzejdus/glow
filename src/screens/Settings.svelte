@@ -4,6 +4,7 @@
   import Slider from '../components/Slider.svelte';
   import Icon from '../components/Icon.svelte';
   import Toggle from '../components/Toggle.svelte';
+  import Diagnostics from './Diagnostics.svelte';
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
   import { deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
@@ -38,6 +39,7 @@
   // Factory offsets from base (S&B support): Booster +15, Superbooster +30 on CRAFTY+, VENTY and VEAZY.
   const factory = { boost: 15, superBoost: 30 };
 
+  let diagnostics = $state(false);
   let finding = $state(false);
   function find() {
     conn.findMy();
@@ -166,8 +168,15 @@
   {/each}
 
   <button type="button" class="outline press rise d3" onclick={() => conn.disconnect()}>Disconnect</button>
+  {#if conn.diagnosable}
+    <button type="button" class="diag" onclick={() => (diagnostics = true)}>Device diagnostics</button>
+  {/if}
   <p class="foot">Glow {__APP_VERSION__} · an unofficial app, not made by STORZ &amp; BICKEL</p>
 </div>
+
+{#if diagnostics}
+  <Diagnostics onclose={() => (diagnostics = false)} />
+{/if}
 
 <style>
   header {
@@ -404,6 +413,16 @@
     font-weight: 800;
     cursor: pointer;
     margin-top: 6px;
+  }
+  .diag {
+    align-self: center;
+    background: none;
+    border: 0;
+    padding: 10px 12px 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--navy);
+    cursor: pointer;
   }
   .foot {
     text-align: center;
