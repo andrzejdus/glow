@@ -6,7 +6,8 @@
 
   let { onclose }: { onclose: () => void } = $props();
 
-  type Change = { time: string; label: string; source: string; from: number | null; to: number | null };
+  /** A register change, or a mark the user set ("the LED just turned green"); both with the temperatures then. */
+  type Change = { time: string; label: string; source: string; from: number | null; to: number | null; temps: string; mark?: boolean; regs?: string };
 
   let rows = $state<DiagnosticValue[]>([]);
   /** The values bits are compared against; set by the first reading and by "Mark as baseline". */
@@ -15,6 +16,12 @@
   let copied = $state(false);
 
   const bits = Array.from({ length: 16 }, (_, i) => 15 - i);
+  const clock = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const temps = () => {
+    const d = conn.device;
+    const c = d?.currentTemp === undefined ? '–' : `${d.currentTemp.toFixed(1)} °C`;
+    return `${c}, target ${d?.targetTemp ?? '–'} °C${d?.mode && d.mode !== 'normal' ? ` (${d.mode})` : ''}`;
+  };
   const hex = (v: number | null) => (v === null ? '–' : `0x${v.toString(16).padStart(4, '0')}`);
   const bit = (v: number | null, i: number) => (v === null ? '·' : (v >> i) & 1 ? '1' : '0');
   const changed = (source: string, v: number | null, i: number) => {
@@ -37,12 +44,12 @@
         const next = await conn.diagnostics().catch(() => [] as DiagnosticValue[]);
         if (!alive) return;
         if (next.length) {
-          const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const time = clock();
           const before = new Map(rows.map((r) => [r.source, r.value]));
           for (const r of next) {
             if (!(r.source in baseline)) baseline[r.source] = r.value;
             if (before.has(r.source) && before.get(r.source) !== r.value) {
-              log = [{ time, label: r.label, source: r.source, from: before.get(r.source)!, to: r.value }, ...log].slice(0, 200);
+              log = [{ time, label: r.label, source: r.source, from: before.get(r.source)!, to: r.value, temps: temps() }, ...log].slice(0, 200);
             }
           }
           rows = next;
@@ -54,6 +61,13 @@
       alive = false;
     };
   });
+
+  function mark() {
+    tap();
+    // Every register's value at that moment, so a bit that did not change is in the log too.
+    const regs = rows.map((r) => `${r.source}=${hex(r.value)}`).join(' ');
+    log = [{ time: clock(), label: 'Marked', source: '', from: null, to: null, temps: temps(), mark: true, regs }, ...log].slice(0, 200);
+  }
 
   function rebase() {
     tap();
@@ -69,7 +83,13 @@
       ...rows.map((r) => `${r.label} ${r.source}: ${hex(r.value)} (baseline ${hex(baseline[r.source] ?? null)})`),
       '',
       'Changes, newest first:',
-      ...(log.length ? log.map((c) => `${c.time} ${c.label} ${c.source}: ${hex(c.from)} → ${hex(c.to)} ${flips(c.from, c.to)}`) : ['none']),
+      ...(log.length
+        ? log.map((c) =>
+            c.mark
+              ? `${c.time} MARKED at ${c.temps}; ${c.regs}`
+              : `${c.time} ${c.label} ${c.source}: ${hex(c.from)} → ${hex(c.to)} ${flips(c.from, c.to)} at ${c.temps}`,
+          )
+        : ['none']),
     ].join('\n');
   }
 
@@ -103,8 +123,9 @@
     </header>
 
     <p class="intro">
-      Raw registers, read every second. Bits that differ from the baseline are marked. Plug the charger in, wait a
-      few seconds, unplug it, then copy the log.
+      Raw registers, read every second. Bits that differ from the baseline are orange, and every change is logged
+      with the temperature. Tap Mark now the moment you see something on the device, such as the LED turning green,
+      then copy the log.
     </p>
 
     <section class="card regs">
@@ -130,6 +151,7 @@
       {/each}
     </section>
 
+    <button type="button" class="primary press markbtn" onclick={mark}>Mark now</button>
     <div class="actions">
       <button type="button" class="secondary press" onclick={rebase}>Mark as baseline</button>
       <button type="button" class="primary press" onclick={copy}>{copied ? 'Copied' : 'Copy log'}</button>
@@ -139,10 +161,15 @@
       <h2>Changes</h2>
       <div class="card log num">
         {#each log as c (c)}
-          <div class="change">
+          <div class="change" class:mark={c.mark}>
             <span class="c-time">{c.time}</span>
-            <span class="c-what">{c.label} {hex(c.from)} → {hex(c.to)}</span>
-            <span class="c-bits">{flips(c.from, c.to)}</span>
+            {#if c.mark}
+              <span class="c-what">Marked</span>
+            {:else}
+              <span class="c-what">{c.label} {hex(c.from)} → {hex(c.to)}</span>
+              <span class="c-bits">{flips(c.from, c.to)}</span>
+            {/if}
+            <span class="c-temps">{c.temps}</span>
           </div>
         {:else}
           <div class="none">No changes yet.</div>
@@ -291,6 +318,18 @@
   }
   .c-what {
     font-weight: 700;
+  }
+  .c-temps {
+    grid-column: 2;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .change.mark .c-what {
+    color: var(--orange-ink);
+  }
+  .markbtn {
+    height: 52px;
+    font-size: 15px;
   }
   .c-bits {
     grid-column: 2;
