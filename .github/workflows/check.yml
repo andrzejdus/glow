@@ -1,0 +1,67 @@
+name: Check
+
+# Runs on every pull request, forks included, and on every push. It uses no secrets: the
+# signed release build stays in android.yml, which never runs for pull requests.
+# Never switch this to pull_request_target, which would hand forks the repository's secrets
+# and a write token.
+on:
+  pull_request:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - run: npm ci
+
+      - run: npx svelte-check --tsconfig ./tsconfig.json
+
+      - run: npm test
+
+      - name: Version
+        id: version
+        run: echo "name=$(node -p "require('./package.json').version")-ci.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Web build and sync
+        run: npx vite build && npx cap sync android
+        env:
+          APP_VERSION: ${{ steps.version.outputs.name }}
+
+      # Signed with the runner's throwaway debug key; installs as "Glow debug"
+      # (pl.gogoad.glow.debug), next to a release install.
+      - name: Debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+        env:
+          GLOW_VERSION_NAME: ${{ steps.version.outputs.name }}
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "glow-${{ steps.version.outputs.name }}-debug.apk"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: glow-${{ steps.version.outputs.name }}-debug
+          path: glow-${{ steps.version.outputs.name }}-debug.apk
+          retention-days: 30
