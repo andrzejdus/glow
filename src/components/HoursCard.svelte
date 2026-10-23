@@ -11,12 +11,15 @@
   const thisMonth = $derived(months[months.length - 1]?.hours);
   const known = $derived(months.filter((w) => w.hours !== null && !w.current));
   const avg = $derived(known.length ? known.reduce((a, w) => a + (w.hours ?? 0), 0) / known.length : null);
+  // Time left until the device switches itself off, when it reports it; nothing while it is off.
   const autoOff = $derived(
-    d?.autoShutoffRemainingSec !== undefined
-      ? mmss(d.autoShutoffRemainingSec)
-      : d?.autoShutoffSec !== undefined
-        ? `after ${duration(d.autoShutoffSec)}`
-        : '–',
+    !d?.heaterOn
+      ? '–'
+      : d.autoShutoffRemainingSec !== undefined
+        ? mmss(d.autoShutoffRemainingSec)
+        : d.autoShutoffSec !== undefined
+          ? `after ${duration(d.autoShutoffSec)}`
+          : '–',
   );
 </script>
 
