@@ -1,0 +1,101 @@
+<!doctype html>
+<!-- The Play feature graphic, 1024 × 500. Rendered by scripts/store-graphics.mjs through the dev
+     server, which also serves the app's own font. No device names, drawings or logos. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/node_modules/@fontsource-variable/roboto-flex/opsz.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1024px;
+        height: 500px;
+        overflow: hidden;
+        background: #001a4d;
+        font-family: 'Roboto Flex Variable', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .canvas {
+        position: relative;
+        width: 1024px;
+        height: 500px;
+        background:
+          radial-gradient(circle at 740px 250px, rgba(255, 102, 0, 0.42) 0, rgba(255, 138, 61, 0.12) 190px, rgba(255, 138, 61, 0) 330px),
+          linear-gradient(120deg, #00287d 0%, #001a4d 70%);
+      }
+      .copy {
+        position: absolute;
+        left: 72px;
+        top: 0;
+        bottom: 0;
+        width: 470px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .word {
+        font-size: 92px;
+        font-weight: 900;
+        letter-spacing: 0.3em;
+        line-height: 1;
+        color: #ffffff;
+      }
+      .line {
+        margin-top: 26px;
+        font-size: 31px;
+        font-weight: 500;
+        line-height: 1.25;
+        color: #dfe7ff;
+      }
+      .chips {
+        margin-top: 30px;
+        display: flex;
+        gap: 10px;
+      }
+      .chip {
+        padding: 8px 16px;
+        border-radius: 999px;
+        border: 2px solid rgba(255, 102, 0, 0.85);
+        font-size: 18px;
+        font-weight: 700;
+        color: #ffb27a;
+      }
+      svg {
+        position: absolute;
+        left: 496px;
+        top: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas">
+      <div class="copy">
+        <div class="word">GLOW</div>
+        <div class="line">Temperature, heater, battery and settings, over Bluetooth.</div>
+        <div class="chips"><span class="chip">No account</span><span class="chip">No network</span><span class="chip">Demo mode</span></div>
+      </div>
+      <!-- The app's dial: the arc and knob of the icon, the readout of the dashboard. -->
+      <svg width="488" height="488" viewBox="0 0 488 488">
+        <defs>
+          <linearGradient id="arc" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stop-color="#FFB27A" />
+            <stop offset="1" stop-color="#FF6600" />
+          </linearGradient>
+          <filter id="lift" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#000000" flood-opacity="0.35" />
+          </filter>
+        </defs>
+        <circle cx="244" cy="244" r="190" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="30" stroke-linecap="round" stroke-dasharray="895.4 1193.8" transform="rotate(135 244 244)" />
+        <circle cx="244" cy="244" r="190" fill="none" stroke="url(#arc)" stroke-width="30" stroke-linecap="round" stroke-dasharray="698.4 1193.8" transform="rotate(135 244 244)" />
+        <circle cx="244" cy="244" r="146" fill="#FFFFFF" filter="url(#lift)" />
+        <circle cx="428" cy="196.7" r="20" fill="#FFFFFF" stroke="#00287D" stroke-width="8" />
+        <text x="244" y="186" text-anchor="middle" font-size="17" font-weight="700" letter-spacing="4" fill="#6B6B6B">NOW</text>
+        <text x="236" y="276" text-anchor="middle" font-size="104" font-weight="200" fill="#00287D">180</text>
+        <text x="322" y="214" font-size="30" font-weight="400" fill="#FF6600">°C</text>
+        <circle cx="210" cy="318" r="7" fill="#0F9D76" />
+        <text x="224" y="325" font-size="22" font-weight="700" fill="#00287D">Ready</text>
+      </svg>
+    </div>
+  </body>
+</html>
