@@ -64,7 +64,10 @@
       {#if conn.caps?.battery && d.battery !== undefined}
         <div class="cell">
           <Battery level={d.battery} charging={d.charging} size="lg" />
-          <div class="cell-state" class:charging={d.charging}>{d.charging ? 'Charging' : 'On battery'}</div>
+          <!-- CRAFTY does not report the charger, so it gets no state rather than a wrong one. -->
+          {#if d.charging !== undefined}
+            <div class="cell-state" class:charging={d.charging}>{d.charging ? 'Charging' : 'On battery'}</div>
+          {/if}
         </div>
       {:else}
         <Glyph kind={d.kind} scale={0.9} />
