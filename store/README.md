@@ -7,6 +7,7 @@ with it. Nothing here is built into the app.
 |---|---|
 | `listing.en-US.md` | The store listing in English (United States), the default language: app name, short description and full description, each with its Play limit and counted length. The canonical text. |
 | `listing.pl-PL.md` | The same listing translated into Polish. Change the English first, then translate. |
+| `play-console-answers.md` | Ready answers for the Console's App content pages (Data safety, content rating, target audience, ads, app access with demo-mode steps, permissions), store settings, and the policy risks found in the app's own wording. |
 | `graphics/icon-512.png` | The app icon for the listing: 512 × 512, 32-bit PNG, from `assets/src/`. |
 | `graphics/feature-graphic.png` | The feature graphic: 1024 × 500, 24-bit PNG. Glow's name and dial in the app's colours, no device names, drawings or logos. Source: `graphics/src/feature-graphic.html`. |
 | `graphics/screenshots/` | Six phone screenshots from demo mode, light theme, 1080 × 2160 24-bit PNG (Play: every side 320–3840 px, long side at most twice the short one). Upload in file-name order. |
