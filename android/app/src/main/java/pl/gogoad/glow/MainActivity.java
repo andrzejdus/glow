@@ -14,9 +14,10 @@ public class MainActivity extends BridgeActivity {
         // Enabling edge-to-edge before that builds the window with the splash theme, which adds an
         // action bar with the splash drawable as its background over the top of the page.
         super.onCreate(savedInstanceState);
-        // Transparent status and navigation bars with dark icons and no contrast scrim on every
-        // Android version; the page pads itself with the safe-area insets Capacitor injects.
-        SystemBarStyle bars = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT);
+        // Transparent status and navigation bars with no contrast scrim on every Android version,
+        // dark icons in light mode and light icons in dark mode; the page pads itself with the
+        // safe-area insets Capacitor injects.
+        SystemBarStyle bars = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT);
         EdgeToEdge.enable(this, bars, bars);
     }
 }

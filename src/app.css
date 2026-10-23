@@ -5,7 +5,10 @@
   --orange-ink: #c44b00;
   --orange-soft: #ffd9bf;
   --orange-tint: #ffe8d9;
+  /* Headings and strong text (navy on light, a pale blue on dark). */
   --navy: #00287d;
+  /* Navy as a surface under white text: buttons, the Air tile, the toast. */
+  --navy-fill: #00287d;
   /* LED colours, tuned to the palette: a red leaning to the brand orange, a green leaning to the navy. */
   --led-heat: #ee3f1c;
   --led-ready: #0f9d76;
@@ -15,6 +18,14 @@
   --card: #ffffff;
   --muted: #6b6b6b;
   --muted-2: #5c5c5c;
+  /* Dimmed text: inactive heat levels, disabled bits. */
+  --faint: #9a9a9a;
+  /* Sunken surfaces inside a card, separators, tracks, knobs, the tab bar. */
+  --card-2: #f2f2f2;
+  --divider: #eeeeee;
+  --track: #e2e2e2;
+  --knob: #ffffff;
+  --tabbar: rgba(255, 255, 255, 0.92);
   --line: rgba(0, 40, 125, 0.08);
   --shadow: 0 1px 2px rgba(0, 26, 77, 0.04), 0 12px 32px rgba(0, 26, 77, 0.06);
   --shadow-sm: 0 2px 8px rgba(0, 26, 77, 0.08);
@@ -22,6 +33,32 @@
   --sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --font: 'Roboto Flex Variable', Roboto, system-ui, sans-serif;
   color-scheme: light;
+}
+
+/* Dark mode follows the phone's setting. Orange stays the brand orange; text on it stays navy-deep. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --orange-ink: #ff8a4c;
+    --orange-soft: #5c2c12;
+    --orange-tint: #3a2414;
+    --navy: #dfe7ff;
+    --navy-fill: #2c55c0;
+    --ink: #d0d6e4;
+    --bg: #0b1124;
+    --card: #151d35;
+    --muted: #9aa4bb;
+    --muted-2: #aab3c7;
+    --faint: #6c7690;
+    --card-2: #1d2742;
+    --divider: rgba(255, 255, 255, 0.07);
+    --track: #2a3452;
+    --knob: #e8ecf6;
+    --tabbar: rgba(21, 29, 53, 0.92);
+    --line: rgba(255, 255, 255, 0.08);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
 }
 
 * {
@@ -128,7 +165,7 @@ a {
   height: 56px;
   border-radius: 999px;
   border: 0;
-  background: var(--navy);
+  background: var(--navy-fill);
   color: #fff;
   font-size: 17px;
   font-weight: 700;

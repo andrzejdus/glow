@@ -26,10 +26,10 @@
         <rect x="9" y="17" width="46" height="86" rx="10" />
       </clipPath>
     </defs>
-    <rect x="22" y="2" width="20" height="9" rx="3.5" fill="#00287D" />
-    <rect x="3" y="10" width="58" height="100" rx="16" fill="#FFFFFF" stroke="#00287D" stroke-width="3.5" />
+    <rect x="22" y="2" width="20" height="9" rx="3.5" style="fill: var(--navy)" />
+    <rect x="3" y="10" width="58" height="100" rx="16" stroke-width="3.5" style="fill: var(--card); stroke: var(--navy)" />
     <g clip-path="url(#cell-{uid})">
-      <rect x="9" y="17" width="46" height="86" fill="#F1F3F8" />
+      <rect x="9" y="17" width="46" height="86" style="fill: var(--card-2)" />
       <rect class="fill" x="9" y="17" width="46" height="86" fill="url(#fill-{uid})" style:transform="scaleY({pct / 100})" />
       {#if filling}<rect class="rise-v" x="9" y="17" width="46" height="86" fill="url(#fill-{uid})" style:--from={pct / 100} />{/if}
       <!-- glass highlight -->
@@ -38,13 +38,13 @@
     {#if charging}
       <path class="bolt" d="M35 30 L23 56 H31 L28 78 L41 50 H33 Z" fill="#FFFFFF" stroke="#001A4D" stroke-width="2.5" stroke-linejoin="round" />
     {:else}
-      <text x="32" y="66" text-anchor="middle" class="pct" fill={pct >= 55 ? '#001A4D' : '#00287D'}>{pct}%</text>
+      <text x="32" y="66" text-anchor="middle" class="pct" style:fill={pct >= 55 ? '#001A4D' : 'var(--navy)'}>{pct}%</text>
     {/if}
   </svg>
 {:else}
   <svg class="sm" viewBox="0 0 30 16" width="30" height="16" aria-hidden="true">
-    <rect x="1" y="1.5" width="24" height="13" rx="4" fill="none" stroke="#00287D" stroke-width="1.8" />
-    <rect x="26.2" y="5.2" width="2.8" height="5.6" rx="1.2" fill="#00287D" />
+    <rect x="1" y="1.5" width="24" height="13" rx="4" fill="none" stroke-width="1.8" style="stroke: var(--navy)" />
+    <rect x="26.2" y="5.2" width="2.8" height="5.6" rx="1.2" style="fill: var(--navy)" />
     <rect class="fill-h" x="3.4" y="3.9" width="19.2" height="8.2" rx="2.2" fill={low ? '#C44B00' : '#FF6600'}
       style:transform="scaleX({Math.max(0.06, pct / 100)})" />
     {#if filling}

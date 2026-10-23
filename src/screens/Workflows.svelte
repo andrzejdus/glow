@@ -141,7 +141,7 @@
   }
   .flat {
     box-shadow: none;
-    border: 1px solid rgba(0, 40, 125, 0.1);
+    border: 1px solid var(--line);
   }
   .flat:disabled {
     opacity: 0.4;
@@ -225,7 +225,7 @@
     box-shadow: 0 10px 26px rgba(255, 102, 0, 0.45);
   }
   .t-tile.air.on {
-    background: var(--navy);
+    background: var(--navy-fill);
     color: #fff;
     box-shadow: 0 10px 24px rgba(0, 40, 125, 0.25);
   }
@@ -273,7 +273,7 @@
     margin-top: 12px;
     height: 8px;
     border-radius: 999px;
-    background: #f0f0f0;
+    background: var(--card-2);
     overflow: hidden;
   }
   .fill {
@@ -319,20 +319,20 @@
     align-items: center;
     font-size: 12px;
     font-weight: 700;
-    background: #f3f3f3;
+    background: var(--card-2);
     color: var(--muted);
     transition: background 0.3s, color 0.3s, transform 0.3s;
   }
   .chip.past {
     background: var(--orange-soft);
-    color: var(--navy-deep);
+    color: var(--navy);
   }
   .chip.past .chip-fill {
     opacity: 0;
   }
   .chip.now {
     background: var(--orange-tint);
-    color: var(--navy-deep);
+    color: var(--navy);
     transform: scale(1.06);
   }
   .chip-fill {

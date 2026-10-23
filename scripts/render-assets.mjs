@@ -17,5 +17,6 @@ await sharp(background).composite([{ input: mark }]).toFile(out('icon-only'));
 const splashMark = await sharp(mark).resize(900, 900).toBuffer();
 const splashBg = await sharp(svg('background'), { density: 288 }).resize(2732, 2732).png().toBuffer();
 await sharp(splashBg).composite([{ input: splashMark, gravity: 'centre' }]).toFile(out('splash'));
-await sharp(splashBg).composite([{ input: splashMark, gravity: 'centre' }]).toFile(out('splash-dark'));
+const splashBgDark = await sharp(svg('background-dark'), { density: 288 }).resize(2732, 2732).png().toBuffer();
+await sharp(splashBgDark).composite([{ input: splashMark, gravity: 'centre' }]).toFile(out('splash-dark'));
 console.log('assets rendered');

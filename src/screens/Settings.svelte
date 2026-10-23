@@ -327,7 +327,7 @@
     align-items: center;
     gap: 14px;
     padding: 14px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--divider);
   }
   .row:last-child {
     border-bottom: 0;
@@ -379,7 +379,7 @@
     padding: 6px 12px;
     border-radius: 999px;
     background: var(--orange-tint);
-    color: var(--navy-deep);
+    color: var(--navy);
   }
   .temp span {
     font-size: 12px;

@@ -223,7 +223,7 @@
     position: absolute;
     inset: 70px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--card);
     box-shadow: 0 18px 40px rgba(0, 40, 125, 0.14);
     display: flex;
     align-items: center;
@@ -275,7 +275,7 @@
     align-items: center;
     gap: 14px;
     height: 44px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--divider);
   }
   .step:last-child {
     border-bottom: 0;
@@ -301,7 +301,7 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 2px solid #d5d5d5;
+    border: 2px solid var(--track);
   }
   .s-label {
     flex-grow: 1;
@@ -323,7 +323,7 @@
     gap: 14px;
     height: 60px;
     border: 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--divider);
     background: none;
     text-align: left;
     cursor: pointer;

@@ -64,11 +64,11 @@
         <stop offset="1" stop-color="#FF6600" />
       </linearGradient>
     </defs>
-    <circle cx="128" cy="128" r={R} fill="none" stroke="rgba(0,40,125,.07)" stroke-width="10" stroke-linecap="round"
+    <circle cx="128" cy="128" r={R} fill="none" style="stroke: var(--line)" stroke-width="10" stroke-linecap="round"
       stroke-dasharray="{ARC} {C}" transform="rotate(135 128 128)" />
     <circle cx="128" cy="128" r={R} fill="none" stroke="url(#heat)" stroke-width="10" stroke-linecap="round"
       stroke-dasharray="{ARC * frac(shown.current)} {C}" transform="rotate(135 128 128)" />
-    <circle class="mark" cx={128 + R * Math.cos(angle)} cy={128 + R * Math.sin(angle)} r="8" fill="#fff" stroke="#00287D"
+    <circle class="mark" cx={128 + R * Math.cos(angle)} cy={128 + R * Math.sin(angle)} r="8" style="fill: var(--card); stroke: var(--navy)"
       stroke-width="2.5" />
   </svg>
   <div class="center">
@@ -130,7 +130,7 @@
     position: absolute;
     inset: 28px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--card);
     box-shadow: 0 2px 4px rgba(0, 26, 77, 0.04), 0 24px 48px rgba(0, 26, 77, 0.1), inset 0 0 0 1px rgba(0, 40, 125, 0.05);
   }
   /* Glows in from the rim of the face, so the numbers stay on white. */

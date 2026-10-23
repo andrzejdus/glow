@@ -38,7 +38,7 @@
     bottom: 0;
     z-index: 10;
     padding-bottom: var(--sab);
-    background: rgba(255, 255, 255, 0.92);
+    background: var(--tabbar);
     backdrop-filter: blur(16px);
     border-top: 1px solid var(--line);
     display: grid;

@@ -20,7 +20,7 @@
     border-radius: 999px;
     border: 0;
     padding: 3px;
-    background: #d5d5d5;
+    background: var(--track);
     cursor: pointer;
     flex-shrink: 0;
     transition: background 0.25s ease;
@@ -33,7 +33,7 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--knob);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
     transition: transform 0.35s cubic-bezier(0.3, 1.5, 0.5, 1);
   }

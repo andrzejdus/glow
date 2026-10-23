@@ -59,7 +59,7 @@
     width: 2px;
     height: 16px;
     border-radius: 1px;
-    background: rgba(0, 40, 125, 0.4);
+    background: color-mix(in srgb, var(--navy) 40%, transparent);
     transform: translate(-50%, -50%);
     transition: background 0.2s ease, height 0.2s ease;
   }
@@ -79,17 +79,17 @@
   input::-webkit-slider-runnable-track {
     height: 6px;
     border-radius: 999px;
-    background: linear-gradient(to right, var(--orange) var(--at), #e6e6e6 var(--at));
+    background: linear-gradient(to right, var(--orange) var(--at), var(--track) var(--at));
   }
   /* The track hides the middle of the tick; draw that part on the track itself. */
   .slider:has(.tick) input::-webkit-slider-runnable-track {
     background:
-      linear-gradient(to right, transparent calc(var(--tick-at) - 1px), rgba(0, 40, 125, 0.4) calc(var(--tick-at) - 1px),
-        rgba(0, 40, 125, 0.4) calc(var(--tick-at) + 1px), transparent calc(var(--tick-at) + 1px)),
-      linear-gradient(to right, var(--orange) var(--at), #e6e6e6 var(--at));
+      linear-gradient(to right, transparent calc(var(--tick-at) - 1px), color-mix(in srgb, var(--navy) 40%, transparent) calc(var(--tick-at) - 1px),
+        color-mix(in srgb, var(--navy) 40%, transparent) calc(var(--tick-at) + 1px), transparent calc(var(--tick-at) + 1px)),
+      linear-gradient(to right, var(--orange) var(--at), var(--track) var(--at));
   }
   .at-default input::-webkit-slider-runnable-track {
-    background: linear-gradient(to right, var(--orange) var(--at), #e6e6e6 var(--at));
+    background: linear-gradient(to right, var(--orange) var(--at), var(--track) var(--at));
   }
   input::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -97,7 +97,7 @@
     height: var(--thumb);
     margin-top: -10px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--knob);
     box-shadow: 0 2px 8px rgba(0, 26, 77, 0.25);
     border: 0;
     transition: transform 0.15s ease;
@@ -110,7 +110,7 @@
     opacity: 0.6;
   }
   .slider.disabled input::-webkit-slider-thumb {
-    box-shadow: 0 0 0 1.5px #9a9a9a;
+    box-shadow: 0 0 0 1.5px var(--faint);
   }
   .slider.disabled input {
     transition: none;

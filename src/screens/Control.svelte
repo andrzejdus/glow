@@ -158,7 +158,7 @@
     height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
-    background: #c9c9c9;
+    background: var(--track);
   }
   .led.red {
     background: var(--led-heat);
@@ -234,7 +234,7 @@
     flex-direction: column;
     align-items: center;
     gap: 1px;
-    color: #9a9a9a;
+    color: var(--faint);
     transition: color 0.3s ease;
   }
   .level.on {
@@ -255,7 +255,7 @@
   }
   .sep {
     font-size: 18px;
-    color: #c4c4c4;
+    color: var(--faint);
     margin-top: 10px;
   }
   .m-label {
@@ -298,7 +298,7 @@
     box-shadow: 0 12px 28px rgba(255, 102, 0, 0.4);
   }
   .tile.air.on {
-    background: var(--navy);
+    background: var(--navy-fill);
     color: #fff;
     box-shadow: 0 10px 24px rgba(0, 40, 125, 0.25);
   }

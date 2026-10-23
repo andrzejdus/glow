@@ -163,7 +163,7 @@
     background: var(--orange);
   }
   .bar.empty {
-    background: #ececec;
+    background: var(--card-2);
   }
   @keyframes grow {
     from { transform: scaleY(0); }

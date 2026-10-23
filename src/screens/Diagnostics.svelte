@@ -215,7 +215,7 @@
   }
   .reg {
     padding: 10px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--divider);
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -261,8 +261,8 @@
     font-size: 12px;
     line-height: 20px;
     border-radius: 5px;
-    background: #f1f1f1;
-    color: #a0a0a0;
+    background: var(--card-2);
+    color: var(--faint);
   }
   .reg:not(.head) .cells span.one {
     color: var(--navy);
@@ -305,7 +305,7 @@
   }
   .change {
     padding: 8px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--divider);
     display: grid;
     grid-template-columns: auto 1fr;
     column-gap: 10px;
