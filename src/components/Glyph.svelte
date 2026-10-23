@@ -53,6 +53,8 @@
       <path d="M16.5 46 Q16.5 44 18.5 44 H21 L22.5 103 Q18.7 103 18.5 99 Z" fill="#FFFFFF" opacity="0.08" />
     {:else if k === 'crafty'}
       <!-- CRAFTY: a ribbed block, flat on top with the mouthpiece flush in it, a groove down the side, and a base band with the light bar -->
+      <!-- Every drawing is centred on the canvas: this one is 78 tall, so it moves up 12. -->
+      <g transform="translate(0 -12)">
       <defs>
         <clipPath id="crafty-{uid}">
           <path d="M9 30 Q9 25 13 25 H51 Q55 25 55 30 V97 Q55 103 49 103 H15 Q9 103 9 97 Z" />
@@ -71,8 +73,11 @@
       </g>
       <rect x="13" y="94" width="10" height="3.6" rx="1.8" fill="#FF8A3D" />
       <rect x="54.5" y="92.5" width="2.2" height="6" rx="1" fill="#FF6600" />
+      </g>
     {:else}
       <!-- VOLCANO: a wide cone with the triangular control panel, a ring at its foot and a low base -->
+      <!-- 63 tall, centred: up 19.5 -->
+      <g transform="translate(0 -19.5)">
       <rect x="25" y="40" width="14" height="7" rx="1.5" fill="#00287D" />
       <rect x="25" y="40" width="14" height="2" rx="1" fill="#001A4D" opacity="0.6" />
       <path d="M25.5 47 H38.5 L60 84 H4 Z" fill="#00287D" stroke="#00287D" stroke-width="2" stroke-linejoin="round" />
@@ -88,6 +93,7 @@
       <rect x="6" y="89" width="52" height="11" rx="2" fill="#001A4D" />
       <rect x="11" y="100" width="6" height="3" rx="1" fill="#001A4D" />
       <rect x="47" y="100" width="6" height="3" rx="1" fill="#001A4D" />
+      </g>
     {/if}
   </svg>
 {/snippet}
