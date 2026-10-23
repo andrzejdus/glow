@@ -1,7 +1,7 @@
 {
   "name": "glow",
   "private": true,
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Unofficial Android remote for STORZ & BICKEL Bluetooth vaporizers",
   "type": "module",
   "scripts": {
