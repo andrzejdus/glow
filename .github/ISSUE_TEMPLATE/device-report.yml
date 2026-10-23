@@ -1,0 +1,94 @@
+name: Device report
+description: Tried Glow on your device? Tell us what works and what does not.
+title: "Device report: "
+labels: ["device report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. Only a CRAFTY+ on firmware V03.24 has been tried on a real device so far, so every report on another model or firmware helps, including "everything works".
+        You do not need to share your serial number.
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: Device
+      options:
+        - VENTY
+        - VEAZY
+        - CRAFTY+
+        - CRAFTY (not plus)
+        - VOLCANO HYBRID
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: Device firmware
+      description: Glow → Settings, the card at the top. Firmware, plus BLE (or Bootloader on VENTY and VEAZY).
+      placeholder: "Firmware V03.24, BLE V2.0.3"
+    validations:
+      required: true
+
+  - type: input
+    id: phone
+    attributes:
+      label: Phone and Android version
+      placeholder: "Pixel 8, Android 15"
+    validations:
+      required: true
+
+  - type: input
+    id: glow
+    attributes:
+      label: Glow version
+      description: At the bottom of Settings.
+      placeholder: "0.1.32"
+    validations:
+      required: true
+
+  - type: textarea
+    id: support
+    attributes:
+      label: What works
+      description: |
+        The rows of the [support table](https://github.com/andrzejdus/glow#supported-devices). After each one write "works", "no" plus what happened, or "—" if your device does not have it. Leave a row empty if you did not try it.
+      value: |
+        Auto-connect:
+        Temperature and target:
+        Heater on / off from the app:
+        Status mirrors the LED:
+        Booster / Superbooster:
+        Booster / Superbooster offsets:
+        Battery level:
+        Charging / charged:
+        Hours of operation, usage per month:
+        Auto-off countdown:
+        Air pump (VOLCANO):
+        Workflows, Flow 1–3 and Balloon (VOLCANO):
+        Find My:
+        Device settings:
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: What went wrong
+      description: For anything that did not work, what you did, what you expected and what happened. Screenshots welcome.
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics log
+      description: |
+        CRAFTY only for now: Settings → Device diagnostics. Use the device, tap Mark now when it does something visible (the LED turns green, the charger goes in), then Copy log and paste it here. Leave empty on other models.
+      render: text
+
+  - type: input
+    id: name
+    attributes:
+      label: Bluetooth name
+      description: Only if Glow does not find your device. The name it shows in Android's Bluetooth settings or in a scanner app such as nRF Connect.

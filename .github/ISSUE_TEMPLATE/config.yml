@@ -1,0 +1,9 @@
+# Blank issues stay open for questions and ideas, which fit neither form.
+blank_issues_enabled: true
+contact_links:
+  - name: Supported devices
+    url: https://github.com/andrzejdus/glow#supported-devices
+    about: What each model gets in Glow, and what has been tried on a real device.
+  - name: How to test and contribute
+    url: https://github.com/andrzejdus/glow/blob/main/CONTRIBUTING.md
+    about: Testing your device, building a debug APK, adding or fixing a driver.

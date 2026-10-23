@@ -1,0 +1,62 @@
+name: Bug
+description: Something in the app is broken or looks wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this is about a device that is not marked ✅ in the [support table](https://github.com/andrzejdus/glow#supported-devices), a [device report](https://github.com/andrzejdus/glow/issues/new?template=device-report.yml) is the better fit.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead. Screenshots welcome.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      options:
+        - Demo mode, no device
+        - VENTY
+        - VEAZY
+        - CRAFTY+
+        - CRAFTY (not plus)
+        - VOLCANO HYBRID
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: Device firmware
+      description: Glow → Settings, the card at the top. Skip for demo mode.
+      placeholder: "V03.24"
+
+  - type: input
+    id: phone
+    attributes:
+      label: Phone and Android version, or browser
+      placeholder: "Pixel 8, Android 15"
+    validations:
+      required: true
+
+  - type: input
+    id: glow
+    attributes:
+      label: Glow version
+      description: At the bottom of Settings.
+      placeholder: "0.1.32"
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Optional. A diagnostics log (CRAFTY), or console output from `chrome://inspect` on a debug build.
+      render: text
