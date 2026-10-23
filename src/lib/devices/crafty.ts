@@ -105,6 +105,8 @@ const ALL_SETTINGS: SettingDef[] = [
     max: AUTO_SHUTOFF_MAX,
     step: AUTO_SHUTOFF_STEP,
     unit: 's',
+    // S&B support, CRAFTY+ Operation: "automatically turns off after 2 minutes of inactivity".
+    defaultValue: 120,
   },
 ];
 

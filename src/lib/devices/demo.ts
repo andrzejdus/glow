@@ -13,7 +13,7 @@ const portableSettings: SettingDef[] = [
     description: 'Turns off the 90 s timeout of Boost and Superboost.' },
   { key: 'vibration', group: 'device', label: 'Vibration', type: 'toggle' },
   { key: 'brightness', group: 'device', label: 'LED brightness', type: 'range', min: 10, max: 100, step: 10, unit: '%' },
-  { key: 'autoShutoff', group: 'device', label: 'Automatic shutoff', type: 'range', min: 30, max: 300, step: 10, unit: 's' },
+  { key: 'autoShutoff', group: 'device', label: 'Automatic shutoff', type: 'range', min: 30, max: 300, step: 10, unit: 's', defaultValue: 120 },
 ];
 
 const volcanoSettings: SettingDef[] = [

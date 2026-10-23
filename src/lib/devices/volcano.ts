@@ -63,8 +63,10 @@ const capabilities: DeviceCapabilities = {
 const settingDefs: SettingDef[] = [
   { key: 'vibration', group: 'device', label: 'Vibration', description: 'Vibrate when the target temperature is reached', type: 'toggle' },
   { key: 'displayOnCooling', group: 'device', label: 'Display on cooling', description: 'Show the temperature while the device cools down', type: 'toggle' },
-  { key: 'ledBrightness', group: 'device', label: 'LED brightness', type: 'range', min: 0, max: 100, step: 10, unit: '%' },
-  { key: 'autoShutoff', group: 'device', label: 'Automatic shutoff', type: 'range', min: 30, max: 360, step: 30, unit: 'min' },
+  // Factory values from S&B support, VOLCANO HYBRID Technical Overview: auto shut-off 30 min,
+  // display at full brightness ("can be reduced to 10 % via the S&B Web App").
+  { key: 'ledBrightness', group: 'device', label: 'LED brightness', type: 'range', min: 0, max: 100, step: 10, unit: '%', defaultValue: 100 },
+  { key: 'autoShutoff', group: 'device', label: 'Automatic shutoff', type: 'range', min: 30, max: 360, step: 30, unit: 'min', defaultValue: 30 },
   { key: 'fahrenheit', group: 'device', label: 'Display in °F', description: 'Unit shown on the device display', type: 'toggle' },
 ];
 

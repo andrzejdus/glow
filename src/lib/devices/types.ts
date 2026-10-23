@@ -16,6 +16,8 @@ export interface SettingDef {
   step?: number;
   /** range only: shown after the value, e.g. "%", "s" */
   unit?: string;
+  /** range only: the factory value, from STORZ & BICKEL's documentation. Omitted when it is not documented. */
+  defaultValue?: number;
 }
 
 /** Everything the UI shows. Drivers report changes as partial patches. */

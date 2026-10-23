@@ -1,6 +1,7 @@
 <script lang="ts">
   import Battery from '../components/Battery.svelte';
   import Glyph from '../components/Glyph.svelte';
+  import Slider from '../components/Slider.svelte';
   import Icon from '../components/Icon.svelte';
   import Toggle from '../components/Toggle.svelte';
   import { conn } from '../lib/connection.svelte';
@@ -34,7 +35,8 @@
     d.targetTemp === undefined || offset === undefined ? '–' : `${toUnit(Math.min(d.maxTemp, d.targetTemp + offset), unit)}°`;
   const unit = $derived(d.unit ?? 'C');
   const plus = (v: number | undefined) => (v === undefined ? '–' : `+${deltaToUnit(v, unit)}°`);
-  const fill = (v: number, max: number) => `${((v - 1) / Math.max(1, max - 1)) * 100}%`;
+  // Factory offsets (S&B support): CRAFTY+ Booster +15; VENTY and VEAZY Boost +15, Superboost +30 from base.
+  const factory = $derived(crafty ? { boost: 15 } : { boost: 15, superBoost: 30 });
 
   let finding = $state(false);
   function find() {
@@ -118,11 +120,10 @@
               {/if}
             </div>
             {#if crafty}
-              <div class="desc">The Superbooster is always 15 °C above the Booster. Factory setting: +15.</div>
+              <div class="desc">The Superbooster is always 15 °C above the Booster.</div>
             {/if}
-            <input id="boostOffset" type="range" min="1" max={room} step="1" value={d.boostOffset}
-              style:--fill={fill(d.boostOffset ?? 1, room)}
-              oninput={(e) => conn.setBoostOffset(Number(e.currentTarget.value))} />
+            <Slider id="boostOffset" min={1} max={room} step={1} value={d.boostOffset ?? 1} defaultValue={factory.boost}
+              onchange={(v) => conn.setBoostOffset(v)} />
           </div>
           {#if !crafty && conn.caps?.superBoost && d.superBoostOffset !== undefined}
             <div class="row range">
@@ -133,9 +134,8 @@
               <div class="temps num">
                 <span class="temp"><span>Superboost</span><strong>{at(d.superBoostOffset)}</strong></span>
               </div>
-              <input id="superBoostOffset" type="range" min="1" max={room} step="1" value={d.superBoostOffset}
-                style:--fill={fill(d.superBoostOffset, room)}
-                oninput={(e) => conn.setSuperBoostOffset(Number(e.currentTarget.value))} />
+              <Slider id="superBoostOffset" min={1} max={room} step={1} value={d.superBoostOffset} defaultValue={factory.superBoost}
+                onchange={(v) => conn.setSuperBoostOffset(v)} />
             </div>
           {/if}
         {/if}
@@ -156,9 +156,8 @@
                 <span class="value num">{show(s, value)}</span>
               </div>
               {#if s.description}<div class="desc">{s.description}</div>{/if}
-              <input id={s.key} type="range" min={s.min} max={s.max} step={s.step} {value}
-                style:--fill="{((value - (s.min ?? 0)) / ((s.max ?? 100) - (s.min ?? 0))) * 100}%"
-                oninput={(e) => conn.setSetting(s.key, Number(e.currentTarget.value))} />
+              <Slider id={s.key} min={s.min ?? 0} max={s.max ?? 100} step={s.step ?? 1} {value} defaultValue={s.defaultValue}
+                onchange={(v) => conn.setSetting(s.key, v)} />
             </div>
           {/if}
         {/each}
@@ -387,29 +386,6 @@
     font-size: 15px;
     font-weight: 800;
     color: var(--orange-ink);
-  }
-  input[type='range'] {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 32px;
-    background: transparent;
-    margin: 2px 0 0;
-  }
-  input[type='range']::-webkit-slider-runnable-track {
-    height: 6px;
-    border-radius: 999px;
-    background: linear-gradient(to right, var(--orange) var(--fill), #e6e6e6 var(--fill));
-  }
-  input[type='range']::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 26px;
-    height: 26px;
-    margin-top: -10px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(0, 26, 77, 0.25);
-    border: 0;
   }
   .outline {
     height: 52px;
