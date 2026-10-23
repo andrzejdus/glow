@@ -197,6 +197,7 @@ class Connection {
     clearInterval(this.refreshTimer);
     await this.driver?.stop().catch(() => undefined);
     if (this.target && !this.demo) await ble.disconnect(this.target.id);
+    if (this.demo) this.target = null;
     this.driver = null;
     this.demo = false;
     this.device = null;
@@ -372,8 +373,11 @@ class Connection {
     this.modeSwitchable = (driver as { modeSwitchable?: boolean }).modeSwitchable !== false;
     this.offsetsAdjustable = typeof driver.setBoostOffsets === 'function';
     this.meta.values = Object.keys(this.device?.settings ?? {}).length;
-    this.last = { id: d.id, name: d.name, kind: d.kind };
-    if (!this.demo) this.persist();
+    // A demo device is never remembered, or Connect would try to reach it afterwards.
+    if (!this.demo) {
+      this.last = { id: d.id, name: d.name, kind: d.kind };
+      this.persist();
+    }
     clearInterval(this.refreshTimer);
     this.refreshTimer = setInterval(() => driver.refresh?.().catch(() => undefined), 30000);
     this.phase = 'connected';

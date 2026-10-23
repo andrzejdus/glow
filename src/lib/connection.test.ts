@@ -44,3 +44,16 @@ describe('fast taps on the target temperature', () => {
     expect(writes.length).toBeLessThanOrEqual(4);
   });
 });
+
+describe('demo mode', () => {
+  it('leaves the remembered device alone, so Connect goes to the real one afterwards', async () => {
+    const real = { id: 'AA:BB', name: 'STORZ&BICKEL', kind: 'crafty' as const };
+    conn.last = real;
+    await conn.startDemo('venty');
+    expect(conn.demo).toBe(true);
+    expect(conn.last).toEqual(real);
+    await conn.disconnect();
+    expect(conn.target).toBeNull();
+    expect(conn.last).toEqual(real);
+  });
+});
