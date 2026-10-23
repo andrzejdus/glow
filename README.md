@@ -1,7 +1,8 @@
 # Glow
 
 An unofficial Android app for STORZ & BICKEL Bluetooth vaporizers: VENTY, VEAZY,
-VOLCANO HYBRID, CRAFTY and CRAFTY+. It is not made or endorsed by STORZ & BICKEL.
+VOLCANO HYBRID, CRAFTY and CRAFTY+ (see [Supported devices](#supported-devices)). It is
+not made or endorsed by STORZ & BICKEL.
 
 <p>
   <img src="docs/screenshots/connect.png" width="160" alt="Connect screen">
@@ -31,6 +32,32 @@ Screenshots from demo mode (`npm run dev`, `/?demo=venty`, `/?demo=crafty`, `/?d
   documents one. Firmware update, factory reset and analysis are left out on purpose.
 - **Demo mode** (Connect screen: "Try without a device") simulates a VENTY or a
   VOLCANO.
+
+## Supported devices
+
+| | VENTY | VEAZY | CRAFTY+ | CRAFTY, firmware V02.51+ | CRAFTY, older firmware | VOLCANO HYBRID |
+|---|---|---|---|---|---|---|
+| **Tried on a real device** | no | no | **yes** (V03.24) | no | no | no |
+| Auto-connect | ✓ | ✓ | ✓ tested | ✓ | ✓ | ✓ |
+| Temperature and target | ✓ | ✓ | ✓ tested | ✓ | ✓ | ✓ |
+| Heater on/off from the app | ✓ | ✓ | ✓ tested | ✓ | – (device button only) | ✓ |
+| Status line mirrors the LED (Heating / Ready) | ✓ | ✓ | ✓ tested | ✓ | ✓ | ✓ (within 1 °C of target) |
+| Booster / Superbooster | ✓ switched from the app | ✓ switched from the app | ✓ readout, tested (the device button switches) | ✓ Booster readout | ✓ Booster readout | – |
+| Booster / Superbooster offsets | ✓ both | ✓ both | ✓ Booster (Superbooster is always +15 °C) | ✓ Booster | ✓ Booster | – |
+| Battery level | ✓ | ✓ | ✓ tested | ✓ | ✓ | – |
+| Charging / Charged | ✓ | ✓ | ✓ tested | ✓ (the CRAFTY+ bit, unconfirmed) | – | – |
+| Hours of operation, usage per month | ✓ | ✓ | ✓ tested | ✓ | ✓ | ✓ |
+| Auto-off countdown | ✓ | ✓ | ✓ | ✓ | – | ✓ |
+| Air pump | – | – | – | – | – | ✓ |
+| Workflows (Flow 1–3, Balloon) | – | – | – | – | – | ✓ |
+| Find My | ✓ | ✓ | ✓ | – | – | – |
+| Device settings | ✓ | ✓ | ✓ | ✓ | ✓ (fewer) | ✓ |
+| Device diagnostics (raw registers) | – | – | ✓ tested | ✓ | ✓ | – |
+
+✓ supported, – not available on that device or not in the app. "tested" means tried
+on a real device; everything else is built from the protocol and covered by unit tests
+only. MIGHTY and MIGHTY+ are not supported: the official web app Glow's drivers are
+based on has no protocol for them.
 
 ## Install
 
