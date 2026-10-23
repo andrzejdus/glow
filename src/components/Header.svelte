@@ -21,7 +21,7 @@
     </div>
   </div>
   {#if d && conn.caps?.battery && d.battery !== undefined}
-    <div class="pill num" aria-label="Battery {d.battery} percent{d.charging ? ', charging' : ''}">
+    <div class="pill num" aria-label="Battery {d.battery} percent{d.charging ? (d.battery >= 100 ? ', charged' : ', charging') : ''}">
       <Battery level={d.battery} charging={d.charging} />{d.battery}%
     </div>
   {/if}

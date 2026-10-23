@@ -68,7 +68,8 @@
           <Battery level={d.battery} charging={d.charging} size="lg" />
           <!-- Older CRAFTY firmware does not report the charger, so it gets no state rather than a wrong one. -->
           {#if d.charging !== undefined}
-            <div class="cell-state" class:charging={d.charging}>{d.charging ? 'Charging' : 'On battery'}</div>
+            <!-- On the charger at 100 % the battery is full; the bolt stays because it is still plugged in. -->
+            <div class="cell-state" class:charging={d.charging}>{d.charging ? (d.battery >= 100 ? 'Charged' : 'Charging') : 'On battery'}</div>
           {/if}
         </div>
       {:else}
