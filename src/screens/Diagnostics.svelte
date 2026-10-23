@@ -50,8 +50,14 @@
           const before = new Map(rows.map((r) => [r.source, r.value]));
           for (const r of next) {
             if (!(r.source in baseline)) baseline[r.source] = r.value;
-            if (!r.quiet && before.has(r.source) && before.get(r.source) !== r.value) {
-              log = [{ time, label: r.label, source: r.source, from: before.get(r.source)!, to: r.value, temps: temps(), unit: r.unit }, ...log].slice(0, 200);
+            const was = before.get(r.source);
+            // A quiet value (a countdown, a voltage) is logged only when it jumps up: a countdown the
+            // device restarted, a charger plugged in. Small wobbles are not.
+            const logged = r.quiet
+              ? was != null && r.value != null && r.value - was > Math.max(5, Math.abs(was) * 0.1)
+              : was !== r.value;
+            if (before.has(r.source) && logged) {
+              log = [{ time, label: r.label, source: r.source, from: was ?? null, to: r.value, temps: temps(), unit: r.unit }, ...log].slice(0, 200);
             }
           }
           rows = next;
