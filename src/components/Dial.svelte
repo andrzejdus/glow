@@ -156,12 +156,19 @@
     transition: --led-tint 1.2s ease;
   }
   .tint.heating {
-    --led-tint: color-mix(in srgb, var(--led-heat) 50%, transparent);
+    /* The same orange as the heat glow around the dial. */
+    --led-tint: color-mix(in srgb, var(--orange) 50%, transparent);
     animation: breathe 1.4s ease-in-out infinite;
   }
   .tint.ready {
     --led-tint: color-mix(in srgb, var(--led-ready) 45%, transparent);
     animation: breathe 3.4s ease-in-out infinite;
+  }
+  /* On the dark face the palette green mixes into teal; a brighter, yellower green stays green. */
+  @media (prefers-color-scheme: dark) {
+    .tint.ready {
+      --led-tint: color-mix(in srgb, #5fd35f 42%, transparent);
+    }
   }
   @keyframes breathe {
     0%, 100% { opacity: 0.6; }
