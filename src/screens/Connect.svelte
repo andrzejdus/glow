@@ -328,7 +328,7 @@
     cursor: pointer;
   }
   .device :global(.glyph) {
-    margin: -28px -11px;
+    margin: -28px -17px;
   }
   .d-name {
     flex-grow: 1;
