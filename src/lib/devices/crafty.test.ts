@@ -150,8 +150,8 @@ describe('crafty driver', () => {
     const { state } = await started(t);
     t.push(U.currentTemp, le16(1999));
     t.push(U.battery, le16(55));
-    t.push(U.status, le16(1 << 6));
-    t.push(U.status2, le16(0b0101)); // vibration off, temp reached
+    t.push(U.status, le16(1 << 6 | 1 << 8)); // superboost, ready (the LED is green)
+    t.push(U.status2, le16(0b0001)); // vibration off
     t.push(U.autoShutoffRemaining, le16(12));
     expect(state).toMatchObject({
       currentTemp: 200,
@@ -256,6 +256,19 @@ describe('crafty driver', () => {
     expect(driver.capabilities.heaterToggle).toBe(false);
     expect(driver.settingDefs.map((d) => d.key)).not.toContain('autoShutoff');
     await expect(driver.setHeater(true)).rejects.toThrow();
+  });
+
+  it('follows the LED with project status bit 8, not the brief status 2 bit 2', async () => {
+    const t = craftyPlus();
+    const { state } = await started(t);
+    // Recorded on a CRAFTY+ V03.24 heating to 190 °C: bit 2 of status 2 flashes on for ~4 s, bit 8 follows the LED.
+    t.push(U.status, le16(0x0515));
+    t.push(U.status2, le16(0x0084));
+    expect(state.tempReached).toBe(true);
+    t.push(U.status2, le16(0x0080));
+    expect(state.tempReached).toBe(true);
+    t.push(U.status, le16(0x0415)); // LED red again
+    expect(state.tempReached).toBe(false);
   });
 
   it('reports the charger from battery status bit 7, polled', async () => {

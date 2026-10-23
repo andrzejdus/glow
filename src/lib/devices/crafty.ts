@@ -45,10 +45,16 @@ const CHR = {
 const STATUS_HEATER_ACTIVE = 1 << 4;
 const STATUS_BOOST = 1 << 5;
 const STATUS_SUPERBOOST = 1 << 6;
+/**
+ * Undocumented: what the LED shows. On a CRAFTY+ (V03.24) it came on with every green LED and went
+ * off with every red one, 4–8 s after the user saw the LED change; nothing else followed the LED.
+ */
+const STATUS_READY = 1 << 8;
 
 /** Project status register 2 (0x1c3). */
 const STATUS2_VIBRATION_OFF = 1 << 0;
 const STATUS2_CHARGE_LED_OFF = 1 << 1;
+/** The official app's "reached" flag; on a CRAFTY+ it is on for only ~4 s once the target is first hit. */
 const STATUS2_TEMP_REACHED = 1 << 2;
 const STATUS2_FIND_DEVICE = 1 << 3;
 const STATUS2_PERMANENT_BLE = 1 << 12;
@@ -188,7 +194,8 @@ export function settingsFromStatus2(status2: number): Record<string, boolean> {
  * CRAFTY-specific extras on top of DeviceDriver.
  * - modeSwitchable: the app cannot switch boost/superboost on a CRAFTY; the button on the
  *   device does. mode is reported live, setMode() rejects anything but the current mode.
- * - tempReached: status register 2 says the target temperature has been reached.
+ * - tempReached: what the LED shows (green). Project status bit 8 on current firmware; legacy
+ *   firmware falls back to the official app's status register 2 bit 2.
  */
 export interface CraftyDriverExtras {
   readonly modeSwitchable: false;
@@ -267,14 +274,19 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private onStatus = (v: DataView) => {
     this.status = readU16(v);
     this.mode = modeFromStatus(this.status);
-    this.emit({ heaterOn: (this.status & STATUS_HEATER_ACTIVE) !== 0, mode: this.mode });
+    this._tempReached = this.reached();
+    this.emit({ heaterOn: (this.status & STATUS_HEATER_ACTIVE) !== 0, mode: this.mode, tempReached: this._tempReached });
   };
 
   private onStatus2 = (v: DataView) => {
     this.status2 = readU16(v);
-    this._tempReached = (this.status2 & STATUS2_TEMP_REACHED) !== 0;
+    this._tempReached = this.reached();
     this.emit({ tempReached: this._tempReached, settings: this.currentSettings() });
   };
+
+  private reached(): boolean {
+    return this.legacy ? (this.status2 & STATUS2_TEMP_REACHED) !== 0 : (this.status & STATUS_READY) !== 0;
+  }
 
   private currentSettings(): Record<string, boolean | number> {
     const s: Record<string, boolean | number> = {
@@ -316,7 +328,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
     await this.subscribe(SVC_SYSTEM, CHR.status2, this.onStatus2);
     this.status2 = readU16(await this.read(SVC_SYSTEM, CHR.status2));
-    this._tempReached = (this.status2 & STATUS2_TEMP_REACHED) !== 0;
+    this._tempReached = this.reached();
     this.emit({ tempReached: this._tempReached });
 
     await this.readOperatingTime();

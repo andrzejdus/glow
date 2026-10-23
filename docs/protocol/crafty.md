@@ -69,6 +69,7 @@ Project status register (`0093`):
 | 4 | Heater active |
 | 5 | Boost mode |
 | 6 | Superboost mode (wins over bit 5) |
+| 8 | **LED green** (ready). Not in the official app; found with Glow's diagnostics, see below. Glow's "Ready" on current firmware |
 | 3, 13 (`0x2008`) | Error flags (trigger the app's analysis) |
 | 15 | Factory reset recommended |
 
@@ -78,7 +79,8 @@ Project status register 2 (`01c3`), changed by read-modify-write of the cached v
 |---|---|
 | 0 | Vibration **disabled** |
 | 1 | Charge indicator LED **disabled** |
-| 2 | Target temperature reached (status, the app turns the reading green) |
+| 2 | Target temperature reached (status, the app turns the reading green). On a CRAFTY+ V03.24 only on for ~4 s when the target is first hit, so it is not the LED; Glow uses it only on legacy firmware |
+| 7 | Came on with bit 2 when the target was first hit and stayed on (observed, meaning unknown) |
 | 3 | Find My CRAFTY active (set to start; the device clears it after ~30 s) |
 | 12 | Permanent Bluetooth (the official code calls it `ENABLE_AUTOBLESHUTDOWN`, but the UI and the analysis text show set = Bluetooth always on) |
 
@@ -140,3 +142,17 @@ Glow reads battery status bit 7 as "charger connected", polled every 3 s (the re
 notified), current firmware only. Battery % moved 99 → 100 a few seconds after plugging in.
 Still open: whether one of these bits means "charging" rather than "charger connected", i.e. drops
 when the battery is full; this test ran at 99–100 %, so it cannot tell.
+
+## LED
+
+Recorded on a CRAFTY+ (V03.24) heating to 190 °C with Glow's Device diagnostics, the user tapping
+Mark at each LED change (green, red, green, red, green between 187 and 189 °C):
+
+- Project status bit 8 switched on after each green mark and off after each red one, 4–8 s later
+  every time; no other bit followed the LED. The lag is unexplained (the screen polls every 1 s).
+- Project status 2 bit 2 (the official app's "reached") came on at 191 °C together with bit 7 and
+  was off again 4 s later, while the LED stayed green.
+- The LED is not a fixed threshold on the reported temperature: the marks were at 187–189 °C for
+  both colours.
+- Battery status (`0063`) bit 5 came on with the heater and went on and off near the target, close
+  to but not in step with the LED; likely heater power.
