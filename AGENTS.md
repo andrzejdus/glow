@@ -23,6 +23,8 @@ through `@capacitor-community/bluetooth-le` on Android and Web Bluetooth in a br
 | `docs/protocol/*.md` | Protocol notes per family: UUIDs, payloads, connect sequence, hardware findings, open questions |
 | `android/` | Capacitor's Android project. `capacitor.build.gradle` and `capacitor.settings.gradle` are generated: do not edit |
 | `.github/workflows/` | `check.yml` (PRs, no secrets), `android.yml` (signed release builds, never on PRs), `screens.yml` (emulator screenshots, manual) |
+| `scripts/` | `render-assets.mjs` (icon, splash), `store-graphics.mjs` (Play graphics), `emulator-shots.sh` (used by `screens.yml`) |
+| `PRIVACY.md`, `store/` | Privacy policy and the Google Play kit (listing texts, graphics, Play Console answers); prepared, not published |
 
 ## Commands
 
@@ -46,6 +48,11 @@ cd android && ./gradlew assembleDebug         # JDK 21, Android SDK 36; installs
 - **Signing:** release builds are signed in CI from secrets. Never add keystores or
   `keystore.properties`, and never add a `pull_request` trigger to `android.yml` or use
   `pull_request_target` anywhere.
+- **Privacy claims follow the code.** A change to what the app stores, its permissions or its
+  backup behaviour updates `PRIVACY.md` and `store/play-console-answers.md` in the same PR.
+- **UI and store wording** describe a Bluetooth remote for a device (temperature, heater,
+  battery, settings). No substances, dosing or effects, and no maker branding in the app name,
+  icon or store graphics (Play policy and trademarks; see `store/play-console-answers.md`).
 - Only the CRAFTY+ (V03.24) has been tried on hardware. Do not mark a support-table row ✅ in
   `README.md` without a report from a real device.
 
@@ -60,3 +67,7 @@ cd android && ./gradlew assembleDebug         # JDK 21, Android SDK 36; installs
 - Comments say why, in plain English. UI text is short and plain, in English.
 - Commits: one change each, subject in the style of `git log` (area first:
   "CRAFTY: …", "README: …", "CI: …"). Version bumps (`0.1.x`) are the maintainer's.
+- Releases: a `vX.Y.Z` tag publishes a GitHub release with exactly one `glow-X.Y.Z.apk`
+  (Obtainium matches it; never attach a second APK or the AAB). The signed `.aab` stays a workflow
+  artifact; the Play internal-track upload runs only once `PLAY_SERVICE_ACCOUNT_JSON` is set.
+- Licence: GPL-3.0-or-later (`LICENSE`); contributions are published under it.
