@@ -111,16 +111,23 @@ cd android && ./gradlew assembleRelease
 
 Releases are built by GitHub Actions (`.github/workflows/android.yml`):
 
-- **Push to `main`:** builds a signed APK and keeps it as a workflow artifact.
+- **Push to `main`:** builds a signed APK and a signed App Bundle (`glow-*.aab`) and
+  keeps both as workflow artifacts. Only the APK goes on GitHub releases, so
+  Obtainium keeps finding a single `glow-*.apk`.
 - **Tag `v*`** (for example `git tag v0.2.0 && git push --tags`): also publishes a
-  GitHub release with the APK attached.
+  GitHub release with the APK attached and, once the `PLAY_SERVICE_ACCOUNT_JSON`
+  secret is set, uploads the bundle to the Google Play internal track (skipped
+  without it). The first bundle has to be uploaded by hand in Play Console.
 - **Screens** (`.github/workflows/screens.yml`, run by hand): boots Android 12 and 15
   emulators and screenshots a debug build, to check layout and system bars before a
   release.
 
 The signing key lives in the repository secrets `GLOW_KEYSTORE_BASE64` and
 `GLOW_KEYSTORE_PASSWORD`, plus offline backups. Every release has to be signed
-with the same key, or Android refuses to update the installed app.
+with the same key, or Android refuses to update the installed app. For the same
+reason Play App Signing uses this key too ("Export and upload a key from Java
+keystore", with Google's PEPK tool) rather than one Google generates, so Play
+installs and GitHub APKs share one signature and update each other.
 
 ### Layout
 
