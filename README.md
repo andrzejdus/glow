@@ -27,10 +27,6 @@ VOLCANO HYBRID, CRAFTY and CRAFTY+. It is not made or endorsed by STORZ & BICKEL
 Download the APK from the newest [release](../../releases/latest) on the phone and
 open it. Android asks once to allow installs from your browser.
 
-To get updates, add `https://github.com/andrzejdus/glow` to
-[Obtainium](https://github.com/ImranR98/Obtainium): it watches the releases and
-installs new versions.
-
 ## Build
 
 Requires Node 22, plus JDK 21 and the Android SDK (platform 36) for the APK.
