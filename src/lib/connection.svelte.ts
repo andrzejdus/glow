@@ -54,7 +54,9 @@ class Connection {
   private generation = 0;
   private userDisconnect = false;
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
-  private debounce = new Map<string, ReturnType<typeof setTimeout>>();
+  private writers = new Map<string, { op: () => Promise<void> | undefined; busy: boolean; timer?: ReturnType<typeof setTimeout> }>();
+  /** Field → until when the device's reports of it are ignored (a newer value is on its way). */
+  private holds = new Map<string, number>();
 
   async start() {
     const saved = await load<Saved>('connection', { last: null, autoConnect: true });
@@ -214,34 +216,34 @@ class Connection {
     if (!d) return;
     const c = Math.round(Math.min(d.maxTemp, Math.max(d.minTemp, celsius)));
     d.targetTemp = c;
-    this.later('target', immediate ? 0 : 250, () => this.driver?.setTargetTemp(c));
+    this.send('target', ['targetTemp'], immediate ? 0 : 150, () => this.driver?.setTargetTemp(c));
   }
 
   setHeater(on: boolean) {
     if (!this.device) return;
     tap();
     this.device.heaterOn = on;
-    this.run(() => this.driver?.setHeater(on));
+    this.send('heater', ['heaterOn'], 0, () => this.driver?.setHeater(on));
   }
 
   setMode(mode: HeatMode) {
     if (!this.device) return;
     tap();
     this.device.mode = mode;
-    this.run(() => this.driver?.setMode(mode));
+    this.send('mode', ['mode'], 0, () => this.driver?.setMode(mode));
   }
 
   setPump(on: boolean) {
     if (!this.device) return;
     this.device.pumpOn = on;
-    this.run(() => this.driver?.setPump?.(on));
+    this.send('pump', ['pumpOn'], 0, () => this.driver?.setPump?.(on));
   }
 
   setSetting(key: string, value: boolean | number) {
     if (!this.device) return;
     if (typeof value === 'boolean') tap();
     this.device.settings[key] = value;
-    this.later(`setting:${key}`, typeof value === 'number' ? 300 : 0, () => this.driver?.setSetting(key, value));
+    this.send(`setting:${key}`, [`settings.${key}`], typeof value === 'number' ? 200 : 0, () => this.driver?.setSetting(key, value));
   }
 
   setBoostOffset(boost: number) {
@@ -250,7 +252,7 @@ class Connection {
     d.boostOffset = boost;
     // CRAFTY+: the Superbooster always sits 15 °C above the Booster.
     if (d.kind === 'crafty' && d.superBoostOffset !== undefined) d.superBoostOffset = boost + 15;
-    this.later('boost', 300, () => this.driver?.setBoostOffsets?.(boost));
+    this.send('offsets', ['boostOffset', 'superBoostOffset'], 200, () => this.driver?.setBoostOffsets?.(boost));
   }
 
   setSuperBoostOffset(superBoost: number) {
@@ -258,7 +260,7 @@ class Connection {
     if (!d || d.boostOffset === undefined) return;
     d.superBoostOffset = superBoost;
     const boost = d.boostOffset;
-    this.later('superboost', 300, () => this.driver?.setBoostOffsets?.(boost, superBoost));
+    this.send('offsets', ['boostOffset', 'superBoostOffset'], 200, () => this.driver?.setBoostOffsets?.(boost, superBoost));
   }
 
   findMy() {
@@ -266,10 +268,45 @@ class Connection {
     this.run(() => this.driver?.findMyDevice?.());
   }
 
-  private later(key: string, ms: number, op: () => Promise<void> | undefined) {
-    clearTimeout(this.debounce.get(key));
-    if (ms === 0) return this.run(op);
-    this.debounce.set(key, setTimeout(() => this.run(op), ms));
+  /**
+   * Sends only the newest value for `key`, one write at a time: fast taps never queue up a
+   * backlog of stale writes. While a value is waiting or being written, and briefly after,
+   * the device's reports of those `fields` are ignored so the UI does not jump back.
+   */
+  private send(key: string, fields: string[], delayMs: number, op: () => Promise<void> | undefined) {
+    this.hold(fields, 60_000);
+    let w = this.writers.get(key);
+    if (!w) {
+      w = { op, busy: false };
+      this.writers.set(key, w);
+    }
+    w.op = op;
+    clearTimeout(w.timer);
+    w.timer = setTimeout(() => this.flush(key, fields), delayMs);
+  }
+
+  private async flush(key: string, fields: string[]): Promise<void> {
+    const w = this.writers.get(key);
+    if (!w || w.busy) return;
+    w.busy = true;
+    const op = w.op;
+    try {
+      await op();
+    } catch (e) {
+      this.say(e instanceof Error ? e.message : String(e));
+    } finally {
+      w.busy = false;
+    }
+    if (w.op !== op) {
+      clearTimeout(w.timer);
+      return this.flush(key, fields);
+    }
+    this.hold(fields, 1500);
+  }
+
+  private hold(fields: string[], ms: number) {
+    const until = Date.now() + ms;
+    for (const f of fields) this.holds.set(f, until);
   }
 
   private run(op: () => Promise<void> | undefined) {
@@ -346,9 +383,18 @@ class Connection {
   private apply(patch: Partial<DeviceState>) {
     const d = this.device;
     if (!d) return;
+    const now = Date.now();
+    const held = (field: string) => (this.holds.get(field) ?? 0) > now;
     const { settings, ...rest } = patch;
-    Object.assign(d, rest);
-    if (settings) d.settings = { ...d.settings, ...settings };
+    const fields = rest as Record<string, unknown>;
+    const current = d as unknown as Record<string, unknown>;
+    for (const k of Object.keys(fields)) if (held(k) && fields[k] !== current[k]) delete fields[k];
+    Object.assign(d, fields);
+    if (settings) {
+      const next = { ...settings };
+      for (const k of Object.keys(next)) if (held(`settings.${k}`) && next[k] !== d.settings[k]) delete next[k];
+      d.settings = { ...d.settings, ...next };
+    }
     usage.observe(d);
   }
 
