@@ -255,9 +255,10 @@ class Connection {
   setBoostOffset(boost: number) {
     const d = this.device;
     if (!d || !this.live()) return;
+    // The Superbooster sits on top of the Booster (CRAFTY+: always 15 °C; VENTY/VEAZY: its own
+    // offset), so it moves with it.
+    if (d.superBoostOffset !== undefined && d.boostOffset !== undefined) d.superBoostOffset += boost - d.boostOffset;
     d.boostOffset = boost;
-    // CRAFTY+: the Superbooster always sits 15 °C above the Booster.
-    if (d.kind === 'crafty' && d.superBoostOffset !== undefined) d.superBoostOffset = boost + 15;
     this.send('offsets', ['boostOffset', 'superBoostOffset'], 200, () => this.driver?.setBoostOffsets?.(boost));
   }
 

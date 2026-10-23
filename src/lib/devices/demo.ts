@@ -46,7 +46,8 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     minutes: isVolcano ? 811 * 60 + 42 : 142 * 60 + 18,
     battery: 78,
   };
-  const offsets = { boost: 10, superboost: kind === 'crafty' ? 25 : 15 };
+  // Offsets from the base temperature; the Superbooster sits on top of the Booster.
+  const offsets = { boost: 10, superboost: 25 };
   // Like the real ones, a demo VENTY/VEAZY reports no live temperature, only "ready".
   const live = kind !== 'venty' && kind !== 'veazy';
   const goal = () => Math.min(isVolcano ? 230 : 210, s.target + (s.mode === 'boost' ? offsets.boost : s.mode === 'superboost' ? offsets.superboost : 0));
@@ -121,9 +122,10 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
       emit({ mode });
     },
     async setBoostOffsets(boost, superBoost) {
-      offsets.boost = boost;
       if (kind === 'crafty') offsets.superboost = boost + 15;
       else if (superBoost !== undefined) offsets.superboost = superBoost;
+      else offsets.superboost += boost - offsets.boost;
+      offsets.boost = boost;
       emit({ boostOffset: offsets.boost, superBoostOffset: offsets.superboost });
     },
     async setPump(on) {

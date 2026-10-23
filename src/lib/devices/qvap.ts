@@ -71,6 +71,8 @@ const PENDING_WRITE_MS = 2500;
 const USAGE_EVERY_N_POLLS = 31;
 
 const MODE_CODES: Record<HeatMode, number> = { normal: 1, boost: 2, superboost: 3 };
+/** How long to wait for the device to leave boost after writing mode 1, before cycling the heater. */
+const LEAVE_BOOST_CHECK_MS = 1500;
 
 const MODELS: Record<'venty' | 'veazy', string> = { venty: 'VENTY', veazy: 'VEAZY' };
 
@@ -229,6 +231,10 @@ export class QvapDriver implements DeviceDriver {
   private findModeOnConnect = false;
   private gotFirstStatus = false;
   private heaterMode = 0;
+  /** The raw offsets as the device reports them; the superboost byte is on top of the boost. */
+  private boostRaw = 0;
+  private superBoostRaw = 0;
+  private modeWrite = 0;
   private pending: { target?: PendingField; boost?: PendingField; superBoost?: PendingField } = {};
   private readonly pollIntervalMs: number;
   private readonly firmwareTimeoutMs: number;
@@ -324,18 +330,32 @@ export class QvapDriver implements DeviceDriver {
    */
   async setMode(mode: HeatMode): Promise<void> {
     if (this.heaterMode === 0) return;
+    const write = ++this.modeWrite;
     await this.send(statusWrite(STATUS_MASK.heater, { 11: MODE_CODES[mode] }));
+    if (mode !== 'normal') return;
+    // One live-tested client reports that a VENTY stays in boost after mode 1 and needs the heater
+    // switched off and on; another writes mode 1 alone. So: check, and cycle only if boost stayed.
+    await new Promise((r) => setTimeout(r, LEAVE_BOOST_CHECK_MS));
+    if (write !== this.modeWrite || this.heaterMode < 2) return;
+    await this.send(statusWrite(STATUS_MASK.heater, { 11: 0 }));
+    await this.send(statusWrite(STATUS_MASK.heater, { 11: 1 }));
   }
 
+  /**
+   * Offsets from the base temperature, as the app shows them. The device stores the superboost
+   * offset on top of the boost one (superboost = target + boost + superboost byte).
+   */
   async setBoostOffsets(boost: number, superBoost?: number): Promise<void> {
     const boostValue = clamp(Math.round(boost), MIN_OFFSET, MAX_OFFSET);
+    this.boostRaw = boostValue;
     this.pending.boost = { value: boostValue, until: Date.now() + PENDING_WRITE_MS };
-    this.onChange({ boostOffset: boostValue });
+    this.onChange({ boostOffset: boostValue, superBoostOffset: boostValue + this.superBoostRaw });
     await this.send(statusWrite(STATUS_MASK.boost, { 6: boostValue }));
     if (superBoost !== undefined) {
-      const superValue = clamp(Math.round(superBoost), MIN_OFFSET, MAX_OFFSET);
+      const superValue = clamp(Math.round(superBoost) - boostValue, MIN_OFFSET, MAX_OFFSET);
+      this.superBoostRaw = superValue;
       this.pending.superBoost = { value: superValue, until: Date.now() + PENDING_WRITE_MS };
-      this.onChange({ superBoostOffset: superValue });
+      this.onChange({ superBoostOffset: boostValue + superValue });
       await this.send(statusWrite(STATUS_MASK.superBoost, { 7: superValue }));
     }
   }
@@ -528,10 +548,10 @@ export class QvapDriver implements DeviceDriver {
       settings,
     };
     if (this.accept('target', status.targetTemp)) patch.targetTemp = status.targetTemp;
-    if (this.accept('boost', status.boostOffset)) patch.boostOffset = status.boostOffset;
-    if (this.accept('superBoost', status.superBoostOffset)) {
-      patch.superBoostOffset = status.superBoostOffset;
-    }
+    if (this.accept('boost', status.boostOffset)) this.boostRaw = status.boostOffset;
+    if (this.accept('superBoost', status.superBoostOffset)) this.superBoostRaw = status.superBoostOffset;
+    patch.boostOffset = this.boostRaw;
+    patch.superBoostOffset = this.boostRaw + this.superBoostRaw;
     this.onChange(patch);
   }
 

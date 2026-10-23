@@ -137,7 +137,7 @@
               {#if crafty}
                 <div class="desc">Fixed on CRAFTY+: always 15 °C above the Booster, so it follows the Booster offset.</div>
               {/if}
-              <Slider id="superBoostOffset" min={1} max={room} step={1} value={Math.min(room, d.superBoostOffset)}
+              <Slider id="superBoostOffset" min={Math.min(room, (d.boostOffset ?? 0) + 1)} max={room} step={1} value={Math.min(room, d.superBoostOffset)}
                 defaultValue={factory.superBoost} disabled={crafty} onchange={(v) => conn.setSuperBoostOffset(v)} />
             </div>
           {/if}

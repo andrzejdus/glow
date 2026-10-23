@@ -130,7 +130,7 @@ describe('qvap decoding', () => {
       firmwareBle: 'V00.05',
       targetTemp: 185,
       boostOffset: 10,
-      superBoostOffset: 15,
+      superBoostOffset: 25, // the superboost byte (15) sits on top of the boost (10)
       battery: 76,
       charging: true,
       heaterOn: true,
@@ -224,8 +224,6 @@ describe('qvap writes', () => {
     const { transport, driver } = await connect();
     await driver.setMode('superboost');
     expect(transport.lastWrite()).toEqual(pad([0x01, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3]));
-    await driver.setMode('normal');
-    expect(transport.lastWrite()).toEqual(pad([0x01, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]));
     await driver.stop();
 
     const off = [...STATUS];
@@ -237,13 +235,14 @@ describe('qvap writes', () => {
     await idle.driver.stop();
   });
 
-  it('setBoostOffsets writes boost and superboost separately', async () => {
-    const { transport, driver } = await connect();
+  it('setBoostOffsets writes the superboost as the part on top of the boost', async () => {
+    const { transport, driver, state } = await connect();
     await driver.setBoostOffsets(12, 20);
     expect(transport.writes.slice(-2)).toEqual([
       pad([0x01, 0x04, 0, 0, 0, 0, 12]),
-      pad([0x01, 0x08, 0, 0, 0, 0, 0, 20]),
+      pad([0x01, 0x08, 0, 0, 0, 0, 0, 8]),
     ]);
+    expect(state).toMatchObject({ boostOffset: 12, superBoostOffset: 20 });
     await driver.stop();
   });
 
@@ -254,6 +253,26 @@ describe('qvap writes', () => {
     const { driver, state } = await connect('venty', deviceResponder(status));
     expect(state.currentTemp).toBeUndefined();
     await driver.stop();
+  });
+
+  it('leaving boost: mode 1, and the heater cycled only if the device stays in boost', async () => {
+    // A device that ignores mode 1 while boosting: the reply keeps mode 2.
+    const stuck = await connect();
+    await stuck.driver.setMode('normal');
+    expect(stuck.transport.writes.slice(-3).map((w) => w[11])).toEqual([1, 0, 1]);
+    await stuck.driver.stop();
+
+    // A device that takes mode 1.
+    const status = [...STATUS];
+    const obeys = deviceResponder(status);
+    const ok = await connect('venty', (w) => {
+      if (w[0] === CMD.status && w[1] & 0x20) status[11] = w[11];
+      return obeys(w);
+    });
+    const before = ok.transport.writes.length;
+    await ok.driver.setMode('normal');
+    expect(ok.transport.writes.slice(before).map((w) => w[11])).toEqual([1]);
+    await ok.driver.stop();
   });
 
   it('a toggle setting is a masked write of settings byte 14', async () => {
