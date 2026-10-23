@@ -291,25 +291,6 @@ describe('crafty driver', () => {
     }
   });
 
-  it('reads the temperature every second, between its notifications', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
-    try {
-      const t = craftyPlus();
-      const { driver, state } = await started(t);
-      t.values.set(U.currentTemp, le16(1812));
-      vi.advanceTimersByTime(1000);
-      await new Promise((r) => setTimeout(r, 10));
-      expect(state.currentTemp).toBe(181);
-      await driver.stop();
-      t.ops = [];
-      vi.advanceTimersByTime(3000);
-      await new Promise((r) => setTimeout(r, 10));
-      expect(t.ops.filter((o) => o.chr === U.currentTemp)).toHaveLength(0);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('does not poll the charger while the app is in the background', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const page = new EventTarget() as EventTarget & { visibilityState: string };

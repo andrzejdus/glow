@@ -66,8 +66,6 @@ const STATUS2_PERMANENT_BLE = 1 << 12;
  */
 const BATTERY_STATUS_CHARGER = 1 << 7;
 const CHARGER_POLL_MS = 3000;
-/** The current temperature is notified only now and then, so it is also read every second. */
-const TEMP_POLL_MS = 1000;
 /** In the background nobody sees the battery, so the charger is not polled. */
 const pageHidden = () => globalThis.document?.visibilityState === 'hidden';
 
@@ -221,8 +219,6 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private mode: HeatMode = 'normal';
   private _tempReached = false;
   private chargerTimer: ReturnType<typeof setInterval> | undefined;
-  private tempTimer: ReturnType<typeof setInterval> | undefined;
-  private tempReading = false;
 
   constructor(private readonly ble: BleTransport) {}
 
@@ -359,8 +355,6 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     if (!this.legacy) await this.subscribe(SVC_SYSTEM, CHR.status, this.onStatus);
     this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
 
-    this.tempTimer = setInterval(() => pageHidden() || this.readTemp(), TEMP_POLL_MS);
-
     // The official app reads the battery status only on current firmware, so legacy units get no charging state.
     if (!this.legacy) {
       await this.readCharger();
@@ -372,15 +366,6 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private onVisible = () => {
     if (!pageHidden()) this.readCharger();
   };
-
-  /** One read at a time: on a slow link the reads never pile up. */
-  private async readTemp() {
-    if (this.tempReading) return;
-    this.tempReading = true;
-    const v = await this.read(SVC_CONTROL, CHR.currentTemp).catch(() => null);
-    this.tempReading = false;
-    if (v) this.onCurrentTemp(v);
-  }
 
   private async readCharger() {
     const v = await this.read(SVC_SYSTEM, CHR.batteryStatus).catch(() => null);
@@ -395,7 +380,6 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
   async stop(): Promise<void> {
     clearInterval(this.chargerTimer);
-    clearInterval(this.tempTimer);
     globalThis.document?.removeEventListener('visibilitychange', this.onVisible);
     const subs = this.subscribed;
     this.subscribed = [];
