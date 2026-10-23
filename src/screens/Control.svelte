@@ -44,9 +44,10 @@
     return list;
   });
   const modeIndex = $derived(Math.max(0, modes.findIndex((m) => m.id === d.mode)));
-  const modeLocked = $derived(!d.heaterOn);
+  const modeLocked = $derived(!d.heaterOn || offline);
 
   function pickMode(mode: HeatMode) {
+    if (offline) return;
     if (!d.heaterOn) return conn.say(`${names.boost} works while the heater is on.`);
     conn.setMode(mode);
   }
@@ -101,18 +102,18 @@
 
   {#if caps?.pump}
     <div class="duo rise d4">
-      <button type="button" class="tile press heat" class:on={d.heaterOn} aria-pressed={d.heaterOn}
+      <button type="button" class="tile press heat" class:on={d.heaterOn} aria-pressed={d.heaterOn} disabled={offline}
         onclick={() => conn.setHeater(!d.heaterOn)}>
         <Icon name="flame" size={24} class={d.heaterOn ? 'flicker' : ''} /> {d.heaterOn ? 'Heat on' : 'Heat'}
       </button>
-      <button type="button" class="tile press air" class:on={d.pumpOn} aria-pressed={!!d.pumpOn}
+      <button type="button" class="tile press air" class:on={d.pumpOn} aria-pressed={!!d.pumpOn} disabled={offline}
         onclick={() => conn.setPump(!d.pumpOn)}>
         <Icon name="fan" size={24} class={d.pumpOn ? 'spinning' : ''} /> {d.pumpOn ? 'Air on' : 'Air'}
       </button>
     </div>
   {:else if caps?.heaterToggle}
     <!-- The VOLCANO Heat tile, full width. -->
-    <button type="button" class="tile press heat rise d4" class:on={d.heaterOn} aria-pressed={d.heaterOn}
+    <button type="button" class="tile press heat rise d4" class:on={d.heaterOn} aria-pressed={d.heaterOn} disabled={offline}
       onclick={() => conn.setHeater(!d.heaterOn)}>
       <Icon name="flame" size={24} class={d.heaterOn ? 'flicker' : ''} /> {d.heaterOn ? 'Heat on' : 'Heat'}
     </button>
@@ -285,6 +286,11 @@
     justify-content: center;
     gap: 10px;
     cursor: pointer;
+  }
+  /* Waiting for the device: the controls stay where they are, greyed out. */
+  .tile:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .tile.heat.on {
     background: var(--orange);

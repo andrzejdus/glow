@@ -217,34 +217,34 @@ class Connection {
 
   setTarget(celsius: number, immediate = false) {
     const d = this.device;
-    if (!d) return;
+    if (!d || !this.live()) return;
     const c = Math.round(Math.min(d.maxTemp, Math.max(d.minTemp, celsius)));
     d.targetTemp = c;
     this.send('target', ['targetTemp'], immediate ? 0 : 150, () => this.driver?.setTargetTemp(c));
   }
 
   setHeater(on: boolean) {
-    if (!this.device) return;
+    if (!this.live()) return;
     tap();
     this.device.heaterOn = on;
     this.send('heater', ['heaterOn'], 0, () => this.driver?.setHeater(on));
   }
 
   setMode(mode: HeatMode) {
-    if (!this.device) return;
+    if (!this.live()) return;
     tap();
     this.device.mode = mode;
     this.send('mode', ['mode'], 0, () => this.driver?.setMode(mode));
   }
 
   setPump(on: boolean) {
-    if (!this.device) return;
+    if (!this.live()) return;
     this.device.pumpOn = on;
     this.send('pump', ['pumpOn'], 0, () => this.driver?.setPump?.(on));
   }
 
   setSetting(key: string, value: boolean | number) {
-    if (!this.device) return;
+    if (!this.live()) return;
     if (typeof value === 'boolean') tap();
     this.device.settings[key] = value;
     this.send(`setting:${key}`, [`settings.${key}`], typeof value === 'number' ? 200 : 0, () => this.driver?.setSetting(key, value));
@@ -252,7 +252,7 @@ class Connection {
 
   setBoostOffset(boost: number) {
     const d = this.device;
-    if (!d) return;
+    if (!d || !this.live()) return;
     d.boostOffset = boost;
     // CRAFTY+: the Superbooster always sits 15 °C above the Booster.
     if (d.kind === 'crafty' && d.superBoostOffset !== undefined) d.superBoostOffset = boost + 15;
@@ -261,15 +261,23 @@ class Connection {
 
   setSuperBoostOffset(superBoost: number) {
     const d = this.device;
-    if (!d || d.boostOffset === undefined) return;
+    if (!d || d.boostOffset === undefined || !this.live()) return;
     d.superBoostOffset = superBoost;
     const boost = d.boostOffset;
     this.send('offsets', ['boostOffset', 'superBoostOffset'], 200, () => this.driver?.setBoostOffsets?.(boost, superBoost));
   }
 
   findMy() {
+    if (!this.live()) return;
     tap();
     this.run(() => this.driver?.findMyDevice?.());
+  }
+
+  /** Commands only go to a connected device; while it reconnects they are refused, not queued. */
+  private live(): this is { device: DeviceState } {
+    if (this.device && this.phase === 'connected') return true;
+    if (this.phase === 'reconnecting') this.say('Waiting for the device - try again once it is back.');
+    return false;
   }
 
   /**

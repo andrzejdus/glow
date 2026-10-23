@@ -75,12 +75,12 @@
     </div>
     <div class="target num">Target <strong>{target === undefined ? '–' : toUnit(target, unit)}°{unit}</strong></div>
   </div>
-  <button type="button" class="round step left press" aria-label="Lower target"
+  <button type="button" class="round step left press" aria-label="Lower target" disabled={offline}
     onpointerdown={() => hold(-1)} onpointerup={release} onpointerleave={release} onpointercancel={release}
     onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onstep(-1)}>
     <Icon name="minus" size={20} color="var(--navy)" stroke={2.4} />
   </button>
-  <button type="button" class="round step right press" aria-label="Raise target"
+  <button type="button" class="round step right press" aria-label="Raise target" disabled={offline}
     onpointerdown={() => hold(1)} onpointerup={release} onpointerleave={release} onpointercancel={release}
     onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onstep(1)}>
     <Icon name="plus" size={20} color="var(--navy)" stroke={2.4} />
@@ -177,6 +177,9 @@
     height: 52px;
     box-shadow: 0 4px 14px rgba(0, 26, 77, 0.1);
     touch-action: manipulation;
+  }
+  .step:disabled {
+    cursor: default;
   }
   .left {
     left: 16px;

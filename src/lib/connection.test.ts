@@ -84,3 +84,35 @@ describe('searching for the remembered device', () => {
     }
   });
 });
+
+describe('while the device reconnects', () => {
+  it('refuses commands instead of showing a change the device never got', async () => {
+    const calls: string[] = [];
+    const driver: DeviceDriver = {
+      kind: 'crafty',
+      capabilities: { pump: false, battery: true, boost: true, superBoost: true, findMy: true, heaterToggle: true },
+      settingDefs: [],
+      async start(onChange) {
+        onChange({ targetTemp: 180, currentTemp: 150, heaterOn: false });
+      },
+      async stop() {},
+      async setTargetTemp() { calls.push('target'); },
+      async setHeater() { calls.push('heater'); },
+      async setMode() {},
+      async setSetting() {},
+    };
+    const internals = conn as unknown as { attach: (...a: unknown[]) => Promise<void>; generation: number };
+    await internals.attach({ id: 'y', name: 'STORZ&BICKEL', kind: 'crafty' }, driver, internals.generation);
+    conn.phase = 'reconnecting';
+    conn.setHeater(true);
+    conn.setTarget(190, true);
+    await wait(50);
+    expect(calls).toEqual([]);
+    expect(conn.device).toMatchObject({ heaterOn: false, targetTemp: 180 });
+    expect(conn.toast).toMatch(/Waiting for the device/);
+    conn.phase = 'connected';
+    conn.setHeater(true);
+    await wait(50);
+    expect(calls).toEqual(['heater']);
+  });
+});
