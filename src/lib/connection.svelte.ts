@@ -51,6 +51,8 @@ class Connection {
   /** Shown next to the connect steps. */
   meta = $state({ bluetoothMs: 0, rssi: undefined as number | undefined, values: 0 });
   toast = $state<string | null>(null);
+  /** When the device last reported the auto-off time left; the UI counts down from there. */
+  autoOffAt = $state(0);
 
   private driver: DeviceDriver | null = null;
   private generation = 0;
@@ -325,6 +327,16 @@ class Connection {
     op()?.catch((e: unknown) => this.say(e instanceof Error ? e.message : String(e)));
   }
 
+  /**
+   * Seconds until auto-off. Devices report it only every few seconds, so this counts down by itself
+   * between reports and takes the device's value again with each one.
+   */
+  autoOffLeft(now: number): number | undefined {
+    const left = this.device?.autoShutoffRemainingSec;
+    if (left === undefined) return undefined;
+    return Math.max(0, left - Math.floor((now - this.autoOffAt) / 1000));
+  }
+
   /** Fresh raw registers for the diagnostics screen; empty when not connected. */
   async diagnostics(): Promise<DiagnosticValue[]> {
     return (await this.driver?.diagnostics?.()) ?? [];
@@ -414,6 +426,7 @@ class Connection {
     const now = Date.now();
     const held = (field: string) => (this.holds.get(field) ?? 0) > now;
     const { settings, ...rest } = patch;
+    if (rest.autoShutoffRemainingSec !== undefined) this.autoOffAt = now;
     const fields = rest as Record<string, unknown>;
     const current = d as unknown as Record<string, unknown>;
     for (const k of Object.keys(fields)) if (held(k) && fields[k] !== current[k]) delete fields[k];

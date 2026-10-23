@@ -116,3 +116,31 @@ describe('while the device reconnects', () => {
     expect(calls).toEqual(['heater']);
   });
 });
+
+describe('auto-off countdown', () => {
+  it('counts down by itself between device reports and takes each new report', async () => {
+    let emit: (p: Partial<DeviceState>) => void = () => {};
+    const driver: DeviceDriver = {
+      kind: 'crafty',
+      capabilities: { pump: false, battery: true, boost: true, superBoost: true, findMy: true, heaterToggle: true },
+      settingDefs: [],
+      async start(onChange) {
+        emit = onChange;
+        onChange({ heaterOn: true, autoShutoffRemainingSec: 120 });
+      },
+      async stop() {},
+      async setTargetTemp() {},
+      async setHeater() {},
+      async setMode() {},
+      async setSetting() {},
+    };
+    const internals = conn as unknown as { attach: (...a: unknown[]) => Promise<void>; generation: number };
+    await internals.attach({ id: 'z', name: 'STORZ&BICKEL', kind: 'crafty' }, driver, internals.generation);
+    const t0 = conn.autoOffAt;
+    expect(conn.autoOffLeft(t0)).toBe(120);
+    expect(conn.autoOffLeft(t0 + 3500)).toBe(117);
+    expect(conn.autoOffLeft(t0 + 500_000)).toBe(0);
+    emit({ autoShutoffRemainingSec: 110 });
+    expect(conn.autoOffLeft(conn.autoOffAt + 1000)).toBe(109);
+  });
+});

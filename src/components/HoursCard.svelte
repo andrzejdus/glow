@@ -12,11 +12,12 @@
   const known = $derived(months.filter((w) => w.hours !== null && !w.current));
   const avg = $derived(known.length ? known.reduce((a, w) => a + (w.hours ?? 0), 0) / known.length : null);
   // Time left until the device switches itself off, when it reports it; nothing while it is off.
+  const left = $derived(conn.autoOffLeft(usage.now));
   const autoOff = $derived(
     !d?.heaterOn
       ? '–'
-      : d.autoShutoffRemainingSec !== undefined
-        ? mmss(d.autoShutoffRemainingSec)
+      : left !== undefined
+        ? mmss(left)
         : d.autoShutoffSec !== undefined
           ? `after ${duration(d.autoShutoffSec)}`
           : '–',
