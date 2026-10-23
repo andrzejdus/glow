@@ -36,6 +36,10 @@ const CHR = {
   batteryStatus: uuid(0x63),
   batteryStatus2: uuid(0x73),
   systemStatus: uuid(0x83),
+  // Not in the official app; named alike by J-Cat/crafty-control, duramson/vo0t and lfuelling/sbcontrol.
+  chargingStatus: uuid(0xa3),
+  mainsVoltage: uuid(0xc3),
+  batteryCurrent: uuid(0xe3),
   securityCode: uuid(0x1b3),
   status2: uuid(0x1c3),
   useMinutes: uuid(0x1e3),
@@ -143,6 +147,8 @@ const u16 = (value: number) => {
 const readU16 = (view: DataView): number =>
   view.byteLength >= 2 ? view.getUint16(0, true) : view.byteLength === 1 ? view.getUint8(0) : 0;
 
+const readI16 = (view: DataView): number => (view.byteLength >= 2 ? view.getInt16(0, true) : 0);
+
 const readText = (view: DataView): string =>
   new TextDecoder('utf-8')
     .decode(new Uint8Array(view.buffer, view.byteOffset, view.byteLength))
@@ -219,6 +225,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private mode: HeatMode = 'normal';
   private _tempReached = false;
   private chargerTimer: ReturnType<typeof setInterval> | undefined;
+  /** Battery status updates the device pushed by itself (unknown whether it does; three clients subscribe). */
+  private batteryStatusPushes = 0;
 
   constructor(private readonly ble: BleTransport) {}
 
@@ -357,6 +365,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
     // The official app reads the battery status only on current firmware, so legacy units get no charging state.
     if (!this.legacy) {
+      // Try notifications too; the 3 s poll stays until diagnostics show the device sends them.
+      await this.subscribe(SVC_SYSTEM, CHR.batteryStatus, this.onBatteryStatus).catch(() => undefined);
       await this.readCharger();
       this.chargerTimer = setInterval(() => pageHidden() || this.readCharger(), CHARGER_POLL_MS);
       globalThis.document?.addEventListener('visibilitychange', this.onVisible);
@@ -371,6 +381,11 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     const v = await this.read(SVC_SYSTEM, CHR.batteryStatus).catch(() => null);
     if (v) this.emit({ charging: (readU16(v) & BATTERY_STATUS_CHARGER) !== 0 });
   }
+
+  private onBatteryStatus = (v: DataView) => {
+    this.batteryStatusPushes++;
+    this.emit({ charging: (readU16(v) & BATTERY_STATUS_CHARGER) !== 0 });
+  };
 
   private async readOperatingTime() {
     const hours = readU16(await this.read(SVC_SYSTEM, CHR.useHours));
@@ -468,7 +483,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
   async diagnostics(): Promise<DiagnosticValue[]> {
     // The official app reads the last three only for its analysis; their bits are undocumented.
-    const registers: [string, string, string, string?, boolean?][] = [
+    // label, service, characteristic, unit (plain number instead of bits), quiet (not logged), signed
+    const registers: [string, string, string, string?, boolean?, boolean?][] = [
       ['Project status', SVC_SYSTEM, CHR.status],
       ['Project status 2', SVC_SYSTEM, CHR.status2],
       ['System status', SVC_SYSTEM, CHR.systemStatus],
@@ -477,12 +493,17 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
       ['Battery', SVC_CONTROL, CHR.battery, '%'],
       ['Auto-off setting', SVC_CONTROL, CHR.autoShutoff, 's'],
       ['Auto-off left', SVC_CONTROL, CHR.autoShutoffRemaining, 's', true],
+      // Other clients read these as the charger state (2 = charging), mains voltage and battery current.
+      ['Charging status', SVC_SYSTEM, CHR.chargingStatus],
+      ['Mains voltage', SVC_SYSTEM, CHR.mainsVoltage, 'mV', true],
+      ['Battery current', SVC_SYSTEM, CHR.batteryCurrent, 'mA', true, true],
     ];
     const out: DiagnosticValue[] = [];
-    for (const [label, service, chr, unit, quiet] of registers) {
-      const value = await this.read(service, chr).then(readU16, () => null);
+    for (const [label, service, chr, unit, quiet, signed] of registers) {
+      const value = await this.read(service, chr).then(signed ? readI16 : readU16, () => null);
       out.push({ label, source: `0x${chr.slice(4, 8)}`, value, unit, quiet });
     }
+    out.push({ label: 'Battery status pushes', source: 'notify 0x0063', value: this.batteryStatusPushes, unit: '×' });
     return out;
   }
 

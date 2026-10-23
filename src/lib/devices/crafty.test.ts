@@ -285,7 +285,7 @@ describe('crafty driver', () => {
       t.values.set(U.batteryStatus, le16(0x0050));
       vi.advanceTimersByTime(3000);
       await new Promise((r) => setTimeout(r, 10));
-      expect(t.ops.filter((o) => o.chr === U.batteryStatus)).toHaveLength(1);
+      expect(t.ops.filter((o) => o.chr === U.batteryStatus && o.type === 'read')).toHaveLength(1);
     } finally {
       vi.useRealTimers();
     }
@@ -314,6 +314,18 @@ describe('crafty driver', () => {
       vi.unstubAllGlobals();
       vi.useRealTimers();
     }
+  });
+
+  it('takes battery status notifications too, and counts them for diagnostics', async () => {
+    const t = craftyPlus({ [U.batteryStatus]: le16(0x0050), [U.batteryCurrent]: le16(0xff38) });
+    const { driver, state } = await started(t);
+    expect(state.charging).toBe(false);
+    t.push(U.batteryStatus, le16(0x80d4));
+    expect(state.charging).toBe(true);
+    const regs = await driver.diagnostics!();
+    expect(regs.find((r) => r.source === 'notify 0x0063')?.value).toBe(1);
+    expect(regs.find((r) => r.source === '0x00e3')?.value).toBe(-200); // signed mA
+    await driver.stop();
   });
 
   it('leaves charging unknown when the battery status cannot be read', async () => {
@@ -347,6 +359,10 @@ describe('crafty driver', () => {
       ['0x0041', 83],
       ['0x0061', 120],
       ['0x0071', 95],
+      ['0x00a3', null],
+      ['0x00c3', null],
+      ['0x00e3', null],
+      ['notify 0x0063', 0],
     ]);
   });
 
