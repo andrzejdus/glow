@@ -69,9 +69,10 @@ class Connection {
     if (demo === 'venty' || demo === 'volcano' || demo === 'crafty') return this.startDemo(demo);
 
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && this.phase === 'idle' && this.native && this.autoConnect && !this.userDisconnect) {
-        this.search();
-      }
+      if (document.visibilityState !== 'visible') return;
+      if (this.phase === 'idle' && this.native && this.autoConnect && !this.userDisconnect) this.search();
+      // The refresh is skipped in the background, so catch up as soon as the app is back.
+      else if (this.phase === 'connected') this.driver?.refresh?.().catch(() => undefined);
     });
 
     if (this.native) {
@@ -392,7 +393,9 @@ class Connection {
       this.persist();
     }
     clearInterval(this.refreshTimer);
-    this.refreshTimer = setInterval(() => driver.refresh?.().catch(() => undefined), 30000);
+    this.refreshTimer = setInterval(() => {
+      if (globalThis.document?.visibilityState !== 'hidden') driver.refresh?.().catch(() => undefined);
+    }, 30000);
     this.phase = 'connected';
     tap();
   }

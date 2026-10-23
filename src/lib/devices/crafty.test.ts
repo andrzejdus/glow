@@ -278,6 +278,31 @@ describe('crafty driver', () => {
     }
   });
 
+  it('does not poll the charger while the app is in the background', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const page = new EventTarget() as EventTarget & { visibilityState: string };
+    page.visibilityState = 'visible';
+    vi.stubGlobal('document', page);
+    try {
+      const t = craftyPlus({ [U.batteryStatus]: le16(0x0050) });
+      const { driver, state } = await started(t);
+      page.visibilityState = 'hidden';
+      page.dispatchEvent(new Event('visibilitychange'));
+      t.values.set(U.batteryStatus, le16(0x80d4));
+      vi.advanceTimersByTime(9000);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(t.ops.filter((o) => o.chr === U.batteryStatus)).toHaveLength(0);
+      page.visibilityState = 'visible';
+      page.dispatchEvent(new Event('visibilitychange'));
+      await new Promise((r) => setTimeout(r, 10));
+      expect(state.charging).toBe(true);
+      await driver.stop();
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
   it('leaves charging unknown when the battery status cannot be read', async () => {
     const { driver, state } = await started(craftyPlus());
     expect(state.charging).toBeUndefined();

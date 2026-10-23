@@ -60,6 +60,8 @@ const STATUS2_PERMANENT_BLE = 1 << 12;
  */
 const BATTERY_STATUS_CHARGER = 1 << 7;
 const CHARGER_POLL_MS = 3000;
+/** In the background nobody sees the battery, so the charger is not polled. */
+const pageHidden = () => globalThis.document?.visibilityState === 'hidden';
 
 /** Written to the security-code characteristic right before the auto shutoff value. */
 const SECURITY_CODE_AUTO_SHUTOFF = 815;
@@ -344,9 +346,14 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     // The official app reads the battery status only on current firmware, so legacy units get no charging state.
     if (!this.legacy) {
       await this.readCharger();
-      this.chargerTimer = setInterval(() => this.readCharger(), CHARGER_POLL_MS);
+      this.chargerTimer = setInterval(() => pageHidden() || this.readCharger(), CHARGER_POLL_MS);
+      globalThis.document?.addEventListener('visibilitychange', this.onVisible);
     }
   }
+
+  private onVisible = () => {
+    if (!pageHidden()) this.readCharger();
+  };
 
   private async readCharger() {
     const v = await this.read(SVC_SYSTEM, CHR.batteryStatus).catch(() => null);
@@ -361,6 +368,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
   async stop(): Promise<void> {
     clearInterval(this.chargerTimer);
+    globalThis.document?.removeEventListener('visibilitychange', this.onVisible);
     const subs = this.subscribed;
     this.subscribed = [];
     for (const [service, chr] of subs) {
