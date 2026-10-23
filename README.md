@@ -87,6 +87,13 @@ built from the protocol and covered by unit tests.
 **Not supported:** MIGHTY and MIGHTY+. The official web app that Glow's drivers are based on has
 no protocol for them.
 
+## Help test your device
+
+Own a VENTY, VEAZY, VOLCANO HYBRID or another CRAFTY? Try Glow on it and
+[send a device report](../../issues/new?template=device-report.yml): your firmware, and which
+rows of the table above work. Fixes are welcome as pull requests; [CONTRIBUTING.md](CONTRIBUTING.md)
+covers testing, building a debug APK and changing a driver.
+
 ## Install
 
 1. Open the [latest release](../../releases/latest) on your phone and download the `glow-*.apk`.
@@ -102,18 +109,24 @@ Requires Node 22, plus JDK 21 and the Android SDK (platform 36) for the APK.
 ```sh
 npm ci
 npm run dev                 # browser, open /?demo=venty, /?demo=volcano or /?demo=crafty
+npx svelte-check --tsconfig ./tsconfig.json
 npm test                    # protocol driver tests
 npm run android:sync        # web build + copy into android/
-cd android && ./gradlew assembleRelease
+cd android && ./gradlew assembleDebug
 ```
 
-### Releases
+The debug APK (`android/app/build/outputs/apk/debug/`) installs as **Glow debug**, next to a
+release install. Release APKs are signed in CI only; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Releases are built by GitHub Actions (`.github/workflows/android.yml`):
+### CI and releases
 
-- **Push to `main`:** builds a signed APK and a signed App Bundle (`glow-*.aab`) and
-  keeps both as workflow artifacts. Only the APK goes on GitHub releases, so
-  Obtainium keeps finding a single `glow-*.apk`.
+GitHub Actions checks every change and builds the releases:
+
+- **Pull requests and every push** (`.github/workflows/check.yml`, no secrets): svelte-check,
+  tests, the web build and a debug APK kept as a workflow artifact, for testers to try.
+- **Push to `main`** (`.github/workflows/android.yml`, never run for pull requests): builds a
+  signed APK and a signed App Bundle (`glow-*.aab`) and keeps both as workflow artifacts.
+  Only the APK goes on GitHub releases, so Obtainium keeps finding a single `glow-*.apk`.
 - **Tag `v*`** (for example `git tag v0.2.0 && git push --tags`): also publishes a
   GitHub release with the APK attached and, once the `PLAY_SERVICE_ACCOUNT_JSON`
   secret is set, uploads the bundle to the Google Play internal track (skipped
