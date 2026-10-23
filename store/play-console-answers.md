@@ -167,9 +167,9 @@ files permissions, so none of those declarations apply.
 - **Intellectual property.** The title, icon and feature graphic carry no maker brand. Model
   names are in the full description only, as compatibility, with the disclaimer.
 - **Before production**, a personal developer account created after November 2023 has to run a
-  closed test with at least 12 testers for 14 days, and Play wants an Android App Bundle
-  (`./gradlew bundleRelease`, not the APK the release workflow builds now), signed with an upload
-  key under Play App Signing.
+  closed test with at least 12 testers for 14 days. The release workflow already builds the
+  Android App Bundle Play wants (`glow-*.aab` artifact); enrol it in Play App Signing with the
+  existing release key, as the README's Releases section describes.
 
 ## Wording in the app
 
