@@ -111,14 +111,15 @@
               <label for="boostOffset" class="name">{crafty ? 'Booster offset' : 'Boost offset'}</label>
               <span class="value num">{plus(d.boostOffset)}</span>
             </div>
-            <div class="desc">
+            <div class="temps num">
+              <span class="temp"><span>{crafty ? 'Booster' : 'Boost'}</span><strong>{at(d.boostOffset)}</strong></span>
               {#if crafty}
-                Booster {at(d.boostOffset)} · Superbooster {at(d.superBoostOffset)}. The Superbooster is always
-                15 °C above the Booster. Factory setting: +15.
-              {:else}
-                Boost heats to {at(d.boostOffset)}.
+                <span class="temp"><span>Superbooster</span><strong>{at(d.superBoostOffset)}</strong></span>
               {/if}
             </div>
+            {#if crafty}
+              <div class="desc">The Superbooster is always 15 °C above the Booster. Factory setting: +15.</div>
+            {/if}
             <input id="boostOffset" type="range" min="1" max={room} step="1" value={d.boostOffset}
               style:--fill={fill(d.boostOffset ?? 1, room)}
               oninput={(e) => conn.setBoostOffset(Number(e.currentTarget.value))} />
@@ -129,7 +130,9 @@
                 <label for="superBoostOffset" class="name">Superboost offset</label>
                 <span class="value num">{plus(d.superBoostOffset)}</span>
               </div>
-              <div class="desc">Superboost heats to {at(d.superBoostOffset)}.</div>
+              <div class="temps num">
+                <span class="temp"><span>Superboost</span><strong>{at(d.superBoostOffset)}</strong></span>
+              </div>
               <input id="superBoostOffset" type="range" min="1" max={room} step="1" value={d.superBoostOffset}
                 style:--fill={fill(d.superBoostOffset, room)}
                 oninput={(e) => conn.setSuperBoostOffset(Number(e.currentTarget.value))} />
@@ -346,6 +349,29 @@
     line-height: 1.35;
     color: var(--muted);
     margin-top: 3px;
+  }
+  .temps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  .temp {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--orange-tint);
+    color: var(--navy-deep);
+  }
+  .temp span {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .temp strong {
+    font-size: 15px;
+    font-weight: 800;
   }
   .row.range {
     flex-direction: column;
