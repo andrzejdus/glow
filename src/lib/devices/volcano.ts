@@ -4,6 +4,7 @@ import type {
   DeviceDriver,
   DeviceKind,
   DeviceState,
+  DiagnosticValue,
   DriverModule,
   HeatMode,
   SettingDef,
@@ -326,6 +327,28 @@ class VolcanoDriver implements DeviceDriver {
       default:
         throw new Error(`Unknown VOLCANO setting: ${key}`);
     }
+  }
+
+  /**
+   * Raw registers, read fresh. Unconfirmed reports to check on a device: register 1 bit 10
+   * (0x0400) as "setpoint reached" and bit 9 (0x0200) as "reached once", both from one client
+   * (SavageNL/home-assistant-volcano-hybrid); Glow does not act on them yet.
+   */
+  async diagnostics(): Promise<DiagnosticValue[]> {
+    const D = VOLCANO_SERVICE_DEVICE;
+    const C = VOLCANO_SERVICE_CONTROL;
+    const rows: [string, string, string, string?, boolean?][] = [
+      ['Register 1', D, VOLCANO_CHAR.register1],
+      ['Register 2', D, VOLCANO_CHAR.register2],
+      ['Register 3', D, VOLCANO_CHAR.register3],
+      ['Auto-off left', C, VOLCANO_CHAR.autoShutoffRemaining, 's', true],
+    ];
+    const out: DiagnosticValue[] = [];
+    for (const [label, service, chr, unit, quiet] of rows) {
+      const value = await this.read(service, chr).then((v) => uintLE(v) & 0xffff, () => null);
+      out.push({ label, source: chr.slice(0, 8), value, unit, quiet });
+    }
+    return out;
   }
 
   async refresh(): Promise<void> {

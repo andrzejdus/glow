@@ -174,6 +174,21 @@ describe('volcano driver', () => {
   });
 });
 
+describe('volcano diagnostics', () => {
+  it('shows the three registers raw and the auto-off time left', async () => {
+    const { t, driver } = await connected();
+    t.values.set(CH.register1, bytes(0x23, 0x06, 0, 0)); // a reported "at target" value
+    const regs = await driver.diagnostics!();
+    expect(regs.map((r) => [r.source, r.value])).toEqual([
+      ['1010000c', 0x0623],
+      ['1010000d', 0x0000],
+      ['1010000e', 0x0400],
+      ['1011000c', 300],
+    ]);
+    await driver.stop();
+  });
+});
+
 describe('volcano workflows', () => {
   it('matches the official Flow 1', () => {
     const flow1 = volcanoWorkflows.find((w) => w.id === 'flow1')!;
