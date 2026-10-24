@@ -38,7 +38,7 @@
     return out.join(', ');
   }
 
-  // Read every second while the screen is open; one read in flight at a time.
+  // Read over and over while the screen is open, a second between passes; one read in flight at a time.
   $effect(() => {
     let alive = true;
     (async () => {
@@ -131,9 +131,9 @@
     </header>
 
     <p class="intro">
-      Raw registers, read every second. Bits that differ from the baseline are orange, and every change is logged
-      with the temperature. Tap Mark now the moment you see something on the device, such as the LED turning green,
-      then copy the log.
+      Raw registers, read over and over; one pass can take several seconds. Bits that differ from the baseline are
+      orange, and every change is logged with the temperature. Tap Mark now the moment you see something on the
+      device, such as the LED turning green, then copy the log.
     </p>
 
     <section class="card regs">
