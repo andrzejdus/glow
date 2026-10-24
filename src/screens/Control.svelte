@@ -69,7 +69,8 @@
   // The dial gets whatever height is left, so the dashboard fits without scrolling.
   let areaH = $state(268);
   let areaW = $state(320);
-  const dialScale = $derived(Math.max(0.62, Math.min(1, (areaH - 6) / 262, (areaW - 8) / 290)));
+  // It also grows into spare room (up to 1.4x), so a tall phone shows a big dial, not empty space.
+  const dialScale = $derived(Math.max(0.62, Math.min(1.4, (areaH - 6) / 262, (areaW - 8) / 262)));
 </script>
 
 <Warmth {warmth} />
