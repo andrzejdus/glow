@@ -313,14 +313,15 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     return patch;
   }
 
-  async start(onChange: (patch: Partial<DeviceState>) => void): Promise<void> {
+  async start(onChange: (patch: Partial<DeviceState>) => void, known?: Readonly<DeviceState>): Promise<void> {
     this.emit = onChange;
     this.emit({ kind: 'crafty', model: 'CRAFTY', minTemp: MIN_TEMP, maxTemp: MAX_TEMP });
 
     this.target = decodeTargetTemp(await this.read(SVC_CONTROL, CHR.targetTemp));
     this.emit({ targetTemp: this.target });
 
-    this.emit({ serial: readText(await this.read(SVC_INFO, CHR.serial)).substring(0, 8) });
+    const serial = readText(await this.read(SVC_INFO, CHR.serial)).substring(0, 8);
+    this.emit({ serial });
 
     await this.subscribe(SVC_CONTROL, CHR.currentTemp, this.onCurrentTemp);
     this.onCurrentTemp(await this.read(SVC_CONTROL, CHR.currentTemp));
@@ -351,7 +352,11 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.ledBrightness = readU16(await this.read(SVC_CONTROL, CHR.ledBrightness));
 
     if (!this.legacy) {
-      this.autoShutoff = readU16(await this.read(SVC_CONTROL, CHR.autoShutoff));
+      // The official app reads the auto-off setting only here and calls it "autoOffCountdown". On a
+      // CRAFTY+ the setting Glow showed dropped on its own around heating, so after a dropped
+      // connection Glow keeps the setting it had instead of reading it again.
+      const kept = known?.serial === serial ? known.autoShutoffSec : undefined;
+      this.autoShutoff = kept ?? readU16(await this.read(SVC_CONTROL, CHR.autoShutoff));
       this.emit({ autoShutoffSec: this.autoShutoff });
       await this.subscribe(SVC_CONTROL, CHR.autoShutoffRemaining, this.onAutoShutoffRemaining);
       this.onAutoShutoffRemaining(await this.read(SVC_CONTROL, CHR.autoShutoffRemaining));
@@ -530,12 +535,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.emit({ targetTemp: this.target, ...this.boostPatch() });
     await this.readOperatingTime();
     this.ledBrightness = readU16(await this.read(SVC_CONTROL, CHR.ledBrightness));
-    // The official app reads the auto-off setting once and calls it "autoOffCountdown": it seems to
-    // count down while heating, which made the setting drop on its own. Re-read it only while the heater is off.
-    if (!this.legacy && !(this.status & STATUS_HEATER_ACTIVE)) {
-      this.autoShutoff = readU16(await this.read(SVC_CONTROL, CHR.autoShutoff));
-      this.emit({ autoShutoffSec: this.autoShutoff });
-    }
+    // Not the auto-off setting: see start().
     this.emit({ settings: this.currentSettings() });
     this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
     await this.readBatteryStats();

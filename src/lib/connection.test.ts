@@ -115,6 +115,31 @@ describe('while the device reconnects', () => {
     await wait(50);
     expect(calls).toEqual(['heater']);
   });
+
+  it('gives the driver the state the app already had, and only on a reconnect', async () => {
+    const given: (DeviceState | undefined)[] = [];
+    const driver: DeviceDriver = {
+      kind: 'crafty',
+      capabilities: { pump: false, battery: true, boost: true, superBoost: true, findMy: true, heaterToggle: true },
+      settingDefs: [],
+      async start(onChange, known) {
+        given.push(known);
+        onChange({ serial: 'CP123456', autoShutoffSec: 300 });
+      },
+      async stop() {},
+      async setTargetTemp() {},
+      async setHeater() {},
+      async setMode() {},
+      async setSetting() {},
+    };
+    await conn.disconnect();
+    const internals = conn as unknown as { attach: (...a: unknown[]) => Promise<void>; generation: number };
+    await internals.attach({ id: 'w', name: 'STORZ&BICKEL', kind: 'crafty' }, driver, internals.generation);
+    conn.phase = 'reconnecting';
+    await internals.attach({ id: 'w', name: 'STORZ&BICKEL', kind: 'crafty' }, driver, internals.generation);
+    expect(given[0]).toBeUndefined();
+    expect(given[1]).toMatchObject({ serial: 'CP123456', autoShutoffSec: 300 });
+  });
 });
 
 describe('auto-off countdown', () => {

@@ -92,8 +92,12 @@ export interface DeviceDriver {
   readonly kind: DeviceKind;
   readonly capabilities: DeviceCapabilities;
   readonly settingDefs: SettingDef[];
-  /** Called once after the GATT connection is up: discover, subscribe, read the initial state. */
-  start(onChange: (patch: Partial<DeviceState>) => void): Promise<void>;
+  /**
+   * Called once after the GATT connection is up: discover, subscribe, read the initial state.
+   * `known` is the state the app already had, passed on a reconnect only, for values the device
+   * cannot be trusted to report again.
+   */
+  start(onChange: (patch: Partial<DeviceState>) => void, known?: Readonly<DeviceState>): Promise<void>;
   /** Unsubscribe; the app closes the connection afterwards. */
   stop(): Promise<void>;
   setTargetTemp(celsius: number): Promise<void>;

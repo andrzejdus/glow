@@ -163,9 +163,11 @@ Mark at each LED change (green, red, green, red, green between 187 and 189 °C):
 
 The official app names `0061` `characteristicautoOffCountdown` but uses it as the setting: it reads
 it once, on connect, into the auto-off slider. `0071` (notified) is the time left. On a CRAFTY+ the
-setting shown in Glow dropped on its own while heating, so `0061` seems to count down while the
-heater runs. Glow re-reads `0061` only while the heater is off; Device diagnostics shows both
-values (not yet confirmed on hardware).
+setting shown in Glow dropped on its own around heating (5 min to 4 min), also after Glow stopped
+re-reading `0061` while the heater was on, so it may stay lowered after heating. Glow now reads it
+like the official app, only on connect, and keeps the value it had after a dropped connection.
+When and how `0061` changes is not confirmed: Device diagnostics reads it every second and logs
+every change with the temperature.
 
 ## Other characteristics
 
