@@ -37,6 +37,8 @@ export interface SessionSummary {
   live: boolean;
   /** A few points of the temperature (or the goal, without a live one) for the timeline. */
   spark: number[];
+  /** The Glow version that recorded it, and any it was carried on by after a restart. */
+  app?: string;
 }
 
 export interface SessionDetail {
@@ -186,7 +188,9 @@ class Sessions {
 
   private async resume(open: SessionSummary, now: number) {
     const detail = (await this.detail(open.id)) ?? { ts: [], c: [], g: [], events: [] };
-    this.active = open;
+    // Carried on by an updated Glow: both versions, for whoever reads the log later.
+    const app = open.app?.split(' → ').includes(__APP_VERSION__) ? open.app : `${open.app ?? '?'} → ${__APP_VERSION__}`;
+    this.active = { ...open, app };
     this.activeDetail = detail;
     this.wasReady = open.readySec !== null;
     this.target = this.last?.targetTemp;
@@ -211,6 +215,7 @@ class Sessions {
       batteryStart: d.battery,
       live: d.currentTemp !== undefined,
       spark: [],
+      app: __APP_VERSION__,
     };
     // The readings just before, from while the heater was still off.
     const pre = this.recent.map((r) => ({ t: Math.round((r.t - now) / 1000), c: r.c })).filter((r) => r.t < 0);

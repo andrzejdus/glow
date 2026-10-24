@@ -25,8 +25,8 @@ Glow saves this in its own private app storage on the phone:
 - **Session log**: for each time the heater was on while Glow was connected, when it started and
   ended, the target and the device's temperature every few seconds (from ten seconds before the
   heater came on until it has cooled down, for at most two minutes after), when it was ready, the heat
-  level used, air on and off (VOLCANO) and the battery level at the start and the end. Kept until
-  you clear Glow's storage. Glow uses it for the Stats screen.
+  level used, air on and off (VOLCANO), the battery level at the start and the end, and the Glow
+  version that recorded it. Kept until you clear Glow's storage. Glow uses it for the Stats screen.
 
 The device's own settings (temperatures, brightness and the rest) are read from and written to
 the device itself; Glow does not keep a copy. The diagnostics change log exists only while the

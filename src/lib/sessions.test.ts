@@ -32,6 +32,7 @@ describe('session log', () => {
     const [s] = sessions.list;
     expect(s.end! - s.id).toBe(99_000);
     expect(s.joined).toBe(false);
+    expect(s.app).toBe(__APP_VERSION__);
     expect(s.readySec).toBe(39);
     expect(s.target).toBe(180);
     expect(s.peak).toBe(199.5);
