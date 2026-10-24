@@ -160,8 +160,8 @@
     border-radius: 50%;
     pointer-events: none;
     --led-tint: transparent;
-    /* Glows in from the rim of the face, so the numbers stay on white. */
-    background: radial-gradient(circle, rgba(255, 255, 255, 0) 46%, var(--led-tint) 100%);
+    /* Glows out from the middle of the face and fades toward its rim. */
+    background: radial-gradient(circle, var(--led-tint) 0%, rgba(255, 255, 255, 0) 54%);
     transition: --led-tint 1.2s ease;
   }
   .tint.heating {
