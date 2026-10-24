@@ -4,7 +4,7 @@ import type { DeviceDriver, DeviceKind, DeviceState, DiagnosticValue, HeatMode, 
 
 const portableSettings: SettingDef[] = [
   { key: 'permanentBluetooth', group: 'connection', label: 'Permanent Bluetooth', type: 'toggle',
-    description: 'Keeps your device ready to connect at any time. Uses a small amount of battery, even when powered off.' },
+    description: 'Keeps the {model} ready to connect at any time. Uses a little battery, even while it is off.' },
   { key: 'chargeOptimization', group: 'battery', label: 'Charge current optimization', type: 'toggle',
     description: 'Slower charging to reduce battery aging.' },
   { key: 'chargeLimit', group: 'battery', label: 'Charge voltage limit', type: 'toggle',
@@ -19,7 +19,7 @@ const portableSettings: SettingDef[] = [
 // The CRAFTY+ list, as its driver shows it.
 const craftySettings: SettingDef[] = [
   { key: 'permanentBluetooth', group: 'connection', label: 'Permanent Bluetooth', type: 'toggle',
-    description: 'Keeps the device ready to connect at any time. Uses a little battery, even while it is off.' },
+    description: 'Keeps the {model} ready to connect at any time. Uses a little battery, even while it is off.' },
   { key: 'chargeIndicator', group: 'battery', label: 'Charge indicator lamp', type: 'toggle' },
   { key: 'vibration', group: 'device', label: 'Vibration', type: 'toggle' },
   { key: 'ledBrightness', group: 'device', label: 'LED brightness', type: 'range', min: 0, max: 100, step: 10, unit: '%' },

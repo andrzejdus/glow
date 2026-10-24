@@ -12,6 +12,8 @@
   import { usage } from '../lib/usage.svelte';
 
   const d = $derived(conn.device as DeviceState);
+  // Setting texts name the connected model rather than "the device".
+  const describe = (s: SettingDef) => s.description?.replaceAll('{model}', d.model);
   const life = $derived(usage.lifetimeSec(usage.now));
   const parts = $derived(life === null ? null : splitHours(life));
   const months = $derived(usage.months(8, usage.now));
@@ -174,7 +176,7 @@
             <div class="row">
               <div class="text">
                 <div class="name"><label for={s.key}>{s.label}</label></div>
-                {#if s.description}<div class="desc">{s.description}</div>{/if}
+                {#if s.description}<div class="desc">{describe(s)}</div>{/if}
               </div>
               <Toggle id={s.key} label={s.label} on={!!d.settings[s.key]} onchange={(v) => conn.setSetting(s.key, v)} />
             </div>
@@ -185,7 +187,7 @@
                 <label for={s.key} class="name">{s.label}</label>
                 <span class="value num">{show(s, value)}</span>
               </div>
-              {#if s.description}<div class="desc">{s.description}</div>{/if}
+              {#if s.description}<div class="desc">{describe(s)}</div>{/if}
               <Slider id={s.key} min={s.min ?? 0} max={s.max ?? 100} step={s.step ?? 1} {value} defaultValue={s.defaultValue}
                 onchange={(v) => conn.setSetting(s.key, v)} />
             </div>

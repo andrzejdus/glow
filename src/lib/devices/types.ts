@@ -8,6 +8,7 @@ export interface SettingDef {
   key: string;
   group: 'connection' | 'battery' | 'boost' | 'device';
   label: string;
+  /** `{model}` stands for the connected model's name ("CRAFTY+"). */
   description?: string;
   type: 'toggle' | 'range';
   /** range only */

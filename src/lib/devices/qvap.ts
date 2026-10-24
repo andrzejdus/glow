@@ -156,7 +156,7 @@ const SETTING_DEFS: Record<string, SettingDef> = {
     group: 'connection',
     label: 'Permanent Bluetooth',
     description:
-      'Keeps the device ready to connect at any time. Uses a little battery, even while the device is off.',
+      'Keeps the {model} ready to connect at any time. Uses a little battery, even while it is off.',
     type: 'toggle',
   },
   chargeOptimization: {

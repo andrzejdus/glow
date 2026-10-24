@@ -101,7 +101,7 @@ const ALL_SETTINGS: SettingDef[] = [
     group: 'connection',
     label: 'Permanent Bluetooth',
     description:
-      'Keeps the device ready to connect at any time. Uses a little battery, even while it is off.',
+      'Keeps the {model} ready to connect at any time. Uses a little battery, even while it is off.',
     type: 'toggle',
   },
   {
