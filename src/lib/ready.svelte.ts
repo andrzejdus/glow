@@ -163,12 +163,20 @@ class Ready {
     const goal = goalOf(d);
     if (goal === undefined) return;
     if (goal !== this.goal) {
-      // A new goal is a new climb, shown at once.
+      const step = this.goal === undefined ? Infinity : goal - this.goal;
       this.goal = goal;
-      this.trail = [];
-      this.at = 0;
-      this.wasReady = false;
-      this.dip = [];
+      if (Math.abs(step) < 5) {
+        // A few degrees with + or -: the same climb, a little longer or shorter. Starting over lost
+        // the pace and made the count jump (39 to 41 s for one degree less).
+        this.trail = this.trail.map((r) => ({ ...r, below: r.below + step }));
+        this.dip = this.dip.map((r) => ({ ...r, below: r.below + step }));
+      } else {
+        // A boost, or a new target far away: a new climb, shown at once.
+        this.trail = [];
+        this.at = 0;
+        this.wasReady = false;
+        this.dip = [];
+      }
     }
     const below = d.currentTemp === undefined ? undefined : goal - d.currentTemp;
     if (isReady(d)) {
@@ -205,9 +213,13 @@ class Ready {
     this.settle(left === null ? null : now + left * 1000, now);
   }
 
-  /** Whole seconds to Ready; null without a guess, 0 once the guess has run out. */
+  /**
+   * Whole seconds to Ready; null without a guess, 0 once the guess has run out. `now` may be the
+   * UI's last clock tick, from before the latest report: counting from it showed a second more
+   * for a moment when the report moved the end a little later.
+   */
   left(now: number): number | null {
-    return this.at ? Math.max(0, Math.ceil((this.at - now) / 1000)) : null;
+    return this.at ? Math.max(0, Math.ceil((this.at - Math.max(now, this.updated)) / 1000)) : null;
   }
 
   /** Earlier heat-ups of this device, loaded as the heater comes on. */
@@ -242,10 +254,11 @@ class Ready {
   }
 
   /**
-   * Moves the shown end towards a new guess, so the count runs a little faster or slower instead
-   * of jumping. Up to 4 s off, it moves at most 0.6 s a second: the count never steps back up and
-   * never skips a second. Further off, it closes a quarter of the gap a second, so a heat-up much
-   * faster or slower than the earlier ones shows within seconds.
+   * Moves the shown end towards a new guess, so the count runs faster or slower instead of
+   * jumping: it moves at most 0.6 s earlier or 0.5 s later per second, so the count runs between
+   * half and 1.6 times the clock's speed, never steps back up and skips at most a second. A big
+   * error takes a while to catch up; a recording on the phone showed that letting it catch up
+   * faster made the count step back up (60, 61, 57, 59). A new goal is shown at once.
    *
    * Once the count has run out ("Almost ready") it stays there until Ready: a guess a second later
    * on each report showed "Almost ready" and "1 s" in turn. Without a guess the count carries on.
@@ -257,10 +270,8 @@ class Ready {
     }
     if (!this.at) this.at = end;
     else {
-      const dt = Math.min(4000, now - this.updated);
-      const gap = end - this.at;
-      const step = Math.max(0.6 * dt, (Math.abs(gap) * dt) / 4000);
-      this.at += Math.max(-step, Math.min(step, gap));
+      const dt = Math.min(1000, now - this.updated);
+      this.at += Math.max(-0.6 * dt, Math.min(0.5 * dt, end - this.at));
     }
     this.updated = now;
   }

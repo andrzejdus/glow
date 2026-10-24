@@ -151,6 +151,25 @@ describe('Ready in', () => {
     expect(leftNow()).toBeNull();
   });
 
+  it('never counts back up, also through a target a degree lower', async () => {
+    vi.useFakeTimers();
+    await seed('ready-8', [past(T0 - 86_400_000, 25, 180), past(T0 - 2 * 86_400_000, 25, 180, 0.8)]);
+    at(0, { heaterOn: true, currentTemp: 25, targetTemp: 181 });
+    await vi.advanceTimersByTimeAsync(0);
+    let shown = Infinity;
+    // Reports five times a second, as a CRAFTY+ sends them, much slower than the earlier heat-ups,
+    // so the guess keeps growing. The screen reads it on its own clock, up to 200 ms behind.
+    for (let ms = 200; ms <= 90_000; ms += 200) {
+      const sec = ms / 1000;
+      at(sec, { heaterOn: true, currentTemp: Math.round(tempAt(sec, 25, 180, 0.6)), targetTemp: sec < 30 ? 181 : 180, tempReached: false });
+      for (const behind of [150, 0]) {
+        const now = ready.left(Date.now() - behind)!;
+        expect(now).toBeLessThanOrEqual(shown);
+        shown = now;
+      }
+    }
+  });
+
   it('runs longer when this heat-up is slower than the earlier ones', async () => {
     vi.useFakeTimers();
     await seed('ready-2', [past(T0 - 86_400_000, 25, 180), past(T0 - 2 * 86_400_000, 25, 180)]);
