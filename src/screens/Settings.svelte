@@ -48,6 +48,9 @@
   function setDebugging(on: boolean) {
     debugging?.set({ enabled: on }).then((s) => (debug = s), () => {});
   }
+  // Background recording is set up for one device: the switch shows it on only for that one.
+  const bgShown = $derived(!!conn.bg?.supported && !conn.demo);
+  const bgOn = $derived(!!conn.bg?.enabled && conn.bg.id?.toUpperCase() === conn.target?.id.toUpperCase());
   let finding = $state(false);
   function find() {
     conn.findMy();
@@ -201,6 +204,18 @@
     <section class="group rise d2">
       <h2>App</h2>
       <div class="card list">
+        {#if bgShown}
+          <div class="row">
+            <div class="text">
+              <div class="name"><label for="background">Record in the background</label></div>
+              <div class="desc">
+                Records sessions while Glow is closed: Android wakes Glow when the {d.model} is switched on nearby, and shows
+                a notification while Glow is connected. Glow lets go of the {d.model} for a moment while you allow it.
+              </div>
+            </div>
+            <Toggle id="background" label="Record in the background" on={bgOn} onchange={(on) => conn.setBackground(on)} />
+          </div>
+        {/if}
         <div class="row">
           <div class="text">
             <div class="name"><label for="debugging">Debugging from a computer</label></div>
