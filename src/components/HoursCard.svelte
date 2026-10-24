@@ -12,9 +12,10 @@
   const known = $derived(months.filter((w) => w.hours !== null && !w.current));
   const avg = $derived(known.length ? known.reduce((a, w) => a + (w.hours ?? 0), 0) / known.length : null);
   // Time left until the device switches itself off, when it reports it; nothing while it is off.
+  // A CRAFTY+ reports 0 a moment before it says the heater is off: show that as off too.
   const left = $derived(conn.autoOffLeft(usage.now));
   const autoOff = $derived(
-    !d?.heaterOn
+    !d?.heaterOn || left === 0
       ? '–'
       : left !== undefined
         ? mmss(left)
