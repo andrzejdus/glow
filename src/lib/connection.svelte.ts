@@ -454,7 +454,9 @@ class Connection {
     const v = rest.autoShutoffRemainingSec;
     if (v !== undefined) {
       const shown = this.autoOffLeft(now);
-      const restarted = shown !== undefined && v > shown + 5;
+      // A restart goes back to the setting. Anything else well above what is shown came late: a
+      // burst of reports held up for seconds once showed 1:44 jump back to 1:47.
+      const restarted = shown !== undefined && v > shown + 5 && (d.autoShutoffSec === undefined || v === d.autoShutoffSec);
       if ((rest.heaterOn ?? d.heaterOn) && restarted && shown > 0) this.autoOffRestartAt = now;
       if (restarted || v === d.autoShutoffRemainingSec) {
         // Just restarted, or the same value again: the device is holding its timer.

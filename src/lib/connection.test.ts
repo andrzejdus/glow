@@ -301,4 +301,37 @@ describe('auto-off countdown', () => {
     emit({ autoShutoffRemainingSec: 210 }); // a draw
     expect(conn.autoOffRestartAt).not.toBe(before);
   });
+
+  it('does not count back up when reports arrive late', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.now() + 2 * 86_400_000);
+      let emit: (p: Partial<DeviceState>) => void = () => {};
+      const driver: DeviceDriver = {
+        kind: 'crafty',
+        capabilities: { pump: false, battery: true, boost: true, superBoost: true, findMy: true, heaterToggle: true },
+        settingDefs: [],
+        async start(onChange) {
+          emit = onChange;
+          onChange({ heaterOn: true, autoShutoffSec: 120, autoShutoffRemainingSec: 114 });
+        },
+        async stop() {},
+        async setTargetTemp() {},
+        async setHeater() {},
+        async setMode() {},
+        async setSetting() {},
+      };
+      const internals = conn as unknown as { attach: (...a: unknown[]) => Promise<void>; generation: number };
+      await internals.attach({ id: 'l', name: 'STORZ&BICKEL', kind: 'crafty' }, driver, internals.generation);
+      emit({ autoShutoffRemainingSec: 112 });
+      const t0 = Date.now();
+      vi.setSystemTime(t0 + 12_000); // then nothing for 12 s, and two reports from 7 s ago at once
+      const before = conn.autoOffLeft(Date.now())!;
+      emit({ autoShutoffRemainingSec: 109 });
+      emit({ autoShutoffRemainingSec: 107 });
+      expect(conn.autoOffLeft(Date.now())).toBeLessThanOrEqual(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
