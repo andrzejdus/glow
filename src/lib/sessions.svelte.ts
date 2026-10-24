@@ -345,7 +345,9 @@ class Sessions {
       id: c.id,
       detail: { ...c.detail, ts: [...c.detail.ts, Math.round((now - c.id) / 1000)], c: [...c.detail.c, temp], g: [...c.detail.g, null] },
     };
-    if (temp <= COOL_TO) this.endCooling();
+    if (temp <= COOL_TO) return this.endCooling();
+    // Saved as it goes, so an app that is closed meanwhile keeps what was recorded.
+    if (this.cooling.detail.ts.length % 6 === 0 && this.persist && this.key) save(`session:${this.key}:${c.id}`, this.cooling.detail);
   }
 
   private endCooling() {

@@ -19,17 +19,20 @@
     (picked !== null ? sessions.list.find((s) => s.id === picked) : null) ?? sessions.active ?? sessions.list[0] ?? null,
   );
   const running = $derived(!!shown && shown.id === sessions.active?.id);
-  let stored = $state<SessionDetail | null>(null);
+  let stored = $state<{ id: number; detail: SessionDetail | null } | null>(null);
+  // The session that just ended keeps growing while its cool-down is recorded; it is read from
+  // the log once that is over, or a copy taken during it would show without the rest.
+  const cooling = $derived(!!shown && sessions.cooling?.id === shown.id);
   $effect(() => {
     const id = shown?.id;
-    if (id === undefined || running) return;
-    stored = null;
+    if (id === undefined || running || cooling) return;
     sessions.detail(id).then((d) => {
-      if (shown?.id === id) stored = d;
+      if (shown?.id === id) stored = { id, detail: d };
     });
   });
-  // The session that just ended keeps growing while its cool-down is recorded.
-  const detail = $derived(running ? sessions.activeDetail : sessions.cooling?.id === shown?.id ? sessions.cooling!.detail : stored);
+  const detail = $derived(
+    running ? sessions.activeDetail : cooling ? sessions.cooling!.detail : stored?.id === shown?.id ? stored!.detail : null,
+  );
 
   const lengthOf = (s: SessionSummary, now: number) => Math.max(0, ((s.end ?? (s.id === sessions.active?.id ? now : s.seen)) - s.id) / 1000);
   const boostSec = (s: SessionSummary) => (s.modes.boost ?? 0) + (s.modes.superboost ?? 0);
