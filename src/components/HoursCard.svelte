@@ -1,7 +1,11 @@
 <script lang="ts">
-  import { conn } from '../lib/connection.svelte';
+  import Icon from './Icon.svelte';
+  import { conn, tap } from '../lib/connection.svelte';
   import { duration, mmss, splitHours, usageTime } from '../lib/format';
   import { usage } from '../lib/usage.svelte';
+
+  /** Opens the Stats screen. */
+  let { onopen }: { onopen: () => void } = $props();
 
   const d = $derived(conn.device);
   const life = $derived(usage.lifetimeSec(usage.now));
@@ -33,10 +37,13 @@
   );
 </script>
 
-<section class="card rise d3">
+<!-- The whole card opens Stats; the controls inside it are read-only. -->
+<div class="card rise d3" role="button" tabindex="0" aria-label="Hours of operation, open Stats"
+  onclick={() => { tap(); onopen(); }}
+  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onopen(); } }}>
   <div class="top">
     <div>
-      <div class="label">Hours of operation</div>
+      <div class="label title">Hours of operation<span class="go"><Icon name="arrow" size={13} color="var(--orange-ink)" /></span></div>
       {#if parts}
         <div class="life num">
           <span class="h">{parts.h}</span><span class="u">h</span>
@@ -74,11 +81,24 @@
       {/key}
     </div>
   </div>
-</section>
+</div>
 
 <style>
-  section {
+  .card {
     padding: 16px 18px 14px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .card:active {
+    transform: scale(0.98);
+  }
+  .title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .go {
+    display: flex;
   }
   .top {
     display: flex;

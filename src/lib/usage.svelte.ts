@@ -101,19 +101,44 @@ class Usage {
 
   /** Usage per calendar month, oldest first, the current month last. */
   months(count = 8, now = this.now): UsageBar[] {
+    return this.bars('month', count, now);
+  }
+
+  /** Usage per day, week (from Monday) or calendar month, oldest first, the current one last. */
+  bars(unit: 'day' | 'week' | 'month', count: number, now = this.now): UsageBar[] {
     const live = this.lifetimeSec(now);
     const today = new Date(now);
+    const y = today.getFullYear();
+    const mo = today.getMonth();
+    const monday = today.getDate() - ((today.getDay() + 6) % 7);
     const bars: UsageBar[] = [];
     for (let i = count - 1; i >= 0; i--) {
-      const from = new Date(today.getFullYear(), today.getMonth() - i, 1).getTime();
-      const to = new Date(today.getFullYear(), today.getMonth() - i + 1, 1).getTime();
+      const start =
+        unit === 'month' ? new Date(y, mo - i, 1) : unit === 'week' ? new Date(y, mo, monday - 7 * i) : new Date(y, mo, today.getDate() - i);
+      const next =
+        unit === 'month' ? new Date(y, mo - i + 1, 1) : unit === 'week' ? new Date(y, mo, monday - 7 * i + 7) : new Date(y, mo, today.getDate() - i + 1);
+      const from = start.getTime();
+      const to = next.getTime();
       const current = i === 0;
       const end = current && live !== null ? live / 60 : this.at(to);
       const begin = this.at(from) ?? this.snaps.find((s) => s.t >= from && s.t < to)?.m;
       const hours = end === undefined || begin === undefined ? null : Math.max(0, end - begin) / 60;
-      bars.push({ label: new Date(from).toLocaleString('en', { month: 'short' }), hours, current });
+      const label =
+        unit === 'month'
+          ? start.toLocaleString('en', { month: 'short' })
+          : unit === 'week'
+            ? start.toLocaleString('en', { month: 'short', day: 'numeric' })
+            : String(start.getDate());
+      bars.push({ label, hours, current });
     }
     return bars;
+  }
+
+  /** Hours on the device's own counter since `from`, as far as Glow has seen it. */
+  hoursSince(from: number, now = this.now): number | null {
+    const live = this.lifetimeSec(now);
+    const begin = this.at(from) ?? this.snaps.find((s) => s.t >= from)?.m;
+    return live === null || begin === undefined ? null : Math.max(0, live / 60 - begin) / 60;
   }
 
   private at(t: number): number | undefined {
