@@ -57,7 +57,13 @@
   // Dashboard lamps on the dial: the active level lights up while the heater is on. On CRAFTY,
   // which switches levels only with its own button, they are the only level display.
   const lamps = $derived(
-    modes.map((m) => ({ id: m.id, label: m.id === 'normal' ? 'BASE' : m.id === 'boost' ? 'BOOST' : 'SUPER', on: d.heaterOn && m.id === d.mode })),
+    modes.map((m) => ({
+      id: m.id,
+      label: m.id === 'normal' ? 'BASE' : m.id === 'boost' ? 'BOOST' : 'SUPER',
+      on: d.heaterOn && m.id === d.mode,
+      // On fire in Superboost, or whenever the target is the device's maximum (e.g. 210 °C set by hand).
+      fire: m.id === 'superboost' || (goal !== undefined && goal >= d.maxTemp),
+    })),
   );
 
   // The dial gets whatever height is left, so the dashboard fits without scrolling.

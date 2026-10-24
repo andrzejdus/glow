@@ -16,7 +16,8 @@
     /** Shrinks the whole dial on short screens. */
     scale?: number;
     /** Heat levels shown as lamps on the dial, like warning lights on a car dashboard. */
-    lamps?: { id: string; label: string; on: boolean }[];
+    /** `fire`: the lit lamp burns (Superboost, or the target at the device's maximum). */
+    lamps?: { id: string; label: string; on: boolean; fire?: boolean }[];
     onstep: (delta: number) => void;
   }
   let { current, target, min, max, heating, ready, unit, offline = false, scale = 1, lamps = [], onstep }: Props = $props();
@@ -95,7 +96,10 @@
   {#if lamps.length}
     <div class="lamps" role="group" aria-label="Heat level">
       {#each lamps as l (l.id)}
-        <span class="lamp" class:on={l.on && !offline} aria-current={l.on ? 'true' : undefined}>{l.label}</span>
+        <span class="lamp" class:on={l.on && !offline} class:fire={l.on && l.fire && !offline} aria-current={l.on ? 'true' : undefined}>
+          {#if l.on && l.fire && !offline}<span class="flames" aria-hidden="true"><i></i><i></i><i></i></span>{/if}
+          <span class="lamp-text">{l.label}</span>
+        </span>
       {/each}
     </div>
   {/if}
@@ -218,6 +222,58 @@
     background: color-mix(in srgb, var(--orange) 14%, transparent);
     text-shadow: 0 0 6px color-mix(in srgb, var(--orange) 70%, transparent);
     box-shadow: 0 0 10px color-mix(in srgb, var(--orange) 30%, transparent);
+  }
+  /* On fire: a rising fire gradient, a flickering glow and small flames licking up off the top. */
+  .lamp {
+    position: relative;
+  }
+  .lamp.fire {
+    color: #fff;
+    border-color: #ff8a00;
+    background: linear-gradient(0deg, #d62800 0%, #ff5a00 35%, #ff9d00 70%, #ffd23f 100%);
+    background-size: 100% 220%;
+    text-shadow: 0 0 4px rgba(120, 20, 0, 0.8);
+    animation: burn 0.9s ease-in-out infinite alternate, flicker 0.23s steps(2, end) infinite;
+  }
+  .lamp-text {
+    position: relative;
+  }
+  .flames {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 10px;
+    display: flex;
+    justify-content: space-around;
+    pointer-events: none;
+  }
+  .flames i {
+    width: 6px;
+    height: 9px;
+    border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%;
+    background: radial-gradient(circle at 50% 80%, #ffe08a 0%, #ff8a00 45%, rgba(255, 60, 0, 0) 75%);
+    transform-origin: 50% 100%;
+    animation: lick 0.7s ease-in-out infinite;
+  }
+  .flames i:nth-child(2) {
+    height: 11px;
+    animation-delay: -0.25s;
+    animation-duration: 0.6s;
+  }
+  .flames i:nth-child(3) {
+    animation-delay: -0.45s;
+  }
+  @keyframes burn {
+    from { background-position: 0 100%; box-shadow: 0 0 8px rgba(255, 90, 0, 0.55), 0 -2px 12px rgba(255, 160, 0, 0.35); }
+    to { background-position: 0 0; box-shadow: 0 0 14px rgba(255, 90, 0, 0.8), 0 -4px 18px rgba(255, 180, 0, 0.5); }
+  }
+  @keyframes flicker {
+    50% { filter: brightness(1.12); }
+  }
+  @keyframes lick {
+    0%, 100% { transform: scaleY(0.7) translateY(2px); opacity: 0.75; }
+    50% { transform: scaleY(1.15) translateY(-1px); opacity: 1; }
   }
   /* Room for the lamps under the numbers, where the face is still wide enough. */
   .center.with-lamps {
