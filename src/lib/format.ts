@@ -31,6 +31,7 @@ export function usageTime(hours: number): string {
 
 export function duration(seconds: number): string {
   if (seconds >= 3600) return `${Math.round(seconds / 360) / 10} h`;
-  if (seconds >= 60) return `${Math.round(seconds / 60)} min`;
+  // One decimal, so the CRAFTY's 30 s steps show as they are: 210 s is 3.5 min, not 4.
+  if (seconds >= 60) return `${Math.round(seconds / 6) / 10} min`;
   return `${Math.round(seconds)} s`;
 }
