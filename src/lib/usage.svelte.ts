@@ -49,8 +49,7 @@ class Usage {
     this.snaps = seed ?? (await load<Snap[]>(`usage:${key}`, []));
   }
 
-  observe(d: DeviceState) {
-    const now = Date.now();
+  observe(d: DeviceState, now = Date.now()) {
     if (d.operatingMinutes !== undefined && d.operatingMinutes !== this.reading?.m) {
       this.reading = { m: d.operatingMinutes, t: now };
       this.record(d.operatingMinutes, now);

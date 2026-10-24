@@ -1,8 +1,8 @@
 import type { DeviceState, HeatMode } from './devices/types';
 import { load, save } from './prefs';
 
-// The session log: one session from heater on to heater off, seen while Glow is connected.
-// Kept for good. Each device has an index of summaries (small, loaded on connect) and one
+// The session log: one session from heater on to heater off, seen while Glow is connected, or
+// replayed from what the background recorder logged while it was closed (replay.ts). Kept for good. Each device has an index of summaries (small, loaded on connect) and one
 // record per session with its temperature samples and events (loaded when it is opened).
 
 /** Something that happened in a session, at `t` seconds from its start. */
@@ -42,6 +42,8 @@ export interface SessionSummary {
   sparkOn?: [number, number];
   /** The Glow version that recorded it, and any it was carried on by after a restart. */
   app?: string;
+  /** Some or all of it was recorded in the background, with Glow closed. */
+  background?: boolean;
 }
 
 export interface SessionDetail {
@@ -63,6 +65,8 @@ const COOL_MS = 120_000;
 const COOL_TO = 50;
 /** Back within this long with the heater still on, and it is the same session. */
 const RESUME_MS = 10 * 60_000;
+/** A gap shorter than this (the app handing the device to the background recorder) is not marked. */
+const GAP_MS = 15_000;
 const SPARK = 32;
 
 /** What the device heats to: the target plus the active boost, capped at its maximum. */
@@ -116,6 +120,9 @@ class Sessions {
   private recent: { t: number; c: number }[] = [];
   private coolUntil = 0;
   private lastCool = 0;
+  /** A background recording is being replayed: the live sampler keeps still. */
+  private replaying = false;
+  private resuming: Promise<void> | null = null;
 
   /** Demo mode passes made-up sessions, which are never saved. */
   async bind(key: string, seed?: { list: SessionSummary[]; details: Map<number, SessionDetail> }) {
@@ -172,6 +179,28 @@ class Sessions {
     }
   }
 
+  /** While a background recording is replayed, times come from the log, not the clock. */
+  pause(on: boolean) {
+    this.replaying = on;
+  }
+
+  /** Resolves once a session that is being carried on has loaded. */
+  settled(): Promise<void> {
+    return this.resuming ?? Promise.resolve();
+  }
+
+  /**
+   * The app hands the device to the background recorder: like lost(), but unmarked, and a
+   * cool-down carries on. The next report, live or replayed, carries the session on or closes it.
+   */
+  suspend() {
+    clearInterval(this.sampler);
+    if (this.cooling) this.saveCooling();
+    this.recent = [];
+    this.last = null;
+    this.flush();
+  }
+
   /** The connection dropped: the session stays open until the device is back. */
   lost(now = Date.now()) {
     this.endCooling();
@@ -191,7 +220,7 @@ class Sessions {
     const open = this.list.find((s) => s.end === null);
     if (!open) return;
     if (d.heaterOn && now - open.seen < RESUME_MS) {
-      void this.resume(open, now);
+      this.resuming = this.resume(open, now).finally(() => (this.resuming = null));
       return;
     }
     // The heater went off while Glow was away: it ended about when Glow last saw it.
@@ -218,7 +247,11 @@ class Sessions {
     this.target = this.last?.targetTemp;
     this.mode = this.last?.mode ?? 'normal';
     this.lastTick = now;
-    this.event({ t: this.sec(now), k: 'back' });
+    // A drop the app saw is marked already; one it did not see (Glow closed, the recorder late) is
+    // marked here unless it was too short to matter.
+    const marked = detail.events[detail.events.length - 1]?.k === 'lost';
+    if (!marked && now - open.seen > GAP_MS) this.event({ t: this.sec(open.seen), k: 'lost' });
+    if (marked || now - open.seen > GAP_MS) this.event({ t: this.sec(now), k: 'back' });
     this.startSampler();
   }
 
@@ -238,6 +271,7 @@ class Sessions {
       live: d.currentTemp !== undefined,
       spark: [],
       app: __APP_VERSION__,
+      ...(this.replaying ? { background: true } : {}),
     };
     // The readings just before, from while the heater was still off.
     const pre = this.recent.map((r) => ({ t: Math.round((r.t - now) / 1000), c: r.c })).filter((r) => r.t < 0);
@@ -303,6 +337,7 @@ class Sessions {
       peak,
       batteryEnd: d.battery ?? s.batteryEnd,
       live: s.live || d.currentTemp !== undefined,
+      ...(this.replaying ? { background: true } : {}),
     };
     if (now - this.lastSample >= SAMPLE_MS) this.sample(d, now);
     this.replace(this.active);
@@ -327,6 +362,7 @@ class Sessions {
   private startSampler() {
     clearInterval(this.sampler);
     this.sampler = setInterval(() => {
+      if (this.replaying) return;
       if (this.active && this.last?.heaterOn) this.track(this.last, Date.now());
       else if (this.cooling && this.last) this.cool(this.last, Date.now());
     }, SAMPLE_MS);

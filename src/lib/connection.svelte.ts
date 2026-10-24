@@ -1,4 +1,5 @@
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { background, type BackgroundState } from './background';
 import { ble, type FoundDevice } from './ble/adapter';
 import type { BleTransport } from './ble/transport';
 import { withTimeout } from './ble/util';
@@ -7,6 +8,7 @@ import { createDriver, modelNames } from './devices/registry';
 import type { DeviceCapabilities, DeviceDriver, DeviceKind, DeviceState, DiagnosticValue, HeatMode, SettingDef } from './devices/types';
 import { load, save } from './prefs';
 import { ready } from './ready.svelte';
+import { replay } from './replay';
 import { demoSessions, sessions } from './sessions.svelte';
 import { demoHistory, usage } from './usage.svelte';
 
@@ -26,6 +28,9 @@ interface Saved {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** In the background this long, Glow hands the device to the background recorder (when it is on). */
+const HAND_OVER_MS = 30_000;
+const hidden = () => globalThis.document?.visibilityState === 'hidden';
 
 export function tap() {
   if (ble.native) Haptics.impact({ style: ImpactStyle.Light }).catch(() => undefined);
@@ -64,6 +69,8 @@ class Connection {
   private autoOffEnd = 0;
   /** When the device last restarted its auto-off timer while heating (a CRAFTY+ does on each draw). */
   autoOffRestartAt = $state(0);
+  /** Background recording (Settings › App); null in a browser. */
+  bg = $state<BackgroundState | null>(null);
 
   private driver: DeviceDriver | null = null;
   private generation = 0;
@@ -72,6 +79,9 @@ class Connection {
   private writers = new Map<string, { op: () => Promise<void> | undefined; busy: boolean; timer?: ReturnType<typeof setTimeout> }>();
   /** Field → until when the device's reports of it are ignored (a newer value is on its way). */
   private holds = new Map<string, number>();
+  private handOverTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The device went to the background recorder; the app takes it back when it is on screen again. */
+  private away = false;
 
   async start() {
     const saved = await load<Saved>('connection', { last: null, autoConnect: true });
@@ -81,9 +91,16 @@ class Connection {
     const demo = new URLSearchParams(location.search).get('demo');
     if (demo === 'venty' || demo === 'volcano' || demo === 'crafty') return this.startDemo(demo);
 
+    background?.status().then((s) => (this.bg = s), () => undefined);
+
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'visible') return;
-      if (this.phase === 'idle' && this.native && this.autoConnect && !this.userDisconnect) this.search();
+      clearTimeout(this.handOverTimer);
+      if (document.visibilityState !== 'visible') {
+        if (this.phase === 'connected' && this.recordsInBackground()) this.handOverTimer = setTimeout(() => this.handOver(), HAND_OVER_MS);
+        return;
+      }
+      if (this.away) this.comeBack();
+      else if (this.phase === 'idle' && this.native && this.autoConnect && !this.userDisconnect) this.search();
       // The refresh is skipped in the background, so catch up as soon as the app is back.
       else if (this.phase === 'connected') this.driver?.refresh?.().catch(() => undefined);
     });
@@ -212,9 +229,11 @@ class Connection {
   async disconnect() {
     tap();
     this.userDisconnect = true;
+    this.away = false;
     this.generation++;
     clearInterval(this.refreshTimer);
     sessions.lost();
+    if (!this.demo) background?.release({ present: false }).catch(() => undefined);
     await this.driver?.stop().catch(() => undefined);
     if (this.target && !this.demo) await ble.disconnect(this.target.id);
     if (this.demo) this.target = null;
@@ -222,6 +241,65 @@ class Connection {
     this.demo = false;
     this.device = null;
     this.phase = 'idle';
+  }
+
+  /**
+   * Background recording on or off for the connected device. Android's dialog looks for the
+   * device's advertising, which it stops while connected, so Glow lets go of it meanwhile.
+   */
+  async setBackground(on: boolean) {
+    if (!background) return;
+    tap();
+    if (!on) {
+      this.bg = await background.disable().catch(() => this.bg);
+      return;
+    }
+    const d = this.target;
+    const model = this.device?.model;
+    if (!d || !model || this.phase !== 'connected') return;
+    const gen = ++this.generation;
+    await this.letGo(d);
+    this.phase = 'reconnecting';
+    try {
+      this.bg = await background.enable({ id: d.id, name: d.name, kind: d.kind, model });
+    } catch (e) {
+      this.say(e instanceof Error ? e.message : String(e));
+    }
+    if (gen === this.generation) this.reconnect(d, gen, true);
+  }
+
+  private recordsInBackground() {
+    return !!this.bg?.enabled && !this.demo && this.bg.id?.toUpperCase() === this.target?.id.toUpperCase();
+  }
+
+  /** Closes the connection without marking a drop in the session log. */
+  private async letGo(d: FoundDevice) {
+    clearInterval(this.refreshTimer);
+    sessions.suspend();
+    const driver = this.driver;
+    this.driver = null;
+    await driver?.stop().catch(() => undefined);
+    await ble.disconnect(d.id);
+  }
+
+  /** In the background for a while: the background recorder takes the device over. */
+  private async handOver() {
+    const d = this.target;
+    if (!d || this.phase !== 'connected' || !hidden() || !this.recordsInBackground()) return;
+    this.generation++;
+    this.away = true;
+    await this.letGo(d);
+    this.phase = 'reconnecting';
+    await background?.release({ present: true }).catch(() => undefined);
+  }
+
+  /** On screen again after a hand-over: take the device back, with what was recorded meanwhile. */
+  private comeBack() {
+    this.away = false;
+    const d = this.target;
+    if (!d) return;
+    this.phase = 'reconnecting';
+    this.reconnect(d, ++this.generation, true);
   }
 
   setAutoConnect(on: boolean) {
@@ -393,13 +471,32 @@ class Connection {
       await usage.bind(d.id);
       await sessions.bind(d.id);
       await ready.bind(d.id);
+      await this.catchUp(d);
       await this.attach(d, createDriver(d.kind, transport), gen);
       return true;
     } catch (e) {
       ble.disconnect(d.id);
+      background?.release({ present: false }).catch(() => undefined);
       if (!quiet && gen === this.generation) this.fail(e, gen);
       return false;
     }
+  }
+
+  /**
+   * The app's own connection is up: the background recorder stops, and what it recorded since the
+   * app last had the device is replayed first, so the live readings carry on from it.
+   */
+  private async catchUp(d: FoundDevice) {
+    if (!background) return;
+    const { log } = await background.hold();
+    if (log) {
+      const n = await replay(log, d.id).catch((e: unknown) => {
+        console.warn('Glow: background log', e);
+        return 0;
+      });
+      if (n) this.say(n === 1 ? 'Added a session recorded in the background.' : `Added ${n} sessions recorded in the background.`);
+    }
+    await background.done();
   }
 
   private async attach(d: FoundDevice, driver: DeviceDriver, gen: number) {
@@ -497,16 +594,26 @@ class Connection {
   private onDisconnect(d: FoundDevice, gen: number) {
     if (gen !== this.generation || this.userDisconnect) return;
     clearInterval(this.refreshTimer);
+    clearTimeout(this.handOverTimer);
     sessions.lost();
     this.driver = null;
+    if (!this.demo) background?.release({ present: false }).catch(() => undefined);
     if (this.phase !== 'connected' && this.phase !== 'reconnecting') return;
+    if (hidden() && this.recordsInBackground()) {
+      // Switched off or out of range with Glow in the background: Android says when it is back,
+      // and the background recorder takes it from there.
+      this.generation++;
+      this.away = true;
+      this.phase = 'reconnecting';
+      return;
+    }
     this.phase = 'reconnecting';
     this.reconnect(d, gen);
   }
 
-  private async reconnect(d: FoundDevice, gen: number) {
+  private async reconnect(d: FoundDevice, gen: number, now = false) {
     for (let attempt = 0; gen === this.generation; attempt++) {
-      await sleep(attempt < 3 ? 1000 * (attempt + 1) : attempt < 15 ? 5000 : 10000);
+      if (attempt > 0 || !now) await sleep(attempt < 3 ? 1000 * (attempt + 1) : attempt < 15 ? 5000 : 10000);
       if (gen !== this.generation) return;
       if (await this.connectTo(d, gen, true, 6000)) return;
     }

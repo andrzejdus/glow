@@ -119,4 +119,24 @@ describe('session log', () => {
     const detail = await sessions.detail(sessions.list[0].id);
     expect(detail!.events.map((e) => e.k)).toEqual(['lost', 'back', 'lost']);
   });
+
+  it('hands over to the background recorder unmarked, and marks a gap it did not see', async () => {
+    vi.useFakeTimers();
+    await sessions.bind('log-6');
+    at(0, { heaterOn: false });
+    at(1, { heaterOn: true, currentTemp: 100 });
+    at(30, { heaterOn: true, currentTemp: 150 });
+    sessions.suspend();
+    at(33, { heaterOn: true, currentTemp: 155 });
+    await sessions.settled();
+    expect(sessions.active?.id).toBe(sessions.list[0].id);
+    at(40, { heaterOn: true, currentTemp: 160 });
+    sessions.suspend();
+    // The recorder came a minute late.
+    at(100, { heaterOn: true, currentTemp: 170 });
+    await sessions.settled();
+    expect(sessions.list).toHaveLength(1);
+    const detail = await sessions.detail(sessions.list[0].id);
+    expect(detail!.events).toEqual([{ t: 39, k: 'lost' }, { t: 99, k: 'back' }]);
+  });
 });
