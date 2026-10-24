@@ -22,6 +22,24 @@
   }
   let { current, target, min, max, heating, ready, unit, offline = false, scale = 1, lamps = [], onstep }: Props = $props();
 
+  const uid = $props.id();
+  // A wood fire: flames of different sizes and speeds, each drifting its own way, and a few sparks.
+  const FLAMES = [
+    { x: 8, s: 6, d: 0.95, delay: 0.1, dx: 1 },
+    { x: 20, s: 8, d: 0.8, delay: 0.55, dx: -1.5 },
+    { x: 33, s: 7, d: 1.1, delay: 0.3, dx: 1.5 },
+    { x: 46, s: 9, d: 0.75, delay: 0.85, dx: -1 },
+    { x: 58, s: 7, d: 1.05, delay: 0.15, dx: 2 },
+    { x: 70, s: 8, d: 0.85, delay: 0.65, dx: -2 },
+    { x: 82, s: 6, d: 1.15, delay: 0.4, dx: 1 },
+    { x: 93, s: 5, d: 0.9, delay: 0.9, dx: -1 },
+  ];
+  const SPARKS = [
+    { x: 27, d: 1.7, delay: 0.2, dx: 3 },
+    { x: 64, d: 2.1, delay: 1.1, dx: -4 },
+    { x: 85, d: 1.9, delay: 0.6, dx: 2 },
+  ];
+
   const R = 114;
   const C = 2 * Math.PI * R;
   const ARC = C * 0.75;
@@ -94,10 +112,28 @@
     {/if}
   </div>
   {#if lamps.length}
+    <!-- Noise that slowly changes, used to twist the flames so they never keep one shape. -->
+    <svg class="defs" width="0" height="0" aria-hidden="true">
+      <filter id="fire-{uid}" x="-40%" y="-80%" width="180%" height="260%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.09 0.24" numOctaves="2" seed="7" result="noise">
+          <animate attributeName="baseFrequency" dur="2.6s" values="0.09 0.24;0.12 0.31;0.08 0.21;0.09 0.24" repeatCount="indefinite" />
+        </feTurbulence>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </svg>
     <div class="lamps" role="group" aria-label="Heat level">
       {#each lamps as l (l.id)}
         <span class="lamp" class:on={l.on && !offline} class:fire={l.on && l.fire && !offline} aria-current={l.on ? 'true' : undefined}>
-          {#if l.on && l.fire && !offline}<span class="flames" aria-hidden="true"><i></i><i></i><i></i></span>{/if}
+          {#if l.on && l.fire && !offline}
+            <span class="flames" aria-hidden="true" style:filter="url(#fire-{uid})">
+              {#each FLAMES as f, i (i)}
+                <i style:left="{f.x}%" style:--s="{f.s}px" style:--dx="{f.dx}px" style:animation-duration="{f.d}s" style:animation-delay="-{f.delay}s"></i>
+              {/each}
+              {#each SPARKS as k, i (i)}
+                <b style:left="{k.x}%" style:--dx="{k.dx}px" style:animation-duration="{k.d}s" style:animation-delay="-{k.delay}s"></b>
+              {/each}
+            </span>
+          {/if}
           <span class="lamp-text">{l.label}</span>
         </span>
       {/each}
@@ -223,57 +259,77 @@
     text-shadow: 0 0 6px color-mix(in srgb, var(--orange) 70%, transparent);
     box-shadow: 0 0 10px color-mix(in srgb, var(--orange) 30%, transparent);
   }
-  /* On fire: a rising fire gradient, a flickering glow and small flames licking up off the top. */
+  /* On fire, like wood: a glowing ember body that flickers unevenly, flames rising off the top and
+     a few sparks. */
+  .defs {
+    position: absolute;
+  }
   .lamp {
     position: relative;
   }
   .lamp.fire {
     color: #fff;
-    border-color: #ff8a00;
-    background: linear-gradient(0deg, #d62800 0%, #ff5a00 35%, #ff9d00 70%, #ffd23f 100%);
-    background-size: 100% 220%;
-    text-shadow: 0 0 4px rgba(120, 20, 0, 0.8);
-    animation: burn 0.9s ease-in-out infinite alternate, flicker 0.23s steps(2, end) infinite;
+    border-color: #ff7a00;
+    background: linear-gradient(0deg, #7a1600 0%, #c93200 35%, #ff6a00 70%, #ffa324 100%);
+    background-size: 100% 180%;
+    text-shadow: 0 0 3px rgba(90, 10, 0, 0.9);
+    animation: ember 2.3s linear infinite;
   }
   .lamp-text {
     position: relative;
   }
   .flames {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 100%;
-    height: 10px;
-    display: flex;
-    justify-content: space-around;
+    left: -2px;
+    right: -2px;
+    bottom: calc(100% - 3px);
+    height: 16px;
     pointer-events: none;
   }
   .flames i {
-    width: 6px;
-    height: 9px;
-    border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%;
-    background: radial-gradient(circle at 50% 80%, #ffe08a 0%, #ff8a00 45%, rgba(255, 60, 0, 0) 75%);
+    position: absolute;
+    bottom: 0;
+    width: var(--s);
+    height: calc(var(--s) * 1.6);
+    margin-left: calc(var(--s) / -2);
+    border-radius: 50% 50% 45% 45% / 62% 62% 38% 38%;
+    background: radial-gradient(ellipse at 50% 78%, #fff4c0 0%, #ffd23f 22%, #ff8a00 48%, rgba(214, 50, 0, 0.55) 68%, rgba(214, 50, 0, 0) 80%);
     transform-origin: 50% 100%;
-    animation: lick 0.7s ease-in-out infinite;
+    opacity: 0;
+    animation: flame 1s ease-in infinite;
   }
-  .flames i:nth-child(2) {
-    height: 11px;
-    animation-delay: -0.25s;
-    animation-duration: 0.6s;
+  .flames b {
+    position: absolute;
+    bottom: 2px;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: #ffe27a;
+    box-shadow: 0 0 3px #ff8a00;
+    opacity: 0;
+    animation: spark 2s ease-out infinite;
   }
-  .flames i:nth-child(3) {
-    animation-delay: -0.45s;
+  /* Uneven steps, so the glow never pulses like a clock. */
+  @keyframes ember {
+    0% { background-position: 0 100%; filter: brightness(1); box-shadow: 0 0 9px rgba(255, 90, 0, 0.6); }
+    13% { filter: brightness(1.12); box-shadow: 0 0 13px rgba(255, 110, 0, 0.75); }
+    27% { filter: brightness(0.94); }
+    41% { background-position: 0 40%; filter: brightness(1.18); box-shadow: 0 0 15px rgba(255, 120, 0, 0.8); }
+    58% { filter: brightness(1.02); box-shadow: 0 0 10px rgba(255, 90, 0, 0.6); }
+    69% { filter: brightness(1.15); }
+    83% { background-position: 0 70%; filter: brightness(0.97); box-shadow: 0 0 12px rgba(255, 100, 0, 0.7); }
+    100% { background-position: 0 100%; filter: brightness(1); box-shadow: 0 0 9px rgba(255, 90, 0, 0.6); }
   }
-  @keyframes burn {
-    from { background-position: 0 100%; box-shadow: 0 0 8px rgba(255, 90, 0, 0.55), 0 -2px 12px rgba(255, 160, 0, 0.35); }
-    to { background-position: 0 0; box-shadow: 0 0 14px rgba(255, 90, 0, 0.8), 0 -4px 18px rgba(255, 180, 0, 0.5); }
+  @keyframes flame {
+    0% { transform: translate(0, 2px) scale(0.9); opacity: 0; }
+    12% { opacity: 1; }
+    55% { transform: translate(var(--dx), -5px) scale(0.75, 0.85); opacity: 0.9; }
+    100% { transform: translate(calc(var(--dx) * -0.6), -12px) scale(0.25, 0.4); opacity: 0; }
   }
-  @keyframes flicker {
-    50% { filter: brightness(1.12); }
-  }
-  @keyframes lick {
-    0%, 100% { transform: scaleY(0.7) translateY(2px); opacity: 0.75; }
-    50% { transform: scaleY(1.15) translateY(-1px); opacity: 1; }
+  @keyframes spark {
+    0% { transform: translate(0, 0); opacity: 0; }
+    15% { opacity: 1; }
+    100% { transform: translate(var(--dx), -22px); opacity: 0; }
   }
   /* Room for the lamps under the numbers, where the face is still wide enough. */
   .center.with-lamps {
