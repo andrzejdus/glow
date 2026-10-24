@@ -52,8 +52,8 @@
     if (def.unit === 'min') return value >= 60 ? `${Math.round(value / 6) / 10} h` : `${value} min`;
     return `${value}${def.unit ?? ''}`;
   }
-  // Battery voltage, current and their product. Current and power show their size only: which
-  // sign means charging is not known yet.
+  // Battery voltage, current and their product. Current and power show their size only; the
+  // battery state above says which way it flows (a CRAFTY+ reports charging as positive).
   const electrics = $derived.by(() => {
     const out: { label: string; value: string; unit: string }[] = [];
     const mv = d.batteryVoltage;

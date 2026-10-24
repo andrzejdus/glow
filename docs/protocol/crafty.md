@@ -162,24 +162,34 @@ Mark at each LED change (green, red, green, red, green between 187 and 189 °C):
 ## Auto-off
 
 The official app names `0061` `characteristicautoOffCountdown` but uses it as the setting: it reads
-it once, on connect, into the auto-off slider. `0071` (notified) is the time left. On a CRAFTY+ the
-setting shown in Glow dropped on its own around heating (5 min to 4 min), also after Glow stopped
-re-reading `0061` while the heater was on, so it may stay lowered after heating. Glow now reads it
-like the official app, only on connect, and keeps the value it had after a dropped connection.
-When and how `0061` changes is not confirmed: Device diagnostics reads it every second and logs
-every change with the temperature.
+it once, on connect, into the auto-off slider. Glow does the same. `0071` (notified) is the time
+left.
+
+CRAFTY+ V03.24, Device diagnostics through a whole heating session (0.1.40):
+
+- `0061` stayed at 210 s from heater on to heater off. It does not count down. The setting Glow
+  showed had dropped (5 to 4 min) because a scroll that started on the slider moved it (fixed in
+  0.1.41), and 210 s showed as "4 min".
+- `0071` starts at the setting when the heater comes on and restarts at the setting on each draw
+  (172 → 210 s and 182 → 210 s, at the user's inhales), so the auto-off counts from the last draw.
 
 ## Other characteristics
 
 Not in the official app; three clients (J-Cat/crafty-control, duramson/vo0t, lfuelling/sbcontrol)
-name them alike. Glow shows them in Device diagnostics only, to be confirmed on a device:
+name them alike. Glow shows them in Device diagnostics; the ranges below are from one CRAFTY+
+V03.24 session that started on the charger at 100 %, then unplugged and heated to 190 °C:
 
 | Char | Reported meaning |
 |---|---|
-| `00a3` | charging status: 2 = charging, non-zero = plugged in |
-| `00b3` | battery voltage, mV (vo0t's screenshot of a CRAFTY+: 3639 mV). Glow shows it in Settings when it is 2.5–4.5 V |
-| `00c3` | mains voltage, mV |
-| `00e3` | battery current, mA (Glow reads it signed; which sign means charging is unknown). Glow shows its size in Settings when it is at most 10 A |
+| `00a3` | charging status. Seen: 2 on the charger (at 100 %, still taking 483 mA), 0 off it |
+| `00b3` | battery voltage, mV. Seen: 4180 on the charger at 100 %, about 3070–3100 under the heater's load, 3817 at rest at 73 %. Glow shows it in Settings when it is 2.5–4.5 V |
+| `00c3` | mains voltage, mV. Seen: 4974 on the charger; off it not 0 but 281–675, rising as the device heated |
+| `00e3` | battery current, mA, signed: positive charges, negative drains. Seen: +483 on the charger at 100 %, −2000 to −7100 while heating, 0 with the heater off. Glow shows its size in Settings when it is at most 10 A |
 
 The same clients subscribe to battery status `0063`. Glow subscribes too and counts the pushes in
-Device diagnostics; the 3 s poll of `0063` stays until a device shows it notifies.
+Device diagnostics. A CRAFTY+ pushed it when the charger came out and when bit 5 (heater power)
+changed: 7 pushes in the session. A push when the charger goes in has not been seen yet, so the
+3 s poll of `0063` stays.
+
+On the phone one pass over these 13 registers took about 8–13 s, so Device diagnostics sees a
+change up to that late, not within a second.

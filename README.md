@@ -67,10 +67,10 @@ built from the protocol and covered by unit tests.
 | Booster / Superbooster | ✓ | ✓ | ✅³ | ✓³ | ✓³ | — |
 | Booster / Superbooster offsets | ✓ | ✓ | ✓⁴ | ✓⁴ | ✓⁴ | — |
 | Battery level | ✓ | ✓ | ✅ | ✓ | ✓ | — |
-| Battery voltage, current, power | — | — | ✓⁷ | ✓⁷ | ✓⁷ | — |
+| Battery voltage, current, power | — | — | ✅ | ✓⁷ | ✓⁷ | — |
 | Charging / charged | ✓ | ✓ | ✅ | ✓⁵ | — | — |
 | Hours of operation, usage per month | ✓ | ✓ | ✅ | ✓ | ✓ | ✓ |
-| Auto-off countdown | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Auto-off countdown | ✓ | ✓ | ✅ | ✓ | — | ✓ |
 | Air pump | — | — | — | — | — | ✓ |
 | Workflows (Flow 1–3, Balloon) | — | — | — | — | — | ✓ |
 | Find My | ✓ | ✓ | ✓ | — | — | — |
@@ -84,7 +84,7 @@ built from the protocol and covered by unit tests.
 ⁴ The Booster offset only; the CRAFTY+ Superbooster is always 15 °C above it. ·
 ⁵ Uses the bit found on a CRAFTY+, not yet confirmed on this firmware. ·
 ⁶ The target only: VENTY and VEAZY give the app no live temperature, so the dial shows the target and Ready. ·
-⁷ Read the way other open-source clients do, shown only when plausible; not yet confirmed on a device.
+⁷ Read the way other open-source clients do, shown only when plausible; confirmed on a CRAFTY+ only.
 </sub>
 
 **Not supported:** MIGHTY and MIGHTY+. They have no Bluetooth: STORZ & BICKEL lists the app
