@@ -6,6 +6,7 @@ import { createDemoDriver } from './devices/demo';
 import { createDriver, modelNames } from './devices/registry';
 import type { DeviceCapabilities, DeviceDriver, DeviceKind, DeviceState, DiagnosticValue, HeatMode, SettingDef } from './devices/types';
 import { load, save } from './prefs';
+import { demoSessions, sessions } from './sessions.svelte';
 import { demoHistory, usage } from './usage.svelte';
 
 export type Phase =
@@ -199,7 +200,9 @@ class Connection {
     this.phase = 'connecting';
     await sleep(900);
     if (gen !== this.generation) return;
-    await usage.bind(d.id, demoHistory(kind === 'volcano' ? 811 * 60 + 42 : 142 * 60 + 18));
+    const made = demoSessions(kind !== 'venty' && kind !== 'veazy', kind !== 'volcano');
+    await usage.bind(d.id, demoHistory(kind === 'volcano' ? 811 * 60 + 42 : 142 * 60 + 18, made.list));
+    await sessions.bind(d.id, made);
     this.device = null;
     await this.attach(d, createDemoDriver(kind), gen);
   }
@@ -209,6 +212,7 @@ class Connection {
     this.userDisconnect = true;
     this.generation++;
     clearInterval(this.refreshTimer);
+    sessions.lost();
     await this.driver?.stop().catch(() => undefined);
     if (this.target && !this.demo) await ble.disconnect(this.target.id);
     if (this.demo) this.target = null;
@@ -385,6 +389,7 @@ class Connection {
     if (this.phase !== 'reconnecting') this.phase = 'connecting';
     try {
       await usage.bind(d.id);
+      await sessions.bind(d.id);
       await this.attach(d, createDriver(d.kind, transport), gen);
       return true;
     } catch (e) {
@@ -482,11 +487,13 @@ class Connection {
       d.settings = { ...d.settings, ...next };
     }
     usage.observe(d);
+    sessions.observe(d);
   }
 
   private onDisconnect(d: FoundDevice, gen: number) {
     if (gen !== this.generation || this.userDisconnect) return;
     clearInterval(this.refreshTimer);
+    sessions.lost();
     this.driver = null;
     if (this.phase !== 'connected' && this.phase !== 'reconnecting') return;
     this.phase = 'reconnecting';

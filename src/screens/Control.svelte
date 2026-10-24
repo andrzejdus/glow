@@ -7,18 +7,16 @@
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, HeatMode } from '../lib/devices/types';
   import { toUnit } from '../lib/format';
+  import { goalOf, isReady } from '../lib/sessions.svelte';
 
   const d = $derived(conn.device as DeviceState);
   const caps = $derived(conn.caps);
   const unit = $derived(d.unit ?? 'C');
   const offline = $derived(conn.phase === 'reconnecting');
-  const offset = $derived(d.mode === 'boost' ? d.boostOffset ?? 0 : d.mode === 'superboost' ? d.superBoostOffset ?? 0 : 0);
-  const goal = $derived(d.targetTemp === undefined ? undefined : Math.min(d.maxTemp, d.targetTemp + offset));
-  const diff = $derived(goal !== undefined && d.currentTemp !== undefined ? goal - d.currentTemp : undefined);
+  const goal = $derived(goalOf(d));
   // The names STORZ & BICKEL's manuals and support pages use for every device.
   const names = { normal: 'Base', boost: 'Booster', superboost: 'Superbooster' };
-  // The device's own flag wins (it is what drives the CRAFTY+ LED); otherwise compare temperatures.
-  const reached = $derived(d.heaterOn && (d.tempReached ?? (diff !== undefined && Math.abs(diff) < 1)));
+  const reached = $derived(isReady(d));
   // Just the LED: red while heating, green when ready, grey when off.
   const status = $derived(offline ? 'Waiting for the device…' : !d.heaterOn ? 'Heater off' : reached ? 'Ready' : 'Heating');
   const led = $derived(

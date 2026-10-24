@@ -141,18 +141,26 @@ class Usage {
   }
 }
 
-/** Made-up history for demo mode only: hours per month, the current month last. */
-export function demoHistory(minutesNow: number): Snap[] {
+/** Made-up history for demo mode only: hours per month before the made-up sessions (or this month). */
+export function demoHistory(minutesNow: number, sessions: { id: number; end: number | null }[] = []): Snap[] {
   const monthly = [6.1, 8.4, 7.2, 10.5, 9.1, 11.3, 8.8];
-  const today = new Date();
   const snaps: Snap[] = [];
-  let m = minutesNow - 4.2 * 60 - monthly.reduce((a, b) => a + b, 0) * 60;
-  for (let i = 0; i < monthly.length; i++) {
-    snaps.push({ t: new Date(today.getFullYear(), today.getMonth() - monthly.length + i, 1).getTime() - 60_000, m });
-    m += monthly[i] * 60;
+  // The sessions, newest first, counted back from the reading now; then the months before them.
+  let m = sessions.length ? minutesNow : minutesNow - 4.2 * 60;
+  for (const s of sessions) {
+    if (s.end === null) continue;
+    snaps.push({ t: s.end, m });
+    m -= (s.end - s.id) / 60_000;
+    snaps.push({ t: s.id, m });
   }
-  snaps.push({ t: new Date(today.getFullYear(), today.getMonth(), 1).getTime() - 60_000, m });
-  return snaps;
+  const anchor = new Date(sessions.length ? sessions[sessions.length - 1].id : Date.now());
+  if (sessions.length) m -= 90;
+  snaps.push({ t: new Date(anchor.getFullYear(), anchor.getMonth(), 1).getTime() - 60_000, m });
+  for (let i = monthly.length - 1; i >= 0; i--) {
+    m -= monthly[i] * 60;
+    snaps.push({ t: new Date(anchor.getFullYear(), anchor.getMonth() - monthly.length + i, 1).getTime() - 60_000, m });
+  }
+  return snaps.sort((a, b) => a.t - b.t);
 }
 
 export const usage = new Usage();

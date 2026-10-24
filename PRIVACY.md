@@ -22,6 +22,10 @@ Glow saves this in its own private app storage on the phone:
 - **Hours-of-operation history**: readings of the device's own lifetime operating counter, with
   the time of each reading (at most two an hour), kept for up to 400 days. Glow uses them to
   show the usage per month.
+- **Session log**: for each time the heater was on while Glow was connected, when it started and
+  ended, the target and the device's temperature every few seconds, when it was ready, the heat
+  level used, air on and off (VOLCANO) and the battery level at the start and the end. Kept until
+  you clear Glow's storage. Glow uses it for the Stats screen.
 
 The device's own settings (temperatures, brightness and the rest) are read from and written to
 the device itself; Glow does not keep a copy. The diagnostics change log exists only while the

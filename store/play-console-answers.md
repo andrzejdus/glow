@@ -116,6 +116,7 @@ when it is sent off the device, and Glow sends nothing:
 |---|---|---|
 | Last device: Bluetooth address, name, model; the auto-connect setting | App storage on the phone only | `save('connection', …)` in `src/lib/connection.svelte.ts`, through `@capacitor/preferences` in `src/lib/prefs.ts` |
 | Hours-of-operation snapshots (device counter + time, up to 400 days) | App storage on the phone only | `save('usage:<device>', …)` in `src/lib/usage.svelte.ts` |
+| Session log (heater on/off times, target and temperature samples, Ready, heat level, air, battery at start and end; kept until storage is cleared) | App storage on the phone only | `save('sessions:<device>', …)` and `save('session:<device>:<start>', …)` in `src/lib/sessions.svelte.ts` |
 | "Debugging from a computer" setting (off by default) | App storage on the phone only; while on, a computer the user has authorised for adb can inspect the WebView and read the log | `DebuggingPlugin.java`, `src/lib/debugging.ts` |
 | Device settings and live readings | Read from and written to the device over Bluetooth; not stored | `src/lib/devices/` |
 | Diagnostics change log | Memory while the screen is open; to the clipboard only on "Copy log" | `src/screens/Diagnostics.svelte` |
@@ -187,7 +188,8 @@ similar finds nothing. Things a strict reviewer could still pick on, none of the
 3. **Usage statistics** (`src/components/HoursCard.svelte`): "Hours of operation" with "Session",
    "Avg per month" and "this month +4 h 12 min" read as a device hour meter, which is what they
    are; a reviewer primed on the device type could read them as consumption tracking. The listing
-   calls them hours of operation only.
+   calls them hours of operation only. The Stats screen (`src/screens/Stats.svelte`) adds a
+   session history in the same terms: heater on and off, temperature, Ready, battery.
 4. **"Balloon" workflow** (`src/lib/devices/volcano.ts`): the maker's own name for one VOLCANO
    program; visible in `03-workflow-running.png`. The listing says "built-in step programs" instead.
 5. **Model names in the header** (`src/components/Header.svelte`): every dashboard screenshot shows
