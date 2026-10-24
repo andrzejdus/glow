@@ -488,15 +488,20 @@ class Connection {
    */
   private async catchUp(d: FoundDevice) {
     if (!background) return;
-    const { log } = await background.hold();
-    if (log) {
-      const n = await replay(log, d.id).catch((e: unknown) => {
-        console.warn('Glow: background log', e);
-        return 0;
-      });
-      if (n) this.say(n === 1 ? 'Added a session recorded in the background.' : `Added ${n} sessions recorded in the background.`);
+    try {
+      const { log } = await background.hold();
+      if (log) {
+        const before = sessions.list.length;
+        await replay(log, d.id);
+        // A session carried on through a hand-over is not a new one.
+        const n = sessions.list.length - before;
+        if (n > 0) this.say(n === 1 ? 'Added a session recorded in the background.' : `Added ${n} sessions recorded in the background.`);
+      }
+      await background.done();
+    } catch (e) {
+      // Never in the way of connecting; the log stays for the next time.
+      console.warn('Glow: background log', e);
     }
-    await background.done();
   }
 
   private async attach(d: FoundDevice, driver: DeviceDriver, gen: number) {
