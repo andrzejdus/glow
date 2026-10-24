@@ -3,6 +3,15 @@ import type { DeviceState } from './devices/types';
 import { estimate, fromHistory, heatUpOf, leftAt, ready, type HeatUp } from './ready.svelte';
 import { sessions, type SessionDetail, type SessionSummary } from './sessions.svelte';
 
+// Storage in memory, so what Glow keeps for a device can be read back.
+vi.mock('./prefs', () => {
+  const store = new Map<string, string>();
+  return {
+    load: async <T>(key: string, fallback: T): Promise<T> => (store.has(key) ? JSON.parse(store.get(key)!) : fallback),
+    save: async (key: string, value: unknown) => void store.set(key, JSON.stringify(value)),
+  };
+});
+
 /** A heat-up from `from`° to `goal`°: 3° a second, then 0.6° a second over the last 15°. */
 const tempAt = (t: number, from: number, goal: number, speed = 1) => {
   const fast = (goal - 15 - from) / 3 / speed;
@@ -43,6 +52,7 @@ const leftNow = () => ready.left(Date.now());
 
 async function seed(key: string, list: { s: SessionSummary; detail: SessionDetail }[]) {
   await sessions.bind(key, { list: list.map((x) => x.s), details: new Map(list.map((x) => [x.s.id, x.detail])) });
+  await ready.bind(key, true);
 }
 
 describe('heat-up curves', () => {
@@ -170,6 +180,42 @@ describe('Ready in', () => {
     expect(leftNow()).toBeNull();
   });
 
+  it('learns reheats after a draw and guesses the next ones from the bottom of the dip', async () => {
+    vi.useFakeTimers();
+    // A draw at `from` s: down to 175° (5° below), back at 180° 4 s later, Ready 4 s after that.
+    const draw = (from: number, temps = [178, 176, 175, 176, 178, 179, 180, 180, 180, 180]) => {
+      const shown: (number | null)[] = [];
+      temps.forEach((c, i) => {
+        at(from + i, { heaterOn: true, currentTemp: c, tempReached: false });
+        shown.push(leftNow());
+      });
+      at(from + temps.length, { heaterOn: true, currentTemp: 180, tempReached: true });
+      return shown;
+    };
+    await sessions.bind('ready-6', { list: [], details: new Map() });
+    await ready.bind('ready-6');
+    at(0, { heaterOn: true, currentTemp: 179, tempReached: false });
+    at(1, { heaterOn: true, currentTemp: 180, tempReached: true });
+    // The first reheat: nothing to go by yet.
+    expect(draw(10).every((v) => v === null)).toBe(true);
+    // The next one: no guess while it still cools, then the 7 s the first took from 4° below.
+    const shown = draw(40);
+    expect(shown.slice(0, 3)).toEqual([null, null, null]);
+    expect(shown[3]).toBe(7);
+    // A deeper dip than any so far: carried on at the rate of the earlier climbs.
+    const deep = draw(70, [178, 174, 170, 172, 175, 178, 180, 180, 180, 180]);
+    expect(deep[3]).toBeGreaterThan(9);
+    expect(deep.slice(3).every((v) => v !== null)).toBe(true);
+    at(90, { heaterOn: false, currentTemp: 180 });
+
+    // Kept for the device: back after connecting to another one.
+    await ready.bind('ready-other');
+    await ready.bind('ready-6');
+    at(100, { heaterOn: true, currentTemp: 179, tempReached: false });
+    at(101, { heaterOn: true, currentTemp: 180, tempReached: true });
+    expect(draw(110)[3]).not.toBeNull();
+  });
+
   it('jumps with a boost and says nothing without earlier sessions', async () => {
     vi.useFakeTimers();
     await seed('ready-3', [past(T0 - 86_400_000, 25, 180)]);
@@ -178,13 +224,16 @@ describe('Ready in', () => {
     for (let sec = 1; sec <= 70; sec++) at(sec, { heaterOn: true, currentTemp: tempAt(sec, 25, 180) });
     at(71, { heaterOn: true, currentTemp: 180, tempReached: true });
     expect(leftNow()).toBeNull();
-    // Booster: 15° more, the slow last stretch of the earlier heat-up again.
-    at(80, { heaterOn: true, currentTemp: 180, mode: 'boost' });
+    // Booster: 15° more, the slow last stretch of the earlier heat-up again. The device still says
+    // Ready for a moment.
+    at(80, { heaterOn: true, currentTemp: 180, mode: 'boost', tempReached: true });
+    at(81, { heaterOn: true, currentTemp: 180, mode: 'boost', tempReached: false });
+    at(82, { heaterOn: true, currentTemp: 181, mode: 'boost', tempReached: false });
     expect(leftNow()).toBeGreaterThan(20);
     at(90, { heaterOn: false, currentTemp: 186 });
     expect(leftNow()).toBeNull();
 
-    await sessions.bind('ready-4', { list: [], details: new Map() });
+    await seed('ready-4', []);
     at(100, { heaterOn: true, currentTemp: 25 });
     await vi.advanceTimersByTimeAsync(0);
     at(101, { heaterOn: true, currentTemp: 28 });

@@ -39,8 +39,9 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
 - 🔒 **Runs entirely on the phone.** No server, account, analytics or CDN; the app talks to the
   device over Bluetooth only, and its Content-Security-Policy blocks every network request.
 - 🌡️ **Dashboard.** A temperature dial that glows red while heating and green when ready, a status
-  line that mirrors the device LED and counts down to Ready (learnt from earlier heat-ups),
-  Booster / Superbooster, and lifetime hours of operation counting up live, with usage per month.
+  line that mirrors the device LED and counts down to Ready (learnt from the device's earlier
+  heat-ups and reheats), Booster / Superbooster, and lifetime hours of operation counting up live,
+  with usage per month.
 - 🔋 **Battery.** Level, charging and charged, with the charge animating up to full.
 - 🌋 **VOLCANO workflows.** Flow 1–3 and Balloon run from the phone, step by step, with time
   running and time left.

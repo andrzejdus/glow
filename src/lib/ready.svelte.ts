@@ -1,4 +1,5 @@
 import type { DeviceState } from './devices/types';
+import { load, save } from './prefs';
 import { goalOf, isReady, sessions, type SessionDetail, type SessionSummary } from './sessions.svelte';
 
 // "Ready in …" while heating. The first guess comes from earlier sessions: how long they still
@@ -6,6 +7,11 @@ import { goalOf, isReady, sessions, type SessionDetail, type SessionSummary } fr
 // of the last few). While the device heats, the last half minute is compared with them over the
 // same degrees, and the guess is scaled by how much faster or slower this heat-up runs (battery,
 // charger, a warm or cold device).
+//
+// A reheat (Ready lost to a draw) is its own case: a draw cools a CRAFTY+ by only a few degrees,
+// yet its Ready comes back seconds after the temperature does, so the last seconds of a first
+// heat-up guessed far too short. Glow keeps the last reheats of each device, from the bottom of
+// the dip to Ready, and guesses from those once the temperature climbs again.
 
 /** The guess is taken from this many of the latest sessions that got Ready. */
 const HISTORY = 8;
@@ -16,6 +22,8 @@ const PACE_FULL_MS = 20_000;
  *  5 s, then 2°), which earlier heat-ups from a colder start never show at those degrees: the pace
  *  is measured only after this. */
 const SPIN_UP_MS = 10_000;
+/** Reheats kept per device. */
+const REHEATS = 12;
 
 /** An earlier heat-up: degrees below the goal and the seconds it still took to Ready, in time order. */
 export interface HeatUp {
@@ -55,8 +63,10 @@ export function leftAt(h: HeatUp, deg: number): number | null {
 
 /** For a goal further away than a heat-up started: its whole time plus the extra degrees at its first rate. */
 function carriedOn(h: HeatUp, deg: number): number | null {
-  const k = h.left.findIndex((l) => h.left[0] - l >= 10);
-  if (k < 0) return null;
+  let k = h.left.findIndex((l) => h.left[0] - l >= 10);
+  // A reheat is shorter than that: its whole climb.
+  if (k < 0) k = h.left.length - 1;
+  if (h.left[0] - h.left[k] < 2) return null;
   const rate = (h.below[0] - h.below[k]) / (h.left[0] - h.left[k]);
   return rate > 0.2 ? h.left[0] + (deg - h.below[0]) / rate : null;
 }
@@ -108,6 +118,13 @@ class Ready {
   at = $state(0);
 
   private curves: HeatUp[] = [];
+  private reheats: HeatUp[] = [];
+  private key = '';
+  private persist = true;
+  /** Ready was reached at this goal, so losing it is a reheat. */
+  private wasReady = false;
+  /** Readings since Ready was lost. */
+  private dip: { t: number; below: number }[] = [];
   /** Seconds from heater on to Ready of earlier sessions, for devices without a live temperature. */
   private times: number[] = [];
   private trail: { t: number; below: number }[] = [];
@@ -116,6 +133,17 @@ class Ready {
   private goal: number | undefined;
   private updated = 0;
   private gen = 0;
+
+  /** Demo mode keeps its reheats in memory only. */
+  async bind(key: string, demo = false) {
+    if (key === this.key) return;
+    this.key = key;
+    this.persist = !demo;
+    // Another device: its own earlier heat-ups load at its first report.
+    this.heating = false;
+    this.at = 0;
+    this.reheats = demo ? [] : await load<HeatUp[]>(`reheats:${key}`, []);
+  }
 
   observe(d: DeviceState, now = Date.now()) {
     if (!d.heaterOn) {
@@ -128,19 +156,40 @@ class Ready {
       this.onAt = now;
       this.trail = [];
       this.at = 0;
+      this.wasReady = false;
+      this.dip = [];
       void this.prepare();
     }
     const goal = goalOf(d);
-    if (isReady(d) || goal === undefined) {
+    if (goal === undefined) return;
+    if (goal !== this.goal) {
+      // A new goal is a new climb, shown at once.
+      this.goal = goal;
+      this.trail = [];
+      this.at = 0;
+      this.wasReady = false;
+      this.dip = [];
+    }
+    const below = d.currentTemp === undefined ? undefined : goal - d.currentTemp;
+    if (isReady(d)) {
+      if (this.dip.length && below !== undefined) this.learn([...this.dip, { t: now, below }], now);
+      // A Ready far below the goal is the flag of the last goal, which the device drops a moment
+      // after a boost; the climb to the boost is not a reheat.
+      this.wasReady ||= below === undefined || below < 5;
+      this.dip = [];
       this.trail = [];
       this.at = 0;
       return;
     }
-    if (goal !== this.goal) {
-      // A new goal is shown at once.
-      this.goal = goal;
-      this.trail = [];
-      this.at = 0;
+    if (this.wasReady) {
+      // A reheat: guess once the temperature climbs again, as the draw may still be going on.
+      // Without a live temperature (VENTY/VEAZY) there is nothing to go by.
+      if (below === undefined) return;
+      this.dip.push({ t: now, below });
+      const bottom = Math.max(...this.dip.map((r) => r.below));
+      const left = below <= bottom - 1 ? fromHistory(this.reheats, below) : null;
+      this.settle(left === null ? null : now + left * 1000, now);
+      return;
     }
     if (d.currentTemp === undefined) {
       // VENTY/VEAZY: no live temperature, so the usual heat-up time, counted from heater on.
@@ -174,6 +223,22 @@ class Ready {
     }
     this.curves = curves;
     this.times = past.map((s) => s.readySec!);
+  }
+
+  /** Keeps a reheat from the bottom of its dip (where the draw ended) to Ready. */
+  private learn(dip: { t: number; below: number }[], readyAt: number) {
+    const bottom = Math.max(...dip.map((r) => r.below));
+    let from = dip.length - 1;
+    while (dip[from].below !== bottom) from--;
+    const climb = dip.slice(from);
+    // Longer than two minutes, Glow was most likely away for part of it.
+    if (climb.length < 2 || readyAt - climb[0].t > 120_000) return;
+    const h: HeatUp = {
+      below: climb.map((r) => Math.round(r.below * 2) / 2),
+      left: climb.map((r) => Math.round((readyAt - r.t) / 100) / 10),
+    };
+    this.reheats = [h, ...this.reheats].slice(0, REHEATS);
+    if (this.persist && this.key) save(`reheats:${this.key}`, this.reheats);
   }
 
   /**

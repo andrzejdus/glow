@@ -204,6 +204,7 @@ class Connection {
     const made = demoSessions(kind !== 'venty' && kind !== 'veazy', kind !== 'volcano');
     await usage.bind(d.id, demoHistory(kind === 'volcano' ? 811 * 60 + 42 : 142 * 60 + 18, made.list));
     await sessions.bind(d.id, made);
+    await ready.bind(d.id, true);
     this.device = null;
     await this.attach(d, createDemoDriver(kind), gen);
   }
@@ -391,6 +392,7 @@ class Connection {
     try {
       await usage.bind(d.id);
       await sessions.bind(d.id);
+      await ready.bind(d.id);
       await this.attach(d, createDriver(d.kind, transport), gen);
       return true;
     } catch (e) {
