@@ -117,7 +117,7 @@ when it is sent off the device, and Glow sends nothing:
 | Last device: Bluetooth address, name, model; the auto-connect setting | App storage on the phone only | `save('connection', …)` in `src/lib/connection.svelte.ts`, through `@capacitor/preferences` in `src/lib/prefs.ts` |
 | Hours-of-operation snapshots (device counter + time, up to 400 days) | App storage on the phone only | `save('usage:<device>', …)` in `src/lib/usage.svelte.ts` |
 | Session log (heater on/off times, target and temperature samples from 10 s before heater on to the cool-down after it, Ready, heat level, air, battery at start and end, the Glow version; kept until storage is cleared) | App storage on the phone only | `save('sessions:<device>', …)` and `save('session:<device>:<start>', …)` in `src/lib/sessions.svelte.ts` |
-| Reheats (degrees below the target and seconds to Ready, from the lowest point of a dip after a draw, for the last 12) | App storage on the phone only | `save('reheats:<device>', …)` in `src/lib/ready.svelte.ts` |
+| Reheats (seconds from losing Ready after a draw to Ready again, and degrees below the target with seconds to Ready from the lowest point, for the last 12) | App storage on the phone only | `save('reheats:<device>', …)` in `src/lib/ready.svelte.ts` |
 | "Debugging from a computer" setting (off by default) | App storage on the phone only; while on, a computer the user has authorised for adb can inspect the WebView and read the log | `DebuggingPlugin.java`, `src/lib/debugging.ts` |
 | Device settings and live readings | Read from and written to the device over Bluetooth; not stored | `src/lib/devices/` |
 | Diagnostics change log | Memory while the screen is open; to the clipboard only on "Copy log" | `src/screens/Diagnostics.svelte` |

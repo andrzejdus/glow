@@ -28,8 +28,9 @@ Glow saves this in its own private app storage on the phone:
   level used, air on and off (VOLCANO), the battery level at the start and the end, and the Glow
   version that recorded it. Kept until you clear Glow's storage. Glow uses it for the Stats screen.
 - **Reheats**: for the last 12 times the device lost Ready while heating (after a draw) and got it
-  back, how many degrees below the target it was, from the lowest point until Ready, about once a
-  second. Glow uses them, and the session log, to show how long until the device is ready.
+  back, how long that took, and how many degrees below the target it was from the lowest point
+  until Ready, about once a second. Glow uses them, and the session log, to show how long until
+  the device is ready.
 
 The device's own settings (temperatures, brightness and the rest) are read from and written to
 the device itself; Glow does not keep a copy. The diagnostics change log exists only while the

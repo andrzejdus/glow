@@ -10,8 +10,9 @@ import { goalOf, isReady, sessions, type SessionDetail, type SessionSummary } fr
 //
 // A reheat (Ready lost to a draw) is its own case: a draw cools a CRAFTY+ by only a few degrees,
 // yet its Ready comes back seconds after the temperature does, so the last seconds of a first
-// heat-up guessed far too short. Glow keeps the last reheats of each device, from the bottom of
-// the dip to Ready, and guesses from those once the temperature climbs again.
+// heat-up guessed far too short. Glow keeps the last reheats of each device: how long each took,
+// and its climb from the bottom of the dip to Ready. While the draw may still be going on, the
+// guess is the usual length of a reheat; once the temperature climbs again, the earlier climbs.
 
 /** The guess is taken from this many of the latest sessions that got Ready. */
 const HISTORY = 8;
@@ -30,6 +31,10 @@ export interface HeatUp {
   below: number[];
   left: number[];
 }
+
+/** A reheat's climb from the bottom of its dip, and its seconds from losing Ready to Ready again
+ *  (not kept before 0.1.58). */
+type Reheat = HeatUp & { total?: number };
 
 /** The part of a session from heater on to its first reading past Ready. */
 export function heatUpOf(s: SessionSummary, detail: SessionDetail): HeatUp | null {
@@ -118,7 +123,7 @@ class Ready {
   at = $state(0);
 
   private curves: HeatUp[] = [];
-  private reheats: HeatUp[] = [];
+  private reheats: Reheat[] = [];
   private key = '';
   private persist = true;
   /** Ready was reached at this goal, so losing it is a reheat. */
@@ -142,7 +147,7 @@ class Ready {
     // Another device: its own earlier heat-ups load at its first report.
     this.heating = false;
     this.at = 0;
-    this.reheats = demo ? [] : await load<HeatUp[]>(`reheats:${key}`, []);
+    this.reheats = demo ? [] : await load<Reheat[]>(`reheats:${key}`, []);
   }
 
   observe(d: DeviceState, now = Date.now()) {
@@ -190,13 +195,14 @@ class Ready {
       return;
     }
     if (this.wasReady) {
-      // A reheat: guess once the temperature climbs again, as the draw may still be going on.
-      // Without a live temperature (VENTY/VEAZY) there is nothing to go by.
+      // A reheat. Without a live temperature (VENTY/VEAZY) there is nothing to go by.
       if (below === undefined) return;
       this.dip.push({ t: now, below });
       const bottom = Math.max(...this.dip.map((r) => r.below));
-      const left = below <= bottom - 1 ? fromHistory(this.reheats, below) : null;
-      this.settle(left === null ? null : now + left * 1000, now);
+      const climb = below <= bottom - 1 ? fromHistory(this.reheats, below) : null;
+      const usual = median(this.reheats.flatMap((h) => (h.total === undefined ? [] : [h.total])));
+      // Before it climbs, a guess from the climbs alone showed "Heating" through most of a reheat.
+      this.settle(climb !== null ? now + climb * 1000 : usual !== null ? this.dip[0].t + usual * 1000 : null, now);
       return;
     }
     if (d.currentTemp === undefined) {
@@ -237,7 +243,7 @@ class Ready {
     this.times = past.map((s) => s.readySec!);
   }
 
-  /** Keeps a reheat from the bottom of its dip (where the draw ended) to Ready. */
+  /** Keeps a reheat: its length, and its climb from the bottom of the dip (where the draw ended). */
   private learn(dip: { t: number; below: number }[], readyAt: number) {
     const bottom = Math.max(...dip.map((r) => r.below));
     let from = dip.length - 1;
@@ -245,9 +251,10 @@ class Ready {
     const climb = dip.slice(from);
     // Longer than two minutes, Glow was most likely away for part of it.
     if (climb.length < 2 || readyAt - climb[0].t > 120_000) return;
-    const h: HeatUp = {
+    const h: Reheat = {
       below: climb.map((r) => Math.round(r.below * 2) / 2),
       left: climb.map((r) => Math.round((readyAt - r.t) / 100) / 10),
+      total: Math.round((readyAt - dip[0].t) / 100) / 10,
     };
     this.reheats = [h, ...this.reheats].slice(0, REHEATS);
     if (this.persist && this.key) save(`reheats:${this.key}`, this.reheats);

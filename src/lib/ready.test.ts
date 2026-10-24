@@ -199,7 +199,7 @@ describe('Ready in', () => {
     expect(leftNow()).toBeNull();
   });
 
-  it('learns reheats after a draw and guesses the next ones from the bottom of the dip', async () => {
+  it('learns reheats after a draw and counts the next ones down from losing Ready', async () => {
     vi.useFakeTimers();
     // A draw at `from` s: down to 175° (5° below), back at 180° 4 s later, Ready 4 s after that.
     const draw = (from: number, temps = [178, 176, 175, 176, 178, 179, 180, 180, 180, 180]) => {
@@ -217,14 +217,17 @@ describe('Ready in', () => {
     at(1, { heaterOn: true, currentTemp: 180, tempReached: true });
     // The first reheat: nothing to go by yet.
     expect(draw(10).every((v) => v === null)).toBe(true);
-    // The next one: no guess while it still cools, then the 7 s the first took from 4° below.
+    // The next one: while it still cools, the 10 s the first one took; then the 7 s the first took
+    // from 4° below.
     const shown = draw(40);
-    expect(shown.slice(0, 3)).toEqual([null, null, null]);
+    expect(shown.slice(0, 3)).toEqual([10, 9, 8]);
     expect(shown[3]).toBe(7);
-    // A deeper dip than any so far: carried on at the rate of the earlier climbs.
+    // A deeper dip than any so far: its climb, carried on at the rate of the earlier ones, needs
+    // longer than the usual 10 s, so the count slows down and has not run out at Ready.
     const deep = draw(70, [178, 174, 170, 172, 175, 178, 180, 180, 180, 180]);
-    expect(deep[3]).toBeGreaterThan(9);
-    expect(deep.slice(3).every((v) => v !== null)).toBe(true);
+    expect(deep[0]).toBe(10);
+    expect(deep.every((v) => v !== null && v > 0)).toBe(true);
+    expect(deep[9]).toBeGreaterThanOrEqual(2);
     at(90, { heaterOn: false, currentTemp: 180 });
 
     // Kept for the device: back after connecting to another one.
