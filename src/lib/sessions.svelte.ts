@@ -220,7 +220,10 @@ class Sessions {
     const open = this.list.find((s) => s.end === null);
     if (!open) return;
     if (d.heaterOn && now - open.seen < RESUME_MS) {
-      this.resuming = this.resume(open, now).finally(() => (this.resuming = null));
+      // Still in memory (handed to the background recorder and back): carry on at once, or this
+      // report would be lost to the session loading meanwhile.
+      if (this.active?.id === open.id && this.activeDetail) this.carryOn(open, this.activeDetail, now);
+      else this.resuming = this.resume(open, now).finally(() => (this.resuming = null));
       return;
     }
     // The heater went off while Glow was away: it ended about when Glow last saw it.
@@ -238,7 +241,10 @@ class Sessions {
   }
 
   private async resume(open: SessionSummary, now: number) {
-    const detail = (await this.detail(open.id)) ?? { ts: [], c: [], g: [], events: [] };
+    this.carryOn(open, (await this.detail(open.id)) ?? { ts: [], c: [], g: [], events: [] }, now);
+  }
+
+  private carryOn(open: SessionSummary, detail: SessionDetail, now: number) {
     // Carried on by an updated Glow: both versions, for whoever reads the log later.
     const app = open.app?.split(' → ').includes(__APP_VERSION__) ? open.app : `${open.app ?? '?'} → ${__APP_VERSION__}`;
     this.active = { ...open, app };
