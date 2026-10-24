@@ -17,26 +17,57 @@
 
   /** How far either side of the factory value the thumb is pulled onto it, in steps. */
   const PULL = 0.75;
+  /** How far a finger goes sideways before the slider takes it (px). */
+  const SLOP = 8;
+  const THUMB = 26;
 
   const span = $derived(Math.max(step, max - min));
   const frac = (v: number) => Math.max(0, Math.min(1, (v - min) / span));
   const hasDefault = $derived(defaultValue !== undefined && defaultValue >= min && defaultValue <= max);
 
-  function input(e: Event & { currentTarget: HTMLInputElement }) {
-    const raw = Number(e.currentTarget.value);
+  function set(raw: number) {
     let next = Math.round((raw - min) / step) * step + min;
     if (hasDefault && Math.abs(raw - (defaultValue as number)) <= PULL * step) next = defaultValue as number;
     next = Math.max(min, Math.min(max, next));
-    // Show the thumb where the value landed, so the pull onto the factory value is visible.
-    e.currentTarget.value = String(next);
-    if (next === value) return;
+    if (next === value) return next;
     if (next === defaultValue) tap();
     onchange(next);
+    return next;
+  }
+
+  // Keyboard and screen readers still use the range input.
+  function input(e: Event & { currentTarget: HTMLInputElement }) {
+    // Show the thumb where the value landed, so the pull onto the factory value is visible.
+    e.currentTarget.value = String(set(Number(e.currentTarget.value)));
+  }
+
+  // Fingers and the mouse: the range input jumps to wherever a touch lands, so a scroll that
+  // started on the track changed the setting. The slider moves only once the pointer goes
+  // sideways, and by how far it went, never to where it landed.
+  let drag = $state<{ id: number; x: number; y: number; from: number; width: number; on: boolean } | null>(null);
+  function down(e: PointerEvent & { currentTarget: HTMLElement }) {
+    if (disabled || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, from: value, width: e.currentTarget.clientWidth, on: false };
+  }
+  function move(e: PointerEvent & { currentTarget: HTMLElement }) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x;
+    if (!drag.on) {
+      if (Math.abs(dx) < SLOP || Math.abs(dx) < Math.abs(e.clientY - drag.y)) return;
+      drag.on = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    set(drag.from + (dx / Math.max(1, drag.width - THUMB)) * span);
+  }
+  function up(e: PointerEvent) {
+    if (drag?.id === e.pointerId) drag = null;
   }
 </script>
 
-<div class="slider" class:disabled class:at-default={hasDefault && value === defaultValue}
-  style:--p={frac(value)} style:--d={hasDefault ? frac(defaultValue as number) : -1}>
+<!-- The pointer handling is for touch and mouse only; the input inside is what assistive tech sees. -->
+<div class="slider" role="presentation" class:disabled class:dragging={drag?.on} class:at-default={hasDefault && value === defaultValue}
+  style:--p={frac(value)} style:--d={hasDefault ? frac(defaultValue as number) : -1}
+  onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
   {#if hasDefault}<span class="tick" aria-hidden="true"></span>{/if}
   <input {id} type="range" {min} {max} step={step / 10} {value} {disabled} oninput={input}
     aria-valuetext={hasDefault && value === defaultValue ? `${value}, factory setting` : String(value)} />
@@ -47,6 +78,8 @@
     position: relative;
     height: 32px;
     margin-top: 2px;
+    /* Up and down scroll the page; sideways is the slider's. */
+    touch-action: pan-y;
     --thumb: 26px;
     --at: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--p));
     --tick-at: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--d));
@@ -75,6 +108,7 @@
     height: 32px;
     margin: 0;
     background: transparent;
+    pointer-events: none;
   }
   input::-webkit-slider-runnable-track {
     height: 6px;
@@ -102,7 +136,7 @@
     border: 0;
     transition: transform 0.15s ease;
   }
-  input:active::-webkit-slider-thumb {
+  .dragging input::-webkit-slider-thumb {
     transform: scale(1.1);
   }
   .slider.disabled {
