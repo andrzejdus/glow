@@ -444,6 +444,13 @@ class Connection {
       d.autoShutoffRemainingSec = d.autoShutoffSec;
       this.autoOffRunning = false;
     }
+    if (rest.tempReached === true && !d.tempReached && !this.autoOffRunning && d.heaterOn) {
+      // Ready: a CRAFTY+ started counting up to ~1.5 s ago, but says so only in its next report,
+      // ~2.4 s later. Waiting for that showed 3:30 jump to 3:28.
+      this.autoOffEnd = now + ((d.autoShutoffRemainingSec ?? 1) - 1) * 1000;
+      this.autoOffRunning = true;
+      this.autoOffAt = now;
+    }
     const v = rest.autoShutoffRemainingSec;
     if (v !== undefined) {
       const shown = this.autoOffLeft(now);
@@ -453,10 +460,12 @@ class Connection {
         // Just restarted, or the same value again: the device is holding its timer.
         this.autoOffRunning = false;
       } else {
-        // Counting down. Reports wobble by a second or so; the end only ever moves earlier, so the
-        // time left never ticks back up.
+        // Counting down. Reports wobble by a second or so, and a CRAFTY+ second is ~3% short. The
+        // end only ever moves earlier, so the time left never ticks back up, and by at most 0.4 s a
+        // report, so it never skips a second, unless the setting was lowered.
         const end = now + v * 1000;
-        this.autoOffEnd = this.autoOffRunning ? Math.min(this.autoOffEnd, end) : end;
+        if (!this.autoOffRunning || end < this.autoOffEnd - 5000) this.autoOffEnd = end;
+        else if (end < this.autoOffEnd) this.autoOffEnd = Math.max(end, this.autoOffEnd - 400);
         this.autoOffRunning = true;
       }
       this.autoOffAt = now;

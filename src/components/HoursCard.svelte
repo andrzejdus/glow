@@ -13,7 +13,15 @@
   const avg = $derived(known.length ? known.reduce((a, w) => a + (w.hours ?? 0), 0) / known.length : null);
   // Time left until the device switches itself off, when it reports it; nothing while it is off.
   // A CRAFTY+ reports 0 a moment before it says the heater is off: show that as off too.
-  const left = $derived(conn.autoOffLeft(usage.now));
+  // On its own clock, faster than usage.now: a report can bring the end a fraction of a second
+  // closer, and on a 1 s clock that showed as a skipped second.
+  let clock = $state(Date.now());
+  $effect(() => {
+    if (!d?.heaterOn) return;
+    const timer = setInterval(() => (clock = Date.now()), 200);
+    return () => clearInterval(timer);
+  });
+  const left = $derived(conn.autoOffLeft(clock));
   const autoOff = $derived(
     !d?.heaterOn || left === 0
       ? '–'

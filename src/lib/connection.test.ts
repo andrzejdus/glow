@@ -255,11 +255,15 @@ describe('auto-off countdown', () => {
           else emit({ heaterOn: (v & 0x10) !== 0, tempReached: (v & 0x100) !== 0 });
           seen.push({ at, left: shown(), restart: conn.autoOffRestartAt });
         }
-        if (at % 1000 === 533 % 1000) tick = t0 + at;
+        if (at % 200 === 100) tick = t0 + at;
         seen.push({ at, left: shown(), restart: conn.autoOffRestartAt });
       }
       const ups = seen.filter((s, k) => k > 0 && s.left !== null && seen[k - 1].left !== null && s.left > seen[k - 1].left! && s.restart === seen[k - 1].restart);
       expect(ups).toEqual([]);
+      // Nor skips a second, at Ready or while counting: each one stays up for a while.
+      const changes = seen.filter((s, k) => k > 0 && s.left !== seen[k - 1].left);
+      const skips = changes.filter((s, k) => k > 0 && s.left !== null && changes[k - 1].left !== null && s.restart === changes[k - 1].restart && (changes[k - 1].left! - s.left > 1 || s.at - changes[k - 1].at < 500));
+      expect(skips).toEqual([]);
       // Never the last session's time, and nothing below 3:30 before the device counts.
       expect(seen.find((s) => s.left !== null)?.left).toBe(210);
       // One restart, at the draw, and "–" (null) straight after the 0 at heater off.
