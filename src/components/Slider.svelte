@@ -35,7 +35,7 @@
     return next;
   }
 
-  // Keyboard and screen readers still use the range input.
+  // Keyboard and screen readers use the range input, a whole step at a time.
   function input(e: Event & { currentTarget: HTMLInputElement }) {
     // Show the thumb where the value landed, so the pull onto the factory value is visible.
     e.currentTarget.value = String(set(Number(e.currentTarget.value)));
@@ -69,7 +69,7 @@
   style:--p={frac(value)} style:--d={hasDefault ? frac(defaultValue as number) : -1}
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
   {#if hasDefault}<span class="tick" aria-hidden="true"></span>{/if}
-  <input {id} type="range" {min} {max} step={step / 10} {value} {disabled} oninput={input}
+  <input {id} type="range" {min} {max} {step} {value} {disabled} oninput={input}
     aria-valuetext={hasDefault && value === defaultValue ? `${value}, factory setting` : String(value)} />
 </div>
 
