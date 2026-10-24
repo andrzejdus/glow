@@ -68,6 +68,8 @@ final class Recorder {
     private static final long IDLE_POLL_MS = 5000;
     private static final long OP_TIMEOUT_MS = 5000;
     private static final long CONNECT_TIMEOUT_MS = 15_000;
+    /** The values the drivers read on connect take seconds; without them by now, the device is not answering. */
+    private static final long READY_MS = 20_000;
     /** Waiting this long for a device that does not answer, the recorder leaves it to the system's next sighting. */
     private static final long WAIT_MS = 120_000;
 
@@ -117,7 +119,9 @@ final class Recorder {
     private volatile boolean connected;
     private boolean stopped;
     /** The values the drivers read on connect are all in: a recording can start. */
-    private boolean ready;
+    private volatile boolean ready;
+    /** Operations in a row the device did not answer. */
+    private int misses;
     private final ArrayDeque<Op> ops = new ArrayDeque<>();
     private Op op;
     /** VENTY/VEAZY: the firmware answer, which has to say the application runs before anything else goes out. */
@@ -150,6 +154,14 @@ final class Recorder {
 
     boolean connected() {
         return connected;
+    }
+
+    /**
+     * Connected, and the device answered what the drivers read on connect. At the edge of range the
+     * link can stay up for minutes while nothing gets through; the app shows the device as gone then.
+     */
+    boolean answering() {
+        return connected && ready;
     }
 
     boolean recording() {
@@ -238,6 +250,7 @@ final class Recorder {
         connected = true;
         handler.removeCallbacks(connectTimeout);
         handler.removeCallbacks(waitTimeout);
+        handler.postDelayed(readyTimeout, READY_MS);
         events.changed();
         // A moment for the link to settle before discovery, as many stacks need.
         handler.postDelayed(() -> {
@@ -245,10 +258,22 @@ final class Recorder {
         }, 300);
     }
 
+    private final Runnable readyTimeout = () -> {
+        if (connected && !ready && !stopped) unanswered();
+    };
+
+    /** The link is up, but the device does not answer: as good as gone, so connect again. */
+    private void unanswered() {
+        Log.i(TAG, "no answer");
+        if (gatt != null) gatt.disconnect();
+        onDisconnected();
+    }
+
     private void onDisconnected() {
         boolean was = connected;
         connected = false;
         ready = false;
+        misses = 0;
         ops.clear();
         op = null;
         firmware = null;
@@ -257,6 +282,7 @@ final class Recorder {
         handler.removeCallbacks(connectTimeout);
         handler.removeCallbacks(waitTimeout);
         handler.removeCallbacks(firmwareTimeout);
+        handler.removeCallbacks(readyTimeout);
         synchronized (Background.LOCK) {
             if (recording && !handedOver) end(System.currentTimeMillis(), "lost");
             heater = false;
@@ -564,7 +590,11 @@ final class Recorder {
         if (op == null) next();
     }
 
-    private final Runnable opTimeout = this::next;
+    private final Runnable opTimeout = () -> {
+        // One can get lost; two in a row, the device no longer answers.
+        if (++misses >= 2) unanswered();
+        else next();
+    };
 
     private void next() {
         handler.removeCallbacks(opTimeout);
@@ -643,11 +673,13 @@ final class Recorder {
 
     /** A read or write answered; one that comes after its timeout must not finish the next one. */
     private void done() {
+        misses = 0;
         if (op != null && !awaitingFirmware) next();
     }
 
     private void onNotify(BluetoothGattCharacteristic c, byte[] value) {
         if (value == null) return;
+        misses = 0;
         record(new Entry(System.currentTimeMillis(), 'N', c.getService().getUuid().toString(), c.getUuid().toString(), value));
         if (qvap) onQvapFrame(value);
     }

@@ -138,7 +138,7 @@ public class RecorderService extends Service {
         if (recorder != null && recorder.recording()) {
             title = "Recording a session";
             text = "The " + model + " is heating. Glow records it in the background.";
-        } else if (recorder != null && recorder.connected()) {
+        } else if (recorder != null && recorder.answering()) {
             title = "Connected to the " + model;
             text = "Glow records sessions in the background.";
         } else {
