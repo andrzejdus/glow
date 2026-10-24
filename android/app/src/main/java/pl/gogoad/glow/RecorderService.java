@@ -17,8 +17,7 @@ import androidx.core.app.NotificationCompat;
 
 /**
  * The foreground service behind background recording. Android shows its notification for as long
- * as it runs: while it records, while it waits for the device to answer, and while the app keeps
- * a connection of its own in the background (STANDBY), where it only keeps Glow from being closed.
+ * as it runs: while it records, and while it waits for the device to answer.
  */
 public class RecorderService extends Service {
 
@@ -76,7 +75,7 @@ public class RecorderService extends Service {
             stopSelf();
             return;
         }
-        if (mode == Background.Mode.RECORD && recorder == null) {
+        if (recorder == null) {
             recorder = new Recorder(this, new Handler(thread.getLooper()), events);
             synchronized (Background.LOCK) {
                 Background.recorder = recorder;
@@ -100,7 +99,7 @@ public class RecorderService extends Service {
                     Background.recorder = null;
                 }
                 // Gone until the system sees it again.
-                Background.setPresent(RecorderService.this, Background.address(RecorderService.this), false);
+                Background.gone(RecorderService.this);
             });
         }
     };
@@ -136,13 +135,10 @@ public class RecorderService extends Service {
         String model = Background.model(this);
         String title;
         String text;
-        if (recorder == null) {
-            title = "Connected to the " + model;
-            text = "Glow keeps the connection while it is in the background.";
-        } else if (recorder.recording()) {
+        if (recorder != null && recorder.recording()) {
             title = "Recording a session";
             text = "The " + model + " is heating. Glow records it in the background.";
-        } else if (recorder.connected()) {
+        } else if (recorder != null && recorder.connected()) {
             title = "Connected to the " + model;
             text = "Glow records sessions in the background.";
         } else {

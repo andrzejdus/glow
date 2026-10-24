@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CRAFTY_UUIDS as C } from './devices/crafty';
 import { GAP_DEVICE_NAME, GAP_SERVICE, QVAP_CONTROL, QVAP_SERVICE } from './devices/qvap';
+import type { DeviceState } from './devices/types';
 import { parseLog, replay } from './replay';
 import { sessions } from './sessions.svelte';
 import { usage } from './usage.svelte';
@@ -13,13 +14,13 @@ const hex = (bytes: number[]) => bytes.map((b) => (b & 0xff).toString(16).padSta
 const u16 = (v: number) => hex([v & 0xff, v >> 8]);
 const text = (s: string) => hex([...s].map((c) => c.charCodeAt(0)));
 
-/** A CRAFTY+ that was off, comes on 14 s in, gets ready at 40 s, goes off at 100 s and cools down. */
-function craftyLog(id: string, end = 'idle') {
-  const lines: string[] = [`${T0} B ${id} crafty Storz&Bickel`];
-  const v = (svc: string, chr: string, value: string) => lines.push(`${T0} V ${svc} ${chr} ${value}`);
+/** The header of a CRAFTY+ recording: the values as they stood at `t0`. */
+function craftyHead(id: string, t0: number, status: number, temp: number) {
+  const lines: string[] = [`${t0} B ${id} crafty Storz&Bickel`];
+  const v = (svc: string, chr: string, value: string) => lines.push(`${t0} V ${svc} ${chr} ${value}`);
   v(C.SVC_CONTROL, C.targetTemp, u16(1800));
   v(C.SVC_INFO, C.serial, text('CY123456'));
-  v(C.SVC_CONTROL, C.currentTemp, u16(300));
+  v(C.SVC_CONTROL, C.currentTemp, u16(temp));
   v(C.SVC_CONTROL, C.boostOffset, u16(100));
   v(C.SVC_INFO, C.firmware, text('V03.24'));
   v(C.SVC_SYSTEM, C.status2, u16(0));
@@ -32,9 +33,15 @@ function craftyLog(id: string, end = 'idle') {
   v(C.SVC_CONTROL, C.battery, u16(80));
   v(C.SVC_SYSTEM, C.batteryVoltage, u16(3900));
   v(C.SVC_SYSTEM, C.batteryCurrent, u16(0));
-  v(C.SVC_SYSTEM, C.status, u16(0));
+  v(C.SVC_SYSTEM, C.status, u16(status));
   v(C.SVC_SYSTEM, C.batteryStatus, u16(0));
-  lines.push(`${T0} S`);
+  lines.push(`${t0} S`);
+  return lines;
+}
+
+/** A CRAFTY+ that was off, comes on 14 s in, gets ready at 40 s, goes off at 100 s and cools down. */
+function craftyLog(id: string, end = 'idle') {
+  const lines = craftyHead(id, T0, 0, 300);
   const at = (sec: number, chr: string, svc: string, value: string) => lines.push(`${T0 + sec * 1000} N ${svc} ${chr} ${value}`);
   for (let sec = 2; sec <= 12; sec += 2) at(sec, C.currentTemp, C.SVC_CONTROL, u16(300));
   at(14, C.status, C.SVC_SYSTEM, u16(0x10));
@@ -97,6 +104,32 @@ describe('background recording replay', () => {
     await replay([...log, `${T0 + 61_000} E app`].join('\n'), id);
     expect(sessions.active?.id).toBe(T0 + 14_000);
     expect(sessions.active?.end).toBeNull();
+  });
+
+  it('carries a session on through a recording made alongside the app off screen, unmarked', async () => {
+    const id = 'AA:BB:CC:DD:EE:05';
+    await usage.bind(id);
+    await sessions.bind(id);
+    const live = (sec: number, temp: number) => {
+      const d: DeviceState = { kind: 'crafty', model: 'CRAFTY+', minTemp: 40, maxTemp: 210, mode: 'normal', heaterOn: true, targetTemp: 180, currentTemp: temp, settings: {} };
+      sessions.observe(d, T0 + sec * 1000);
+    };
+    for (let sec = 0; sec <= 20; sec += 5) live(sec, 100 + sec * 2);
+    // Glow goes off screen; the recorder connects 2 s later, with the heater on, and stops when Glow
+    // is back on screen.
+    sessions.suspend();
+    const lines = craftyHead(id, T0 + 22_000, 0x10, 1450);
+    for (let sec = 23; sec <= 60; sec++) lines.push(`${T0 + sec * 1000} N ${C.SVC_CONTROL} ${C.currentTemp} ${u16(1450 + (sec - 22) * 10)}`);
+    lines.push(`${T0 + 61_000} E app`);
+    expect(await replay(lines.join('\n'), id)).toBe(1);
+    live(62, 184);
+    await sessions.settled();
+    expect(sessions.list).toHaveLength(1);
+    expect(sessions.active?.id).toBe(T0);
+    expect(sessions.active?.seen).toBe(T0 + 62_000);
+    const detail = (await sessions.detail(T0))!;
+    expect(detail.events.filter((e) => e.k === 'lost' || e.k === 'back')).toEqual([]);
+    expect(detail.ts).toContain(40);
   });
 
   it('turns a VENTY recording into a session, answering its requests from the log', async () => {

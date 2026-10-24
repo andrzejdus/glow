@@ -28,8 +28,6 @@ interface Saved {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/** In the background this long, Glow hands the device to the background recorder (when it is on). */
-const HAND_OVER_MS = 30_000;
 const hidden = () => globalThis.document?.visibilityState === 'hidden';
 
 export function tap() {
@@ -79,9 +77,14 @@ class Connection {
   private writers = new Map<string, { op: () => Promise<void> | undefined; busy: boolean; timer?: ReturnType<typeof setTimeout> }>();
   /** Field → until when the device's reports of it are ignored (a newer value is on its way). */
   private holds = new Map<string, number>();
-  private handOverTimer: ReturnType<typeof setTimeout> | undefined;
-  /** The device went to the background recorder; the app takes it back when it is on screen again. */
+  /** The device dropped off screen and is the background recorder's; the app takes it back on screen. */
   private away = false;
+  /**
+   * Off screen with background recording on: the recorder logs the device, so the session log does
+   * not hear from the app's own connection until that log is read.
+   */
+  private quiet = false;
+  private catchingUp: Promise<void> = Promise.resolve();
 
   async start() {
     const saved = await load<Saved>('connection', { last: null, autoConnect: true });
@@ -94,15 +97,21 @@ class Connection {
     background?.status().then((s) => (this.bg = s), () => undefined);
 
     document.addEventListener('visibilitychange', () => {
-      clearTimeout(this.handOverTimer);
       if (document.visibilityState !== 'visible') {
-        if (this.phase === 'connected' && this.recordsInBackground()) this.handOverTimer = setTimeout(() => this.handOver(), HAND_OVER_MS);
+        // Android stops the page soon after this, and the background recorder connects alongside.
+        if (this.phase === 'connected' && this.recordsInBackground()) {
+          this.quiet = true;
+          sessions.suspend();
+        }
         return;
       }
       if (this.away) this.comeBack();
       else if (this.phase === 'idle' && this.native && this.autoConnect && !this.userDisconnect) this.search();
-      // The refresh is skipped in the background, so catch up as soon as the app is back.
-      else if (this.phase === 'connected') this.driver?.refresh?.().catch(() => undefined);
+      else if (this.phase === 'connected') {
+        if (this.recordsInBackground() && this.target) this.catchUp(this.target);
+        // The refresh is skipped in the background, so catch up as soon as the app is back.
+        this.driver?.refresh?.().catch(() => undefined);
+      }
     });
 
     if (this.native) {
@@ -282,18 +291,7 @@ class Connection {
     await ble.disconnect(d.id);
   }
 
-  /** In the background for a while: the background recorder takes the device over. */
-  private async handOver() {
-    const d = this.target;
-    if (!d || this.phase !== 'connected' || !hidden() || !this.recordsInBackground()) return;
-    this.generation++;
-    this.away = true;
-    await this.letGo(d);
-    this.phase = 'reconnecting';
-    await background?.release({ present: true }).catch(() => undefined);
-  }
-
-  /** On screen again after a hand-over: take the device back, with what was recorded meanwhile. */
+  /** On screen again after the device dropped meanwhile: connect, with what was recorded since. */
   private comeBack() {
     this.away = false;
     const d = this.target;
@@ -483,11 +481,22 @@ class Connection {
   }
 
   /**
-   * The app's own connection is up: the background recorder stops, and what it recorded since the
-   * app last had the device is replayed first, so the live readings carry on from it.
+   * The app's own connection is up, or back on screen: the background recorder stops, and what it
+   * recorded since the app last heard the device is replayed first, so the live readings carry on
+   * from it. One at a time: coming back on screen and reconnecting can both ask at once.
    */
-  private async catchUp(d: FoundDevice) {
-    if (!background) return;
+  private catchUp(d: FoundDevice): Promise<void> {
+    this.catchingUp = this.catchingUp.then(() => this.readLog(d));
+    return this.catchingUp;
+  }
+
+  private async readLog(d: FoundDevice) {
+    if (!background) {
+      this.quiet = false;
+      return;
+    }
+    // The sampler would carry the session on to now before the log fills in the time between.
+    sessions.pause(true);
     try {
       const { log } = await background.hold();
       if (log) {
@@ -501,6 +510,9 @@ class Connection {
     } catch (e) {
       // Never in the way of connecting; the log stays for the next time.
       console.warn('Glow: background log', e);
+    } finally {
+      sessions.pause(false);
+      this.quiet = false;
     }
   }
 
@@ -591,16 +603,18 @@ class Connection {
       for (const k of Object.keys(next)) if (held(`settings.${k}`) && next[k] !== d.settings[k]) delete next[k];
       d.settings = { ...d.settings, ...next };
     }
-    usage.observe(d);
-    sessions.observe(d);
+    if (!this.quiet) {
+      usage.observe(d);
+      sessions.observe(d);
+    }
     ready.observe(d);
   }
 
   private onDisconnect(d: FoundDevice, gen: number) {
     if (gen !== this.generation || this.userDisconnect) return;
     clearInterval(this.refreshTimer);
-    clearTimeout(this.handOverTimer);
-    sessions.lost();
+    // Quiet: the recorder saw the drop too, and its log says when.
+    if (!this.quiet) sessions.lost();
     this.driver = null;
     if (!this.demo) background?.release({ present: false }).catch(() => undefined);
     if (this.phase !== 'connected' && this.phase !== 'reconnecting') return;

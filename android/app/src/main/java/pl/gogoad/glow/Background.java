@@ -18,12 +18,13 @@ import java.util.List;
 /**
  * Background recording: who owns the device right now, and the log the recorder writes.
  *
- * The app's own connection (the web layer, through the Bluetooth plugin) always wins: while Glow is
- * on screen, or keeps a connection of its own in the background, the recorder stays out of the
- * way. Otherwise, once the device is around (the system's companion-device presence, or the app
- * just handing it over), RecorderService connects by itself and logs what the device sends. The
- * app replays that log through its own drivers the next time it connects, so the protocols stay
- * written once, in TypeScript.
+ * While Glow is on screen, the app's own connection (the web layer, through the Bluetooth plugin)
+ * has the device to itself. Off screen the web layer stops running, so once the device is around
+ * (the system's companion-device presence, or the app's own connection still up) RecorderService
+ * connects by itself, alongside the app's connection if there is one (Android lets an app have
+ * several connections to a device over one link), and logs what the device sends. The app replays
+ * that log through its own drivers when it is back, so the protocols stay written once, in
+ * TypeScript.
  *
  * Settings live in their own SharedPreferences file; the log lives in files/background/.
  */
@@ -41,8 +42,6 @@ final class Background {
     enum Mode {
         /** Nothing: the service stops. */
         NONE,
-        /** The app's own connection runs in the background; the service only keeps Glow alive. */
-        STANDBY,
         /** Connect and record. */
         RECORD,
     }
@@ -98,8 +97,9 @@ final class Background {
 
     static synchronized Mode mode(Context c) {
         if (!enabled(c) || visible) return Mode.NONE;
-        if (held) return Mode.STANDBY;
-        return present || (recorder != null && recorder.connected()) ? Mode.RECORD : Mode.NONE;
+        // The app's connection in the background says the device is there, but the app no longer
+        // hears it: Android stops the web layer of an app that is off screen.
+        return present || held || (recorder != null && recorder.connected()) ? Mode.RECORD : Mode.NONE;
     }
 
     /** The app came on screen or went off it. */
@@ -140,9 +140,18 @@ final class Background {
         sync(c);
     }
 
-    /** On screen or connected: the app takes over whatever the recorder had. */
+    /** The recorder gave up on the device: gone, with any connection the app still thought it had. */
+    static void gone(Context c) {
+        synchronized (Background.class) {
+            present = false;
+            held = false;
+        }
+        sync(c);
+    }
+
+    /** On screen: the app takes over whatever the recorder had. */
     static synchronized boolean appHasIt() {
-        return visible || held;
+        return visible;
     }
 
     static synchronized boolean present() {

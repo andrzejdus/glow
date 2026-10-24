@@ -162,18 +162,21 @@ final class Recorder {
         handler.post(() -> connect(false));
     }
 
-    /** Closes the connection; a recording in progress ends with `reason` ("app": the app takes over). */
+    /**
+     * Closes the connection. A recording in progress ends with `reason` ("app": the app takes over)
+     * right away, before the app can take the log, and nothing more is logged.
+     */
     void stop(String reason) {
+        synchronized (Background.LOCK) {
+            if (recording && !handedOver) end(System.currentTimeMillis(), reason);
+            handedOver = true;
+        }
         handler.post(() -> close(reason));
     }
 
-    /** The app takes the device over: the recording ends here, and nothing more is logged. */
+    /** The app takes the device over. */
     void handOver() {
-        synchronized (Background.LOCK) {
-            if (recording) end(System.currentTimeMillis(), "app");
-            handedOver = true;
-        }
-        handler.post(() -> close("app"));
+        stop("app");
     }
 
     // The connection.
