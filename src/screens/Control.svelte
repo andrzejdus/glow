@@ -66,11 +66,22 @@
     })),
   );
 
-  // The dial gets whatever height is left, so the dashboard fits without scrolling.
-  let areaH = $state(268);
+  // The dial gets whatever height is left, so the dashboard fits without scrolling. The status
+  // line shares that area, so 32 px of it is kept for the line.
+  let areaH = $state(300);
   let areaW = $state(320);
   // It also grows into spare room (up to 1.4x), so a tall phone shows a big dial, not empty space.
-  const dialScale = $derived(Math.max(0.62, Math.min(1.4, (areaH - 6) / 262, (areaW - 8) / 262)));
+  const dialScale = $derived(Math.max(0.62, Math.min(1.4, (areaH - 38) / 262, (areaW - 8) / 262)));
+  // The status line sits in the dial's open bottom, between - and +, as high as its width lets it
+  // pass the buttons. In dial units a button's centre is 100 below the dial's centre and 86 to the
+  // side, with a radius of 26.
+  let statusW = $state(0);
+  const statusY = $derived.by(() => {
+    const s = dialScale;
+    const room = 86 * s - statusW / 2 - 6;
+    const below = room <= 0 ? 26 * s : Math.sqrt(Math.max(0, (26 * s) ** 2 - room ** 2));
+    return Math.max(116 * s, 100 * s + below + 10);
+  });
 </script>
 
 <Warmth {warmth} />
@@ -80,14 +91,15 @@
   <div class="dial-area" bind:clientHeight={areaH} bind:clientWidth={areaW}>
   <Dial scale={dialScale} current={d.currentTemp} target={goal} min={d.minTemp} max={d.maxTemp} heating={d.heaterOn} ready={reached} {unit} {offline} {lamps}
     onstep={(delta) => conn.setTarget((d.targetTemp ?? d.minTemp) + (unit === 'F' ? delta * 5 / 9 : delta))} />
+  <div class="status rise d1 num" class:ready={reached} class:off={!d.heaterOn} style:top="calc(50% + {statusY - 10}px)">
+    <span class="line" bind:clientWidth={statusW}>
+      {#if led}
+        <span class="led {led.color} {led.blink}" role="img"
+          aria-label="Device LED {led.color}{led.blink === 'steady' ? '' : led.blink === 'fast' ? ', flashing fast' : ', flashing'}"></span>
+      {/if}
+      {status}
+    </span>
   </div>
-
-  <div class="status rise d1 num" class:ready={reached} class:off={!d.heaterOn}>
-    {#if led}
-      <span class="led {led.color} {led.blink}" role="img"
-        aria-label="Device LED {led.color}{led.blink === 'steady' ? '' : led.blink === 'fast' ? ', flashing fast' : ', flashing'}"></span>
-    {/if}
-    {status}
   </div>
 
   {#if modes.length && conn.modeSwitchable}
@@ -134,24 +146,29 @@
     padding-bottom: calc(var(--sab) + 78px);
   }
   .dial-area {
+    position: relative;
     flex: 1 1 0;
-    min-height: 168px;
+    min-height: 200px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
+  /* Over the dial's open bottom; taps go through to the - and + buttons. */
   .status {
+    position: absolute;
+    left: 0;
+    right: 0;
     text-align: center;
-    margin-top: 4px;
     font-size: 14px;
     font-weight: 700;
     color: var(--navy);
     height: 20px;
+    pointer-events: none;
   }
-  .status {
-    display: flex;
+  .line {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
+    height: 20px;
     gap: 8px;
   }
   .status.ready {
