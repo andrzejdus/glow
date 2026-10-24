@@ -52,8 +52,17 @@
     if (def.unit === 'min') return value >= 60 ? `${Math.round(value / 6) / 10} h` : `${value} min`;
     return `${value}${def.unit ?? ''}`;
   }
-  // The size only: which sign means charging is not known yet.
-  const amps = (ma: number) => (Math.abs(ma) < 1000 ? `${Math.abs(ma)} mA` : `${(Math.abs(ma) / 1000).toFixed(2)} A`);
+  // Battery voltage, current and their product. Current and power show their size only: which
+  // sign means charging is not known yet.
+  const electrics = $derived.by(() => {
+    const out: { label: string; value: string; unit: string }[] = [];
+    const mv = d.batteryVoltage;
+    const ma = d.batteryCurrent === undefined ? undefined : Math.abs(d.batteryCurrent);
+    if (mv !== undefined) out.push({ label: 'Voltage', value: (mv / 1000).toFixed(2), unit: 'V' });
+    if (ma !== undefined) out.push(ma < 1000 ? { label: 'Current', value: String(ma), unit: 'mA' } : { label: 'Current', value: (ma / 1000).toFixed(2), unit: 'A' });
+    if (mv !== undefined && ma !== undefined) out.push({ label: 'Power', value: ((mv * ma) / 1e6).toFixed(2), unit: 'W' });
+    return out;
+  });
   const asNumber = (v: unknown, fallback: number) => (typeof v === 'number' ? v : fallback);
 </script>
 
@@ -73,14 +82,6 @@
             <!-- On the charger at 100 % the battery is full; the bolt stays because it is still plugged in. -->
             <div class="cell-state" class:charging={d.charging}>{d.charging ? (d.battery >= 100 ? 'Charged' : 'Charging') : 'On battery'}</div>
           {/if}
-          {#if d.batteryVoltage !== undefined || d.batteryCurrent !== undefined}
-            <div class="cell-volt num">
-              {[
-                d.batteryVoltage === undefined ? '' : `${(d.batteryVoltage / 1000).toFixed(2)} V`,
-                d.batteryCurrent === undefined ? '' : amps(d.batteryCurrent),
-              ].filter(Boolean).join(' · ')}
-            </div>
-          {/if}
         </div>
       {:else}
         <Glyph kind={d.kind} scale={0.9} />
@@ -94,6 +95,16 @@
         {#if thisMonth !== null && thisMonth !== undefined}<div class="week num">+{usageTime(thisMonth)} this month</div>{/if}
       </div>
     </div>
+    {#if electrics.length}
+      <div class="electrics" style:--n={electrics.length}>
+        {#each electrics as e (e.label)}
+          <div>
+            <span class="e-label">{e.label}</span>
+            <span class="e-value num">{e.value}<small>{e.unit}</small></span>
+          </div>
+        {/each}
+      </div>
+    {/if}
     <div class="facts">
       <div><span>Serial</span><strong class="num">{d.serial ?? '–'}</strong></div>
       <div><span>Firmware</span><strong class="num">{d.firmware ?? '–'}</strong></div>
@@ -231,12 +242,6 @@
     font-weight: 700;
     color: var(--muted);
   }
-  .cell-volt {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--muted);
-    margin-top: -2px;
-  }
   .cell-state.charging {
     color: var(--orange-ink);
   }
@@ -266,6 +271,43 @@
     font-weight: 700;
     color: var(--orange-ink);
     margin-top: 4px;
+  }
+  .electrics {
+    display: grid;
+    grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+    border-radius: 16px;
+    /* Orange mixed into the card: a pale tint on light, a warm glow on dark (not brown). */
+    background: color-mix(in srgb, var(--orange) 11%, var(--card));
+    padding: 10px 4px;
+  }
+  .electrics div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+  }
+  .electrics div + div {
+    border-left: 1px solid color-mix(in srgb, var(--orange) 22%, transparent);
+  }
+  .e-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--orange-ink);
+  }
+  .e-value {
+    font-size: 20px;
+    font-weight: 300;
+    color: var(--navy);
+    letter-spacing: -0.01em;
+  }
+  .e-value small {
+    font-size: 12px;
+    font-weight: 700;
+    margin-left: 2px;
+    color: var(--muted);
   }
   .facts {
     display: grid;
