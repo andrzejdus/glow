@@ -2,7 +2,6 @@
   import Dial from '../components/Dial.svelte';
   import Header from '../components/Header.svelte';
   import HoursCard from '../components/HoursCard.svelte';
-  import Stats from './Stats.svelte';
   import Icon from '../components/Icon.svelte';
   import Warmth from '../components/Warmth.svelte';
   import { conn } from '../lib/connection.svelte';
@@ -11,8 +10,10 @@
   import { ready } from '../lib/ready.svelte';
   import { goalOf, isReady, sessions } from '../lib/sessions.svelte';
 
+  /** Opens the Stats tab. */
+  let { onstats }: { onstats: () => void } = $props();
+
   const d = $derived(conn.device as DeviceState);
-  let stats = $state(false);
   const caps = $derived(conn.caps);
   const unit = $derived(d.unit ?? 'C');
   const offline = $derived(conn.phase === 'reconnecting');
@@ -109,9 +110,6 @@
 </script>
 
 <Warmth {warmth} />
-{#if stats}
-  <Stats onclose={() => (stats = false)} />
-{/if}
 <div class="screen fit">
   <Header />
 
@@ -142,7 +140,7 @@
     </div>
   {/if}
 
-  <HoursCard onopen={() => (stats = true)} />
+  <HoursCard onopen={onstats} />
 
   {#if caps?.pump}
     <div class="duo rise d4">

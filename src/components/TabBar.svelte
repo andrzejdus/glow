@@ -13,6 +13,7 @@
     [
       { id: 'control' as const, label: 'Control', icon: 'control' as const },
       ...(workflows ? [{ id: 'workflows' as const, label: 'Workflows', icon: 'workflows' as const }] : []),
+      { id: 'stats' as const, label: 'Stats', icon: 'stats' as const },
       { id: 'settings' as const, label: 'Settings', icon: 'settings' as const },
     ],
   );

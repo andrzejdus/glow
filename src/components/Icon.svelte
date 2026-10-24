@@ -1,7 +1,7 @@
 <script lang="ts">
   type Name =
     | 'back' | 'plus' | 'minus' | 'flame' | 'fan' | 'check' | 'bell' | 'play' | 'pause' | 'stop'
-    | 'control' | 'workflows' | 'settings' | 'clock' | 'bolt' | 'arrow' | 'refresh';
+    | 'control' | 'workflows' | 'stats' | 'settings' | 'clock' | 'bolt' | 'arrow' | 'refresh';
   interface Props {
     name: Name;
     size?: number;
@@ -26,6 +26,7 @@
   {:else if name === 'stop'}<rect x="5" y="5" width="14" height="14" rx="2" fill={color} stroke="none" />
   {:else if name === 'control'}<path d="M12 14V5" /><circle cx="12" cy="17" r="3" />
   {:else if name === 'workflows'}<path d="M4 6h10M4 12h16M4 18h7" />
+  {:else if name === 'stats'}<path d="M5 20v-7M12 20V5M19 20v-11" />
   {:else if name === 'settings'}<circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
   {:else if name === 'clock'}<circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
   {:else if name === 'bolt'}<path d="M13 3L5 13h6l-1 8 8-10h-6z" />

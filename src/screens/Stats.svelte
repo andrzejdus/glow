@@ -1,13 +1,10 @@
 <script lang="ts">
-  import { fly } from 'svelte/transition';
   import Icon from '../components/Icon.svelte';
   import SessionChart from '../components/SessionChart.svelte';
   import { conn, tap } from '../lib/connection.svelte';
   import { mmss, splitHours, toUnit, usageTime } from '../lib/format';
   import { sessions, type SessionDetail, type SessionEvent, type SessionSummary } from '../lib/sessions.svelte';
   import { usage } from '../lib/usage.svelte';
-
-  let { onclose }: { onclose: () => void } = $props();
 
   const unit = $derived(conn.device?.unit ?? 'C');
   const deg = (c: number | null | undefined) => (c === null || c === undefined ? '–' : `${toUnit(c, unit)}°`);
@@ -139,151 +136,136 @@
   }
 </script>
 
-<div class="overlay" transition:fly={{ y: 16, duration: 300 }}>
-  <div class="screen">
-    <header bind:this={top}>
-      <button type="button" class="round press" aria-label="Back to the dashboard" onclick={onclose}>
-        <Icon name="back" size={20} color="var(--navy)" />
-      </button>
-      <h1>Stats</h1>
-    </header>
+<div class="screen">
+  <header class="rise" bind:this={top}>
+    <h1>Stats</h1>
+  </header>
 
-    {#if shown}
-      <section class="card session rise d1">
-        <div class="s-head">
-          <div>
-            <div class="label">{running ? 'Current session' : shown.id === sessions.list[0]?.id ? 'Last session' : 'Session'}</div>
-            <div class="s-when">{dayName(shown.id)}, {when(shown.id)}</div>
-          </div>
-          {#if picked !== null && sessions.active}
-            <button type="button" class="pill press" onclick={() => { tap(); picked = null; }}>Current</button>
-          {:else if status}
-            <div class="chip" class:ready={status === 'Ready'}><span></span>{status}</div>
-          {/if}
+  {#if shown}
+    <section class="card session rise d1">
+      <div class="s-head">
+        <div>
+          <div class="label">{running ? 'Current session' : shown.id === sessions.list[0]?.id ? 'Last session' : 'Session'}</div>
+          <div class="s-when">{dayName(shown.id)}, {when(shown.id)}</div>
         </div>
-        <div class="big num">{mmss(lengthOf(shown, usage.now))}</div>
-
-        <SessionChart summary={shown} {detail} {unit} {running} />
-
-        <div class="facts num">
-          <div><span>Ready in</span><strong>{shown.readySec === null || shown.joined ? '–' : mmss(shown.readySec)}</strong></div>
-          <div><span>Target</span><strong>{deg(shown.target)}</strong></div>
-          {#if shown.live}<div><span>Peak</span><strong>{deg(shown.peak)}</strong></div>{/if}
-          <div><span>Boost</span><strong>{boostSec(shown) >= 1 ? mmss(boostSec(shown)) : '–'}</strong></div>
-          {#if used(shown) !== null}<div><span>Battery</span><strong>{used(shown) ? `−${used(shown)} %` : '–'}</strong></div>{/if}
-          {#if shown.airSec}<div><span>Air</span><strong>{mmss(shown.airSec)}</strong></div>{/if}
-        </div>
-
-        <ol class="events num">
-          {#each events as e, i (i)}
-            <li class={e.tone}><span class="e-t">{mmss(e.t)}</span><span class="e-dot"></span>{e.text}</li>
-          {/each}
-        </ol>
-      </section>
-    {:else}
-      <section class="card nothing rise d1">
-        <Icon name="flame" size={28} color="var(--orange)" />
-        <p>Turn the heater on and the session shows up here, with its temperature over time.</p>
-      </section>
-    {/if}
-
-    <section class="card hours rise d2">
-      <div class="label">Hours of operation</div>
-      <div class="h-top">
-        {#if parts}
-          <div class="life num"><span class="h">{parts.h}</span><span class="u">h</span><span class="m">{parts.m}</span><span class="u">m</span></div>
-        {:else}
-          <div class="life num"><span class="h">–</span></div>
+        {#if picked !== null && sessions.active}
+          <button type="button" class="pill press" onclick={() => { tap(); picked = null; }}>Current</button>
+        {:else if status}
+          <div class="chip" class:ready={status === 'Ready'}><span></span>{status}</div>
         {/if}
-        <div class="seg" role="tablist" aria-label="Period">
-          {#each ['day', 'week', 'month'] as const as p (p)}
-            <button type="button" role="tab" aria-selected={period === p} class:on={period === p} onclick={() => { tap(); period = p; }}>
-              {p === 'day' ? 'Days' : p === 'week' ? 'Weeks' : 'Months'}
-            </button>
-          {/each}
-        </div>
       </div>
-      <div class="bars" style:--n={bars.length} role="img" aria-label="Hours used per {period}">
-        {#each bars as b, i (period + b.label + i)}
-          <div class="col">
-            <div class="val num" class:current={b.current}>{!b.hours || b.hours * 60 < 1 ? '' : b.hours < 1 ? `${Math.round(b.hours * 60)}m` : b.hours.toFixed(1)}</div>
-            <div class="bar" class:current={b.current} class:empty={!b.hours}
-              style:height="{!b.hours ? 4 : Math.max(6, Math.round((b.hours / max) * 64))}px" style:animation-delay="{i * 0.03}s"></div>
-            <div class="wk" class:current={b.current}>{b.label}</div>
-          </div>
+      <div class="big num">{mmss(lengthOf(shown, usage.now))}</div>
+
+      <SessionChart summary={shown} {detail} {unit} {running} />
+
+      <div class="facts num">
+        <div><span>Ready in</span><strong>{shown.readySec === null || shown.joined ? '–' : mmss(shown.readySec)}</strong></div>
+        <div><span>Target</span><strong>{deg(shown.target)}</strong></div>
+        {#if shown.live}<div><span>Peak</span><strong>{deg(shown.peak)}</strong></div>{/if}
+        <div><span>Boost</span><strong>{boostSec(shown) >= 1 ? mmss(boostSec(shown)) : '–'}</strong></div>
+        {#if used(shown) !== null}<div><span>Battery</span><strong>{used(shown) ? `−${used(shown)} %` : '–'}</strong></div>{/if}
+        {#if shown.airSec}<div><span>Air</span><strong>{mmss(shown.airSec)}</strong></div>{/if}
+      </div>
+
+      <ol class="events num">
+        {#each events as e, i (i)}
+          <li class={e.tone}><span class="e-t">{mmss(e.t)}</span><span class="e-dot"></span>{e.text}</li>
+        {/each}
+      </ol>
+    </section>
+  {:else}
+    <section class="card nothing rise d1">
+      <Icon name="flame" size={28} color="var(--orange)" />
+      <p>Turn the heater on and the session shows up here, with its temperature over time.</p>
+    </section>
+  {/if}
+
+  <section class="card hours rise d2">
+    <div class="label">Hours of operation</div>
+    <div class="h-top">
+      {#if parts}
+        <div class="life num"><span class="h">{parts.h}</span><span class="u">h</span><span class="m">{parts.m}</span><span class="u">m</span></div>
+      {:else}
+        <div class="life num"><span class="h">–</span></div>
+      {/if}
+      <div class="seg" role="tablist" aria-label="Period">
+        {#each ['day', 'week', 'month'] as const as p (p)}
+          <button type="button" role="tab" aria-selected={period === p} class:on={period === p} onclick={() => { tap(); period = p; }}>
+            {p === 'day' ? 'Days' : p === 'week' ? 'Weeks' : 'Months'}
+          </button>
         {/each}
       </div>
-      <div class="grid num">
-        <div><span>Sessions a week</span><strong>{perWeek === null ? '–' : perWeek.toFixed(1)}</strong></div>
-        <div><span>Avg session</span><strong>{avgLength === null ? '–' : mmss(avgLength)}</strong></div>
-        <div><span>Avg ready in</span><strong>{avgReady === null ? '–' : mmss(avgReady)}</strong></div>
-        <div><span>Outside Glow</span><strong>{outside === null ? '–' : usageTime(outside)}</strong></div>
-      </div>
-    </section>
+    </div>
+    <div class="bars" style:--n={bars.length} role="img" aria-label="Hours used per {period}">
+      {#each bars as b, i (period + b.label + i)}
+        <div class="col">
+          <div class="val num" class:current={b.current}>{!b.hours || b.hours * 60 < 1 ? '' : b.hours < 1 ? `${Math.round(b.hours * 60)}m` : b.hours.toFixed(1)}</div>
+          <div class="bar" class:current={b.current} class:empty={!b.hours}
+            style:height="{!b.hours ? 4 : Math.max(6, Math.round((b.hours / max) * 64))}px" style:animation-delay="{i * 0.03}s"></div>
+          <div class="wk" class:current={b.current}>{b.label}</div>
+        </div>
+      {/each}
+    </div>
+    <div class="grid num">
+      <div><span>Sessions a week</span><strong>{perWeek === null ? '–' : perWeek.toFixed(1)}</strong></div>
+      <div><span>Avg session</span><strong>{avgLength === null ? '–' : mmss(avgLength)}</strong></div>
+      <div><span>Avg ready in</span><strong>{avgReady === null ? '–' : mmss(avgReady)}</strong></div>
+      <div><span>Outside Glow</span><strong>{outside === null ? '–' : usageTime(outside)}</strong></div>
+    </div>
+  </section>
 
-    {#if sessions.list.length}
-      <section class="history rise d3">
-        <h2 class="label">History</h2>
-        <ol class="line">
-          {#each history as g (g.day)}
-            <li class="day">{g.day}</li>
-            {#each g.items as s (s.id)}
-              {@const isShown = s.id === shown?.id}
-              {@const isRunning = s.id === sessions.active?.id}
-              {@const sp = sparkPaths(s)}
-              <li>
-                <span class="node" class:boost={boostSec(s) >= 1} class:running={isRunning}></span>
-                <button type="button" class="item card press" class:shown={isShown} onclick={() => open(s)}>
-                  <div class="i-main">
-                    <div class="i-top num"><strong>{when(s.id)}</strong><span>{mmss(lengthOf(s, usage.now))}</span>{#if isRunning}<em>now</em>{/if}</div>
-                    <div class="i-sub num">
-                      {[
-                        deg(s.target),
-                        s.readySec !== null && !s.joined ? `ready in ${mmss(s.readySec)}` : '',
-                        boostSec(s) >= 1 ? (s.modes.superboost ? 'Superbooster' : 'Booster') : '',
-                        used(s) ? `−${used(s)} %` : '',
-                      ].filter(Boolean).join(' · ')}
-                    </div>
+  {#if sessions.list.length}
+    <section class="history rise d3">
+      <h2 class="label">History</h2>
+      <ol class="line">
+        {#each history as g (g.day)}
+          <li class="day">{g.day}</li>
+          {#each g.items as s (s.id)}
+            {@const isShown = s.id === shown?.id}
+            {@const isRunning = s.id === sessions.active?.id}
+            {@const sp = sparkPaths(s)}
+            <li>
+              <span class="node" class:boost={boostSec(s) >= 1} class:running={isRunning}></span>
+              <button type="button" class="item card press" class:shown={isShown} onclick={() => open(s)}>
+                <div class="i-main">
+                  <div class="i-top num"><strong>{when(s.id)}</strong><span>{mmss(lengthOf(s, usage.now))}</span>{#if isRunning}<em>now</em>{/if}</div>
+                  <div class="i-sub num">
+                    {[
+                      deg(s.target),
+                      s.readySec !== null && !s.joined ? `ready in ${mmss(s.readySec)}` : '',
+                      boostSec(s) >= 1 ? (s.modes.superboost ? 'Superbooster' : 'Booster') : '',
+                      used(s) ? `−${used(s)} %` : '',
+                    ].filter(Boolean).join(' · ')}
                   </div>
-                  <svg class="spark" width="64" height="22" viewBox="0 0 64 22" aria-hidden="true">
-                    <path class="off" d={sp.before} /><path class="off" d={sp.after} /><path d={sp.on} />
-                  </svg>
-                </button>
-              </li>
-            {/each}
+                </div>
+                <svg class="spark" width="64" height="22" viewBox="0 0 64 22" aria-hidden="true">
+                  <path class="off" d={sp.before} /><path class="off" d={sp.after} /><path d={sp.on} />
+                </svg>
+              </button>
+            </li>
           {/each}
-        </ol>
-        {#if sessions.list.length > pageSize}
-          <button type="button" class="more pill press" onclick={() => { tap(); pageSize += 30; }}>Show earlier sessions</button>
-        {/if}
-      </section>
-    {/if}
-  </div>
+        {/each}
+      </ol>
+      {#if sessions.list.length > pageSize}
+        <button type="button" class="more pill press" onclick={() => { tap(); pageSize += 30; }}>Show earlier sessions</button>
+      {/if}
+    </section>
+  {/if}
 </div>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 30;
-    overflow-y: auto;
-    background: var(--bg);
-  }
-  .screen {
-    padding-bottom: calc(var(--sab) + 24px);
-  }
   header {
     display: flex;
     align-items: center;
-    gap: 12px;
     height: 44px;
     scroll-margin-top: calc(var(--sat) + 12px);
   }
   h1 {
     margin: 0;
-    font-size: 26px;
+    font-size: 30px;
     font-weight: 800;
     color: var(--navy);
+    letter-spacing: -0.01em;
   }
   .session {
     padding: 16px 16px 14px;

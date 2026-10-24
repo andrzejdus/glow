@@ -6,6 +6,7 @@
   import Connect from './screens/Connect.svelte';
   import Control from './screens/Control.svelte';
   import Settings from './screens/Settings.svelte';
+  import Stats from './screens/Stats.svelte';
   import Workflows from './screens/Workflows.svelte';
 
   let tab = $state<Tab>('control');
@@ -33,9 +34,11 @@
   {#key tab}
     <main in:fly={{ y: 12, duration: 380 }}>
       {#if tab === 'control'}
-        <Control />
+        <Control onstats={() => select('stats')} />
       {:else if tab === 'workflows'}
         <Workflows />
+      {:else if tab === 'stats'}
+        <Stats />
       {:else}
         <Settings />
       {/if}

@@ -1,1 +1,1 @@
-export type Tab = 'control' | 'workflows' | 'settings';
+export type Tab = 'control' | 'workflows' | 'stats' | 'settings';
