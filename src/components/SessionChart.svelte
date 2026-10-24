@@ -37,10 +37,10 @@
 
   // A gap in the samples (Glow was away) breaks the line rather than drawing across it.
   const GAP = 20;
-  function path(get: (i: number) => number | null, step = false) {
+  function path(get: (i: number) => number | null, step = false, from = 0, to = ts.length - 1) {
     let d = '';
     let prev: { t: number; v: number } | null = null;
-    for (let i = 0; i < ts.length; i++) {
+    for (let i = from; i <= to; i++) {
       const v = get(i);
       if (v === null) {
         prev = null;
@@ -55,20 +55,27 @@
     return d;
   }
   const goalPath = $derived(path((i) => detail!.g[i], true));
+  // The heater-on stretch as sample indexes; the parts before and after share its end points,
+  // so the line runs on unbroken from grey to orange and back.
+  const onFrom = $derived(Math.max(0, ts.findIndex((t) => t >= 0)));
+  const onTo = $derived.by(() => {
+    let i = ts.length - 1;
+    while (endSec !== null && i > onFrom && ts[i] > endSec) i--;
+    return i;
+  });
   // Without a live temperature (VENTY, VEAZY), the target from Ready on: the device is at it.
-  const currentPath = $derived(
-    summary.live
-      ? path((i) => detail!.c[i])
-      : summary.readySec === null
-        ? ''
-        : path((i) => (ts[i] >= summary.readySec! ? detail!.g[i] : null), true),
-  );
+  const temp = (i: number) =>
+    summary.live ? detail!.c[i] : summary.readySec !== null && ts[i] >= summary.readySec ? detail!.g[i] : null;
+  const beforePath = $derived(summary.live && onFrom > 0 ? path(temp, false, 0, onFrom) : '');
+  const currentPath = $derived(path(temp, !summary.live, onFrom, onTo));
+  const afterPath = $derived(summary.live && onTo < ts.length - 1 ? path(temp, false, onTo, ts.length - 1) : '');
+  // The glow under the line, only while the heater is on.
   const area = $derived.by(() => {
-    if (!currentPath || !summary.live) return '';
-    const first = ts.findIndex((_, i) => detail!.c[i] !== null);
-    let lastI = -1;
-    for (let i = ts.length - 1; i >= 0; i--) if (detail!.c[i] !== null) { lastI = i; break; }
-    if (first < 0 || lastI < 0 || currentPath.indexOf('M', 1) > 0) return '';
+    if (!currentPath || !summary.live || currentPath.indexOf('M', 1) > 0) return '';
+    let first = onFrom;
+    while (first < onTo && detail!.c[first] === null) first++;
+    let lastI = onTo;
+    while (lastI > first && detail!.c[lastI] === null) lastI--;
     return `${currentPath}L${x(ts[lastI]).toFixed(1)},${H - pad.b}L${x(ts[first]).toFixed(1)},${H - pad.b}Z`;
   });
 
@@ -153,6 +160,8 @@
       {/each}
       {#if area}<path class="area" d={area} />{/if}
       <path class="goal" d={goalPath} />
+      {#if beforePath}<path class="current off" d={beforePath} />{/if}
+      {#if afterPath}<path class="current off" d={afterPath} />{/if}
       {#if currentPath}<path class="current" d={currentPath} />{/if}
       {#if ready}
         <line class="ready-line" x1={ready.x} x2={ready.x} y1={pad.t} y2={H - pad.b} />
@@ -161,7 +170,7 @@
       {/if}
       {#if end}
         {#if running}<circle class="pulse" cx={end.x} cy={end.y} r="5" />{/if}
-        <circle class="end" cx={end.x} cy={end.y} r="4.5" />
+        <circle class="end" class:off={!!afterPath} cx={end.x} cy={end.y} r="4.5" />
       {/if}
     </svg>
     <div class="legend">
@@ -278,6 +287,14 @@
     fill: var(--orange);
     stroke: var(--card);
     stroke-width: 2;
+  }
+  /* Heater off, as in the timeline's small lines. */
+  .current.off {
+    stroke: var(--faint);
+    stroke-width: 2;
+  }
+  .end.off {
+    fill: var(--faint);
   }
   .pulse {
     fill: var(--orange);
