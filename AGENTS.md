@@ -23,7 +23,7 @@ through `@capacitor-community/bluetooth-le` on Android and Web Bluetooth in a br
 | `docs/protocol/*.md` | Protocol notes per family: UUIDs, payloads, connect sequence, hardware findings, open questions |
 | `android/` | Capacitor's Android project. `capacitor.build.gradle` and `capacitor.settings.gradle` are generated: do not edit |
 | `.github/workflows/` | `check.yml` (PRs, no secrets), `android.yml` (signed release builds, never on PRs), `screens.yml` (emulator screenshots, manual) |
-| `scripts/` | `render-assets.mjs` (icon, splash), `store-graphics.mjs` (Play graphics), `emulator-shots.sh` (used by `screens.yml`) |
+| `scripts/` | `render-assets.mjs` (icon, splash), `store-graphics.mjs` (Play graphics), `readme-screenshots.mjs` (`docs/screenshots/`), `emulator-shots.sh` (used by `screens.yml`) |
 | `PRIVACY.md`, `store/` | Privacy policy and the Google Play kit (listing texts, graphics, Play Console answers); prepared, not published |
 
 ## Commands
@@ -65,6 +65,8 @@ cd android && ./gradlew assembleDebug         # JDK 21, Android SDK 36; installs
   are optional methods plus `capabilities`. A protocol change comes with a test using captured
   bytes and an update to the family's `docs/protocol/` note.
 - Comments say why, in plain English. UI text is short and plain, in English.
+- A change to how the app looks updates `README.md` in the same change: the screenshots
+  (`node scripts/readme-screenshots.mjs`, demo mode) and any feature text it affects.
 - Commits: one change each, subject in the style of `git log` (area first:
   "CRAFTY: …", "README: …", "CI: …"). Version bumps (`0.1.x`) are the maintainer's.
 - Releases: a `vX.Y.Z` tag publishes a GitHub release with exactly one `glow-X.Y.Z.apk`
