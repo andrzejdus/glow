@@ -40,16 +40,22 @@ export interface SessionSummary {
 }
 
 export interface SessionDetail {
-  /** Seconds from the start. */
+  /** Seconds from the start; negative before it, past the end for the cool-down. */
   ts: number[];
   /** Live temperature, null when there is none. */
   c: (number | null)[];
-  /** Goal: target plus the boost in use. */
-  g: number[];
+  /** Goal: target plus the boost in use; null while the heater is off. */
+  g: (number | null)[];
   events: SessionEvent[];
 }
 
 const SAMPLE_MS = 5000;
+/** The temperature this long before the heater comes on starts the chart, one reading every PRE_STEP_MS. */
+const PRE_MS = 10_000;
+const PRE_STEP_MS = 2000;
+/** After the heater goes off, the cool-down is recorded until it is down to COOL_TO or for COOL_MS. */
+const COOL_MS = 120_000;
+const COOL_TO = 50;
 /** Back within this long with the heater still on, and it is the same session. */
 const RESUME_MS = 10 * 60_000;
 const SPARK = 24;
@@ -67,8 +73,11 @@ export function isReady(d: DeviceState): boolean {
   return d.heaterOn && (d.tempReached ?? (diff !== undefined && Math.abs(diff) < 1));
 }
 
-export function spark(detail: SessionDetail, live: boolean): number[] {
-  const values = detail.ts.map((_, i) => (live ? detail.c[i] : null) ?? detail.g[i]);
+/** The session itself, without the time before it and the cool-down after it. */
+export function spark(detail: SessionDetail, live: boolean, endSec = Infinity): number[] {
+  const values = detail.ts
+    .map((t, i) => (t < 0 || t > endSec ? null : ((live ? detail.c[i] : null) ?? detail.g[i])))
+    .filter((v): v is number => v !== null);
   if (values.length <= SPARK) return values;
   return Array.from({ length: SPARK }, (_, i) => values[Math.round((i * (values.length - 1)) / (SPARK - 1))]);
 }
@@ -78,6 +87,8 @@ class Sessions {
   /** The running session's summary and samples, while there is one. */
   active = $state.raw<SessionSummary | null>(null);
   activeDetail = $state.raw<SessionDetail | null>(null);
+  /** The session that just ended, while its cool-down is being recorded. */
+  cooling = $state.raw<{ id: number; detail: SessionDetail } | null>(null);
 
   private key = '';
   private persist = true;
@@ -92,22 +103,29 @@ class Sessions {
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private sampler: ReturnType<typeof setInterval> | undefined;
   private details = new Map<number, SessionDetail>();
+  /** The last seconds of temperature before a session, for the start of its chart. */
+  private recent: { t: number; c: number }[] = [];
+  private coolUntil = 0;
+  private lastCool = 0;
 
   /** Demo mode passes made-up sessions, which are never saved. */
   async bind(key: string, seed?: { list: SessionSummary[]; details: Map<number, SessionDetail> }) {
     if (key === this.key) return;
+    this.endCooling();
     this.flush();
     this.key = key;
     this.persist = !seed;
     this.active = null;
     this.activeDetail = null;
     this.last = null;
+    this.recent = [];
     this.details = seed?.details ?? new Map();
     this.list = seed?.list ?? (await load<SessionSummary[]>(`sessions:${key}`, []));
   }
 
   async detail(id: number): Promise<SessionDetail | null> {
     if (this.active?.id === id) return this.activeDetail;
+    if (this.cooling?.id === id) return this.cooling.detail;
     const known = this.details.get(id);
     if (known) return known;
     const found = await load<SessionDetail | null>(`session:${this.key}:${id}`, null);
@@ -119,13 +137,21 @@ class Sessions {
     const first = this.last === null;
     this.last = d;
     if (first) this.closeStale(d, now);
-    if (d.heaterOn && !this.active) this.begin(d, now, first);
-    else if (!d.heaterOn && this.active) this.finish(now);
+    if (d.heaterOn && !this.active) {
+      this.endCooling();
+      this.begin(d, now, first);
+    } else if (!d.heaterOn && this.active) this.finish(now);
     if (this.active) this.track(d, now);
+    else {
+      this.remember(d, now);
+      this.cool(d, now);
+    }
   }
 
   /** The connection dropped: the session stays open until the device is back. */
   lost(now = Date.now()) {
+    this.endCooling();
+    this.recent = [];
     if (!this.active || !this.activeDetail) return;
     this.event({ t: this.sec(now), k: 'lost' });
     this.last = null;
@@ -154,7 +180,7 @@ class Sessions {
     }
     const latest = this.list.find((s) => s.id === open.id)!;
     const detail = this.details.get(open.id);
-    this.replace({ ...latest, end: latest.seen, spark: detail ? spark(detail, latest.live) : latest.spark });
+    this.replace({ ...latest, end: latest.seen, spark: detail ? spark(detail, latest.live, (latest.seen - latest.id) / 1000) : latest.spark });
     this.save();
   }
 
@@ -186,8 +212,11 @@ class Sessions {
       live: d.currentTemp !== undefined,
       spark: [],
     };
+    // The readings just before, from while the heater was still off.
+    const pre = this.recent.map((r) => ({ t: Math.round((r.t - now) / 1000), c: r.c })).filter((r) => r.t < 0);
+    this.recent = [];
     this.active = s;
-    this.activeDetail = { ts: [], c: [], g: [], events: [] };
+    this.activeDetail = { ts: pre.map((r) => r.t), c: pre.map((r) => r.c), g: pre.map(() => null), events: [] };
     this.wasReady = false;
     this.mode = d.mode;
     this.target = d.targetTemp;
@@ -256,6 +285,7 @@ class Sessions {
     const detail = this.activeDetail;
     const goal = goalOf(d);
     if (!detail || goal === undefined) return;
+    if (detail.ts[detail.ts.length - 1] === this.sec(now)) return;
     this.lastSample = now;
     this.activeDetail = {
       ...detail,
@@ -271,18 +301,60 @@ class Sessions {
     clearInterval(this.sampler);
     this.sampler = setInterval(() => {
       if (this.active && this.last?.heaterOn) this.track(this.last, Date.now());
+      else if (this.cooling && this.last) this.cool(this.last, Date.now());
     }, SAMPLE_MS);
   }
 
   private finish(now: number) {
     const s = this.active!;
     // The last stretch, counted in the level it ran in: a device drops back to Base as it turns off.
-    this.track({ ...this.last!, heaterOn: true, mode: this.mode, targetTemp: this.target }, now);
-    clearInterval(this.sampler);
+    const last = { ...this.last!, heaterOn: true, mode: this.mode, targetTemp: this.target };
+    this.track(last, now);
+    // A reading at the very end, so the line reaches the heater-off mark.
+    this.sample(last, now);
     this.active = { ...this.active!, end: now, spark: spark(this.activeDetail!, s.live) };
     this.flush();
+    if (s.live) {
+      this.cooling = { id: s.id, detail: this.activeDetail! };
+      this.coolUntil = now + COOL_MS;
+      this.lastCool = now;
+    } else {
+      clearInterval(this.sampler);
+    }
     this.active = null;
     this.activeDetail = null;
+  }
+
+  /** Keeps the last few seconds of temperature while the heater is off. */
+  private remember(d: DeviceState, now: number) {
+    if (d.currentTemp === undefined) return;
+    if (now - (this.recent[this.recent.length - 1]?.t ?? 0) >= PRE_STEP_MS) {
+      this.recent = [...this.recent.filter((r) => r.t > now - PRE_MS - PRE_STEP_MS), { t: now, c: d.currentTemp }];
+    }
+  }
+
+  /** After the heater went off: the temperature going down, until COOL_TO or COOL_MS. */
+  private cool(d: DeviceState, now: number) {
+    const c = this.cooling;
+    if (!c) return;
+    if (now > this.coolUntil || d.currentTemp === undefined) return this.endCooling();
+    if (now - this.lastCool < SAMPLE_MS) return;
+    this.lastCool = now;
+    const temp = Math.round(d.currentTemp * 2) / 2;
+    this.cooling = {
+      id: c.id,
+      detail: { ...c.detail, ts: [...c.detail.ts, Math.round((now - c.id) / 1000)], c: [...c.detail.c, temp], g: [...c.detail.g, null] },
+    };
+    if (temp <= COOL_TO) this.endCooling();
+  }
+
+  private endCooling() {
+    const c = this.cooling;
+    if (!c) return;
+    this.cooling = null;
+    if (!this.active) clearInterval(this.sampler);
+    this.details.set(c.id, c.detail);
+    if (this.persist && this.key) save(`session:${this.key}:${c.id}`, c.detail);
   }
 
   private event(e: SessionEvent) {
@@ -331,6 +403,13 @@ export function demoSessions(live: boolean, battery: boolean, now = Date.now()) 
       const boostAt = rnd() < 0.5 ? Math.round(length * (0.4 + rnd() * 0.3)) : null;
       const detail: SessionDetail = { ts: [], c: [], g: [], events: [] };
       let c = 24 + rnd() * 10;
+      if (live) {
+        for (let t = -10; t < 0; t += 2) {
+          detail.ts.push(t);
+          detail.c.push(Math.round((c + rnd() * 0.5) * 2) / 2);
+          detail.g.push(null);
+        }
+      }
       let readySec: number | null = null;
       let peak = c;
       for (let t = 0; t <= length; t += 5) {
@@ -346,6 +425,14 @@ export function demoSessions(live: boolean, battery: boolean, now = Date.now()) 
         detail.c.push(live ? Math.round(c * 2) / 2 : null);
         detail.g.push(g);
       }
+      // The cool-down: to 50° or for two minutes.
+      for (let t = Math.ceil(length / 5) * 5 + 5; live && t <= length + 120; t += 5) {
+        c += (24 - c) * 0.085;
+        detail.ts.push(t);
+        detail.c.push(Math.round(c * 2) / 2);
+        detail.g.push(null);
+        if (c <= 50) break;
+      }
       const boostSec = boostAt === null ? 0 : length - boostAt;
       const s: SessionSummary = {
         id: start,
@@ -357,7 +444,7 @@ export function demoSessions(live: boolean, battery: boolean, now = Date.now()) 
         peak: live ? Math.round(peak * 2) / 2 : null,
         modes: { normal: length - boostSec, ...(boostSec ? { boost: boostSec } : {}) },
         live,
-        spark: spark(detail, live),
+        spark: spark(detail, live, length),
       };
       if (battery) {
         s.batteryStart = 90 - Math.round(rnd() * 30);

@@ -44,7 +44,44 @@ describe('session log', () => {
     expect(detail!.events.map((e) => e.k)).toEqual(['ready', 'mode', 'target']);
     expect(detail!.events[2]).toEqual({ t: 61, k: 'target', v: 190 });
     expect(detail!.ts.length).toBeGreaterThan(2);
-    expect(s.spark.length).toBe(detail!.ts.length);
+    // The reading a second before the heater came on starts the chart, but not the timeline's line.
+    expect(detail!.ts[0]).toBe(-1);
+    expect(detail!.g[0]).toBeNull();
+    expect(s.spark.length).toBe(detail!.ts.filter((t) => t >= 0).length);
+  });
+
+  it('keeps the 10 s before the start and the cool-down after the end, to 50° or for 2 minutes', async () => {
+    vi.useFakeTimers();
+    await sessions.bind('log-4');
+    for (let sec = 0; sec <= 20; sec++) at(sec, { heaterOn: false, currentTemp: 30 + sec / 10 });
+    at(21, { heaterOn: true, currentTemp: 32 });
+    at(60, { heaterOn: true, currentTemp: 180 });
+    at(61, { heaterOn: false, currentTemp: 180 });
+    expect(sessions.cooling?.id).toBe(sessions.list[0].id);
+    // Cooling 2.5° a second: 50° about 52 s after the end.
+    for (let sec = 62; sec <= 200; sec++) at(sec, { heaterOn: false, currentTemp: Math.max(24, 180 - (sec - 61) * 2.5) });
+    expect(sessions.cooling).toBeNull();
+    const detail = (await sessions.detail(sessions.list[0].id))!;
+    const before = detail.ts.filter((t) => t < 0);
+    expect(Math.min(...before)).toBeGreaterThanOrEqual(-12);
+    expect(before.length).toBeGreaterThanOrEqual(4);
+    const after = detail.ts.filter((t) => t > 40);
+    expect(detail.c[detail.c.length - 1]).toBeLessThanOrEqual(50);
+    expect(after[after.length - 1]).toBeLessThanOrEqual(40 + 60);
+    expect(detail.g.slice(-3)).toEqual([null, null, null]);
+  });
+
+  it('stops the cool-down after 2 minutes when it stays warm', async () => {
+    vi.useFakeTimers();
+    await sessions.bind('log-5');
+    at(0, { heaterOn: false, currentTemp: 30 });
+    at(1, { heaterOn: true, currentTemp: 30 });
+    at(30, { heaterOn: false, currentTemp: 180 });
+    for (let sec = 31; sec <= 200; sec++) at(sec, { heaterOn: false, currentTemp: 150 });
+    expect(sessions.cooling).toBeNull();
+    const detail = (await sessions.detail(sessions.list[0].id))!;
+    expect(detail.ts[detail.ts.length - 1]).toBeLessThanOrEqual(29 + 120);
+    expect(detail.ts[detail.ts.length - 1]).toBeGreaterThan(29 + 110);
   });
 
   it('marks a session that was already heating when Glow connected', async () => {

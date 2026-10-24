@@ -28,7 +28,8 @@
       if (shown?.id === id) stored = d;
     });
   });
-  const detail = $derived(running ? sessions.activeDetail : stored);
+  // The session that just ended keeps growing while its cool-down is recorded.
+  const detail = $derived(running ? sessions.activeDetail : sessions.cooling?.id === shown?.id ? sessions.cooling!.detail : stored);
 
   const lengthOf = (s: SessionSummary, now: number) => Math.max(0, ((s.end ?? (s.id === sessions.active?.id ? now : s.seen)) - s.id) / 1000);
   const boostSec = (s: SessionSummary) => (s.modes.boost ?? 0) + (s.modes.superboost ?? 0);

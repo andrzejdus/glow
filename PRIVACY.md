@@ -23,7 +23,8 @@ Glow saves this in its own private app storage on the phone:
   the time of each reading (at most two an hour), kept for up to 400 days. Glow uses them to
   show the usage per month.
 - **Session log**: for each time the heater was on while Glow was connected, when it started and
-  ended, the target and the device's temperature every few seconds, when it was ready, the heat
+  ended, the target and the device's temperature every few seconds (from ten seconds before the
+  heater came on until it has cooled down, for at most two minutes after), when it was ready, the heat
   level used, air on and off (VOLCANO) and the battery level at the start and the end. Kept until
   you clear Glow's storage. Glow uses it for the Stats screen.
 

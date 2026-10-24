@@ -13,15 +13,20 @@
 
   let w = $state(320);
   const H = 180;
-  const pad = { l: 34, r: 12, t: 18, b: 22 };
+  const pad = { l: 34, r: 12, t: 26, b: 22 };
 
   const ts = $derived(detail?.ts ?? []);
-  const span = $derived(Math.max(60, ts[ts.length - 1] ?? 0));
-  const values = $derived([...(detail?.g ?? []), ...((detail?.c ?? []).filter((c) => c !== null) as number[])]);
+  const last = $derived(ts[ts.length - 1] ?? 0);
+  const endSec = $derived(summary.end === null ? null : (summary.end - summary.id) / 1000);
+  // From 10 s before the heater came on to the end of the cool-down (10 s past the end without
+  // a live temperature), or to now while it runs.
+  const t0 = $derived(Math.min(ts[0] ?? 0, -10));
+  const t1 = $derived(Math.max(t0 + 60, last, endSec === null ? 0 : endSec + 10));
+  const values = $derived([...(detail?.g ?? []), ...(detail?.c ?? [])].filter((v): v is number => v !== null));
   // The scale in steps of 20, a little room above the highest value.
   const lo = $derived(values.length ? Math.max(0, Math.floor((Math.min(...values) - 5) / 20) * 20) : 0);
   const hi = $derived(values.length ? Math.ceil((Math.max(...values) + 5) / 20) * 20 : 220);
-  const x = (t: number) => pad.l + (t / span) * (w - pad.l - pad.r);
+  const x = (t: number) => pad.l + ((t - t0) / (t1 - t0)) * (w - pad.l - pad.r);
   const y = (c: number) => pad.t + (1 - (c - lo) / Math.max(1, hi - lo)) * (H - pad.t - pad.b);
   const ticks = $derived.by(() => {
     const step = hi - lo > 120 ? 40 : 20;
@@ -76,9 +81,23 @@
       if (open) out.push({ ...open, to: e.t });
       open = e.v === 'normal' ? null : { from: e.t, mode: e.v };
     }
-    if (open) out.push({ ...open, to: span });
+    if (open) out.push({ ...open, to: endSec ?? last });
     return out;
   });
+  // A vertical mark for each thing that happened; Ready has its own.
+  const marks = $derived.by(() => {
+    const out: { t: number; kind: string; label?: string }[] = [{ t: 0, kind: 'on', label: summary.joined ? 'Seen' : 'On' }];
+    for (const e of detail?.events ?? []) {
+      if (e.k !== 'ready') out.push({ t: e.t, kind: e.k === 'lost' || e.k === 'back' ? 'gap' : e.k });
+    }
+    if (endSec !== null) out.push({ t: endSec, kind: 'off', label: 'Off' });
+    return out;
+  });
+  /** A mark's label beside its line, on the side with room for it. */
+  const labelAt = (m: { t: number; kind: string }) => {
+    const left = m.kind === 'on' ? x(m.t) - pad.l > 24 : w - pad.r - x(m.t) < 26;
+    return { x: x(m.t) + (left ? -4 : 4), anchor: left ? 'end' : 'start' };
+  };
   const lastI = $derived(ts.length - 1);
   const end = $derived.by(() => {
     if (lastI < 0) return null;
@@ -87,9 +106,16 @@
   });
   const ready = $derived(summary.readySec === null || !detail ? null : {
     x: x(summary.readySec),
-    y: y(detail.g[ts.findIndex((t) => t >= summary.readySec!)] ?? detail.g[lastI]),
+    y: y(detail.g[ts.findIndex((t) => t >= summary.readySec!)] ?? lo),
   });
-  const xLabels = $derived(span >= 120 ? [0, span / 2, span] : [0, span]);
+  // The start, the end (or now) and how long the cool-down ran.
+  const xLabels = $derived.by(() => {
+    const stop = endSec ?? last;
+    const out = [{ t: 0, text: '0:00', anchor: 'start' }];
+    if (x(stop) - x(0) > 40) out.push({ t: stop, text: mmss(stop), anchor: x(t1) - x(stop) > 20 ? 'middle' : 'end' });
+    if (endSec !== null && x(t1) - x(endSec) > 50) out.push({ t: t1, text: `+${mmss(t1 - endSec)}`, anchor: 'end' });
+    return out;
+  });
 </script>
 
 <div class="chart" bind:clientWidth={w}>
@@ -102,16 +128,28 @@
           <stop offset="1" stop-color="var(--orange)" stop-opacity="0" />
         </linearGradient>
       </defs>
+      <!-- Heater off: before the start and during the cool-down. -->
+      <rect class="off-zone" x={x(t0)} y={pad.t - 14} width={Math.max(0, x(0) - x(t0))} height={H - pad.b - pad.t + 14} />
+      {#if endSec !== null}
+        <rect class="off-zone" x={x(endSec)} y={pad.t - 14} width={Math.max(0, x(t1) - x(endSec))} height={H - pad.b - pad.t + 14} />
+      {/if}
       {#each bands as b (b.from)}
-        <rect class="band" x={x(b.from)} y={pad.t - 12} width={Math.max(2, x(b.to) - x(b.from))} height={H - pad.b - pad.t + 12} rx="6" />
-        <text class="band-label" x={x(b.from) + 6} y={pad.t - 2}>{b.mode === 'superboost' ? 'SUPER' : 'BOOST'}</text>
+        <rect class="band" x={x(b.from)} y={pad.t - 10} width={Math.max(2, x(b.to) - x(b.from))} height={H - pad.b - pad.t + 10} rx="6" />
+        <text class="band-label" x={x(b.from) + 6} y={pad.t}>{b.mode === 'superboost' ? 'SUPER' : 'BOOST'}</text>
       {/each}
       {#each ticks as v (v)}
         <line class="grid" x1={pad.l} x2={w - pad.r} y1={y(v)} y2={y(v)} />
         <text class="axis" x={pad.l - 6} y={y(v) + 3.5} text-anchor="end">{toUnit(v, unit)}°</text>
       {/each}
-      {#each xLabels as t, i (i)}
-        <text class="axis" x={x(t)} y={H - 6} text-anchor={i === 0 ? 'start' : i === xLabels.length - 1 ? 'end' : 'middle'}>{mmss(t)}</text>
+      {#each xLabels as l (l.t)}
+        <text class="axis" x={x(l.t)} y={H - 6} text-anchor={l.anchor}>{l.text}</text>
+      {/each}
+      {#each marks as m, i (i)}
+        <line class="mark {m.kind}" x1={x(m.t)} x2={x(m.t)} y1={pad.t - 14} y2={H - pad.b} />
+        {#if m.label}
+          {@const at = labelAt(m)}
+          <text class="mark-label {m.kind}" x={at.x} y={pad.t - 16} text-anchor={at.anchor}>{m.label}</text>
+        {/if}
       {/each}
       {#if area}<path class="area" d={area} />{/if}
       <path class="goal" d={goalPath} />
@@ -130,6 +168,7 @@
       {#if summary.live}<span><i class="sw current"></i>Temperature</span>{:else if summary.readySec !== null}<span><i class="sw current"></i>At temperature</span>{/if}
       <span><i class="sw goal"></i>Target</span>
       {#if bands.length}<span><i class="sw band"></i>Boost</span>{/if}
+      <span><i class="sw off"></i>Heater off</span>
     </div>
   {:else}
     <div class="empty" style:height="{H}px">{running ? 'Collecting the first readings…' : 'No readings for this session.'}</div>
@@ -157,6 +196,45 @@
   }
   .band {
     fill: var(--orange-tint);
+  }
+  .off-zone {
+    fill: var(--card-2);
+  }
+  .mark {
+    stroke-width: 1.2;
+    stroke-dasharray: 3 3;
+  }
+  .mark.on {
+    stroke: var(--led-heat);
+    stroke-dasharray: none;
+  }
+  .mark.off {
+    stroke: var(--muted);
+    stroke-dasharray: none;
+  }
+  .mark.mode {
+    stroke: var(--orange);
+  }
+  .mark.target {
+    stroke: var(--navy);
+    opacity: 0.45;
+  }
+  .mark.air {
+    stroke: var(--navy-fill);
+  }
+  .mark.gap {
+    stroke: var(--faint);
+    stroke-dasharray: 1 3;
+  }
+  .mark-label {
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .mark-label.on {
+    fill: var(--led-heat);
+  }
+  .mark-label.off {
+    fill: var(--muted);
   }
   .band-label {
     font-size: 9px;
@@ -240,6 +318,11 @@
   .sw.band {
     height: 10px;
     background: var(--orange-tint);
+  }
+  .sw.off {
+    height: 10px;
+    background: var(--card-2);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .empty {
     display: flex;
