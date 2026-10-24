@@ -54,10 +54,12 @@ class Connection {
   /** When the device last reported the auto-off time left; the UI counts down from there. */
   autoOffAt = $state(0);
   /**
-   * Whether the device's auto-off timer is running. A CRAFTY+ keeps reporting the full time while it
-   * heats up; counting down between those reports made the time left jump back every second.
+   * Whether the device's auto-off timer is running, and when it will run out. A CRAFTY+ holds the
+   * full time while heating up and after a draw cools it below the target, repeating it every
+   * ~2.4 s, and counts down only once it is ready again.
    */
   private autoOffRunning = true;
+  private autoOffEnd = 0;
   /** When the device last restarted its auto-off timer while heating (a CRAFTY+ does on each draw). */
   autoOffRestartAt = $state(0);
 
@@ -337,13 +339,14 @@ class Connection {
 
   /**
    * Seconds until auto-off. Devices report it only every few seconds, so this counts down by itself
-   * between reports and takes the device's value again with each one.
+   * between reports. `now` may be the UI's last clock tick, from before the latest report: counting
+   * from it showed a second too many after each report.
    */
   autoOffLeft(now: number): number | undefined {
     const left = this.device?.autoShutoffRemainingSec;
     if (left === undefined) return undefined;
     if (!this.autoOffRunning) return left;
-    return Math.max(0, left - Math.floor((now - this.autoOffAt) / 1000));
+    return Math.max(0, Math.ceil((this.autoOffEnd - Math.max(now, this.autoOffAt)) / 1000));
   }
 
   /** Fresh raw registers for the diagnostics screen; empty when not connected. */
@@ -435,11 +438,27 @@ class Connection {
     const now = Date.now();
     const held = (field: string) => (this.holds.get(field) ?? 0) > now;
     const { settings, ...rest } = patch;
-    if (rest.autoShutoffRemainingSec !== undefined) {
+    if (rest.heaterOn === true && !d.heaterOn) {
+      // A new session: the time left on record is from the last one. Hold the setting until the
+      // device reports.
+      d.autoShutoffRemainingSec = d.autoShutoffSec;
+      this.autoOffRunning = false;
+    }
+    const v = rest.autoShutoffRemainingSec;
+    if (v !== undefined) {
       const shown = this.autoOffLeft(now);
-      if (d.heaterOn && shown !== undefined && shown > 0 && rest.autoShutoffRemainingSec > shown + 5) this.autoOffRestartAt = now;
-      // The same value again means the device is holding its timer, not counting it down.
-      this.autoOffRunning = rest.autoShutoffRemainingSec !== d.autoShutoffRemainingSec;
+      const restarted = shown !== undefined && v > shown + 5;
+      if ((rest.heaterOn ?? d.heaterOn) && restarted && shown > 0) this.autoOffRestartAt = now;
+      if (restarted || v === d.autoShutoffRemainingSec) {
+        // Just restarted, or the same value again: the device is holding its timer.
+        this.autoOffRunning = false;
+      } else {
+        // Counting down. Reports wobble by a second or so; the end only ever moves earlier, so the
+        // time left never ticks back up.
+        const end = now + v * 1000;
+        this.autoOffEnd = this.autoOffRunning ? Math.min(this.autoOffEnd, end) : end;
+        this.autoOffRunning = true;
+      }
       this.autoOffAt = now;
     }
     const fields = rest as Record<string, unknown>;

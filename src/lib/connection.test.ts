@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ble } from './ble/adapter';
 import { conn } from './connection.svelte';
 import type { DeviceDriver, DeviceState } from './devices/types';
@@ -169,6 +169,108 @@ describe('auto-off countdown', () => {
     expect(conn.autoOffLeft(conn.autoOffAt + 2000)).toBe(203);
   });
 
+  it('counts a recorded CRAFTY+ session down without ticking back up', async () => {
+    // 0071 (time left) and 0093 (status: 0x0415 heating, 0x0515 ready, 0x0400 off) as a CRAFTY+
+    // V03.24 sent them, ms after the first one: holding 210 s while heating up, counting from Ready,
+    // back to 210 when a draw cooled it below the target, then 0 at heater off.
+    const session: [number, 'left' | 'status', number][] = [
+      [0, 'left', 210],
+      [2396, 'left', 210],
+      [4992, 'left', 210],
+      [7400, 'left', 210],
+      [10001, 'left', 209],
+      [11013, 'status', 1301],
+      [12396, 'left', 207],
+      [14999, 'left', 204],
+      [17399, 'left', 202],
+      [20002, 'left', 199],
+      [22395, 'left', 196],
+      [25009, 'left', 194],
+      [27401, 'left', 191],
+      [30011, 'left', 189],
+      [32406, 'left', 186],
+      [34998, 'left', 184],
+      [37399, 'left', 181],
+      [40006, 'left', 178],
+      [42403, 'left', 176],
+      [44999, 'left', 173],
+      [47412, 'left', 171],
+      [50009, 'left', 168],
+      [52405, 'left', 165],
+      [54998, 'left', 163],
+      [57401, 'left', 160],
+      [60000, 'left', 158],
+      [62398, 'left', 155],
+      [64999, 'left', 152],
+      [67397, 'left', 150],
+      [68405, 'status', 1045],
+      [69996, 'left', 210],
+      [72398, 'left', 210],
+      [74999, 'left', 210],
+      [76007, 'status', 1301],
+      [77398, 'left', 207],
+      [79998, 'left', 205],
+      [82395, 'left', 202],
+      [85010, 'left', 200],
+      [87411, 'left', 197],
+      [90001, 'left', 194],
+      [92401, 'left', 192],
+      [95006, 'left', 0],
+      [96006, 'status', 1024],
+    ];
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.now() + 86_400_000); // past any hold an earlier test left
+      let emit: (p: Partial<DeviceState>) => void = () => {};
+      const driver: DeviceDriver = {
+        kind: 'crafty',
+        capabilities: { pump: false, battery: true, boost: true, superBoost: true, findMy: true, heaterToggle: true },
+        settingDefs: [],
+        async start(onChange) {
+          emit = onChange;
+          // Off, with the time left from the session before still on record.
+          onChange({ heaterOn: false, autoShutoffSec: 210, autoShutoffRemainingSec: 157 });
+        },
+        async stop() {},
+        async setTargetTemp() {},
+        async setHeater() {},
+        async setMode() {},
+        async setSetting() {},
+      };
+      const internals = conn as unknown as { attach: (...a: unknown[]) => Promise<void>; generation: number };
+      await internals.attach({ id: 's', name: 'STORZ&BICKEL', kind: 'crafty' }, driver, internals.generation);
+      const t0 = Date.now();
+      emit({ heaterOn: true }); // the heater comes on 2 s before the first report
+      // What the dashboard shows: null for "–" (heater off, or 0 left).
+      const shown = () => (conn.device!.heaterOn && conn.autoOffLeft(tick) ? conn.autoOffLeft(tick)! : null);
+      let tick = t0;
+      const seen: { at: number; left: number | null; restart: number }[] = [];
+      const events = session.map(([at, kind, v]) => [at + 2000, kind, v] as const);
+      // The dashboard's clock ticks once a second, out of step with the reports.
+      for (let at = 0, i = 0; at <= events.at(-1)![0] + 2000; at += 100) {
+        vi.setSystemTime(t0 + at);
+        while (i < events.length && events[i][0] <= at) {
+          const [, kind, v] = events[i++];
+          if (kind === 'left') emit({ autoShutoffRemainingSec: v });
+          else emit({ heaterOn: (v & 0x10) !== 0, tempReached: (v & 0x100) !== 0 });
+          seen.push({ at, left: shown(), restart: conn.autoOffRestartAt });
+        }
+        if (at % 1000 === 533 % 1000) tick = t0 + at;
+        seen.push({ at, left: shown(), restart: conn.autoOffRestartAt });
+      }
+      const ups = seen.filter((s, k) => k > 0 && s.left !== null && seen[k - 1].left !== null && s.left > seen[k - 1].left! && s.restart === seen[k - 1].restart);
+      expect(ups).toEqual([]);
+      // Never the last session's time, and nothing below 3:30 before the device counts.
+      expect(seen.find((s) => s.left !== null)?.left).toBe(210);
+      // One restart, at the draw, and "–" (null) straight after the 0 at heater off.
+      expect(new Set(seen.map((s) => s.restart)).size).toBe(2);
+      expect(seen.at(-1)!.left).toBeNull();
+      expect(seen.filter((s) => s.left === 0)).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('notes when the device restarts its timer while heating, but not when the heater comes on', async () => {
     let emit: (p: Partial<DeviceState>) => void = () => {};
     const driver: DeviceDriver = {
@@ -187,11 +289,12 @@ describe('auto-off countdown', () => {
     };
     const internals = conn as unknown as { attach: (...a: unknown[]) => Promise<void>; generation: number };
     await internals.attach({ id: 'r', name: 'STORZ&BICKEL', kind: 'crafty' }, driver, internals.generation);
+    (conn as unknown as { holds: Map<string, number> }).holds.clear(); // commands sent by earlier tests
     const before = conn.autoOffRestartAt;
     emit({ heaterOn: true, autoShutoffRemainingSec: 210 });
     emit({ autoShutoffRemainingSec: 172 });
     expect(conn.autoOffRestartAt).toBe(before);
     emit({ autoShutoffRemainingSec: 210 }); // a draw
-    expect(conn.autoOffRestartAt).toBeGreaterThan(before);
+    expect(conn.autoOffRestartAt).not.toBe(before);
   });
 });
