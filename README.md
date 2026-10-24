@@ -18,18 +18,19 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/connect.png" width="220" alt="Connect screen"><br><sub>Connect</sub></td>
-    <td align="center"><img src="docs/screenshots/crafty.png" width="220" alt="CRAFTY+ dashboard while heating"><br><sub>CRAFTY+ heating</sub></td>
-    <td align="center"><img src="docs/screenshots/venty.png" width="220" alt="VENTY dashboard, ready"><br><sub>VENTY ready</sub></td>
+    <td align="center"><img src="docs/screenshots/connect.png" width="200" alt="Connect screen"><br><sub>Connect</sub></td>
+    <td align="center"><img src="docs/screenshots/crafty.png" width="200" alt="CRAFTY+ dashboard while heating, counting down to Ready"><br><sub>CRAFTY+ heating</sub></td>
+    <td align="center"><img src="docs/screenshots/venty.png" width="200" alt="VENTY dashboard, ready"><br><sub>VENTY ready</sub></td>
+    <td align="center"><img src="docs/screenshots/stats.png" width="200" alt="Stats: a session's chart and facts"><br><sub>Stats</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/volcano-workflows.png" width="220" alt="VOLCANO workflows"><br><sub>VOLCANO workflows</sub></td>
-    <td align="center"><img src="docs/screenshots/settings.png" width="220" alt="CRAFTY+ settings"><br><sub>Settings</sub></td>
-    <td align="center"><img src="docs/screenshots/diagnostics.png" width="220" alt="Device diagnostics"><br><sub>Device diagnostics</sub></td>
+    <td align="center"><img src="docs/screenshots/volcano-workflows.png" width="200" alt="VOLCANO workflows"><br><sub>VOLCANO workflows</sub></td>
+    <td align="center"><img src="docs/screenshots/settings.png" width="200" alt="CRAFTY+ settings"><br><sub>Settings</sub></td>
+    <td align="center"><img src="docs/screenshots/diagnostics.png" width="200" alt="Device diagnostics"><br><sub>Device diagnostics</sub></td>
   </tr>
 </table>
 
-<sub>Screenshots from demo mode: <code>npm run dev</code>, then <code>/?demo=venty</code>, <code>/?demo=crafty</code> or <code>/?demo=volcano</code>.</sub>
+<sub>Screenshots from demo mode (<code>npm run dev</code>, then <code>/?demo=venty</code>, <code>/?demo=crafty</code> or <code>/?demo=volcano</code>), made by <code>scripts/readme-screenshots.mjs</code>.</sub>
 
 ## Features
 
@@ -42,6 +43,9 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
   line that mirrors the device LED and counts down to Ready (learnt from the device's earlier
   heat-ups and reheats), Booster / Superbooster, and lifetime hours of operation counting up live,
   with usage per month.
+- 📊 **Stats.** A tab with each session as a chart (temperature against the target, Ready, boosts
+  and the cool-down) and its facts, hours of operation by day, week or month, and a timeline of
+  every session Glow saw. Tapping Hours of operation on the dashboard opens it.
 - 🔋 **Battery.** Level, charging and charged, with the charge animating up to full.
 - 🌋 **VOLCANO workflows.** Flow 1–3 and Balloon run from the phone, step by step, with time
   running and time left.
