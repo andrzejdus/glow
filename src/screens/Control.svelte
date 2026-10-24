@@ -26,6 +26,9 @@
   let clock = $state(Date.now());
   $effect(() => {
     if (!d.heaterOn || reached) return;
+    // The clock stood still while the heater was off: counted from there, the first guess showed
+    // minutes too many ("8:27" for a moment at heater on).
+    clock = Date.now();
     const timer = setInterval(() => (clock = Date.now()), 200);
     return () => clearInterval(timer);
   });
