@@ -343,7 +343,7 @@ describe('crafty driver', () => {
     await driver.stop();
   });
 
-  it('reads the auto-off setting only on connect, where it can drop around heating', async () => {
+  it('reads the auto-off setting only on connect, like the official app', async () => {
     const t = craftyPlus();
     const { driver, state } = await started(t);
     t.values.set(U.autoShutoff, le16(87));
@@ -351,21 +351,6 @@ describe('crafty driver', () => {
     await driver.refresh!();
     expect(t.ops.some((o) => o.chr === U.autoShutoff)).toBe(false);
     expect(state.settings?.autoShutoff).toBe(120);
-  });
-
-  it('keeps the auto-off setting it had on a reconnect to the same device', async () => {
-    const t = craftyPlus({ [U.autoShutoff]: le16(240) });
-    const kept: Partial<DeviceState> = {};
-    const merge = (p: Partial<DeviceState>) => Object.assign(kept, p, p.settings ? { settings: { ...kept.settings, ...p.settings } } : {});
-    const known = { serial: 'CP123456', autoShutoffSec: 300 } as DeviceState;
-    await crafty.create('crafty', t).start(merge, known);
-    expect(kept.settings?.autoShutoff).toBe(300);
-    expect(t.ops.some((o) => o.type === 'read' && o.chr === U.autoShutoff)).toBe(false);
-
-    // Another CRAFTY: its own setting is read.
-    const other: Partial<DeviceState> = {};
-    await crafty.create('crafty', craftyPlus({ [U.autoShutoff]: le16(240) })).start((p) => Object.assign(other, p), { ...known, serial: 'CP999999' });
-    expect(other.autoShutoffSec).toBe(240);
   });
 
   it('reads the raw registers for diagnostics, a failed read as null', async () => {

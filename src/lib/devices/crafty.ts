@@ -313,15 +313,14 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     return patch;
   }
 
-  async start(onChange: (patch: Partial<DeviceState>) => void, known?: Readonly<DeviceState>): Promise<void> {
+  async start(onChange: (patch: Partial<DeviceState>) => void): Promise<void> {
     this.emit = onChange;
     this.emit({ kind: 'crafty', model: 'CRAFTY', minTemp: MIN_TEMP, maxTemp: MAX_TEMP });
 
     this.target = decodeTargetTemp(await this.read(SVC_CONTROL, CHR.targetTemp));
     this.emit({ targetTemp: this.target });
 
-    const serial = readText(await this.read(SVC_INFO, CHR.serial)).substring(0, 8);
-    this.emit({ serial });
+    this.emit({ serial: readText(await this.read(SVC_INFO, CHR.serial)).substring(0, 8) });
 
     await this.subscribe(SVC_CONTROL, CHR.currentTemp, this.onCurrentTemp);
     this.onCurrentTemp(await this.read(SVC_CONTROL, CHR.currentTemp));
@@ -352,11 +351,9 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.ledBrightness = readU16(await this.read(SVC_CONTROL, CHR.ledBrightness));
 
     if (!this.legacy) {
-      // The official app reads the auto-off setting only here and calls it "autoOffCountdown". On a
-      // CRAFTY+ the setting Glow showed dropped on its own around heating, so after a dropped
-      // connection Glow keeps the setting it had instead of reading it again.
-      const kept = known?.serial === serial ? known.autoShutoffSec : undefined;
-      this.autoShutoff = kept ?? readU16(await this.read(SVC_CONTROL, CHR.autoShutoff));
+      // Like the official app, which calls it "autoOffCountdown", Glow reads the auto-off setting
+      // only here. On a CRAFTY+ it stayed the same through a whole heating session.
+      this.autoShutoff = readU16(await this.read(SVC_CONTROL, CHR.autoShutoff));
       this.emit({ autoShutoffSec: this.autoShutoff });
       await this.subscribe(SVC_CONTROL, CHR.autoShutoffRemaining, this.onAutoShutoffRemaining);
       this.onAutoShutoffRemaining(await this.read(SVC_CONTROL, CHR.autoShutoffRemaining));

@@ -384,8 +384,7 @@ class Connection {
   }
 
   private async attach(d: FoundDevice, driver: DeviceDriver, gen: number) {
-    const reconnecting = this.phase === 'reconnecting';
-    if (!reconnecting) this.phase = 'syncing';
+    if (this.phase !== 'reconnecting') this.phase = 'syncing';
     this.driver = driver;
     this.caps = driver.capabilities;
     this.settingDefs = driver.settingDefs;
@@ -400,8 +399,7 @@ class Connection {
         settings: {},
       };
     }
-    const known = reconnecting && this.device ? $state.snapshot(this.device) : undefined;
-    await withTimeout(driver.start((patch) => this.apply(patch), known), 15000, 'Reading the device');
+    await withTimeout(driver.start((patch) => this.apply(patch)), 15000, 'Reading the device');
     if (gen !== this.generation) return;
     // Some drivers only know their capabilities once they have read the firmware.
     this.caps = { ...driver.capabilities };
