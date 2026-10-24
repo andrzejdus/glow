@@ -158,12 +158,16 @@ describe('Ready in', () => {
     await vi.advanceTimersByTimeAsync(0);
     let shown = Infinity;
     // Reports five times a second, as a CRAFTY+ sends them, much slower than the earlier heat-ups,
-    // so the guess keeps growing. The screen reads it on its own clock, up to 200 ms behind.
+    // so the guess keeps growing. The screen reads it on its own clock, which may tick just before
+    // a report (seen on the phone: 23, 24) or lag behind it.
     for (let ms = 200; ms <= 90_000; ms += 200) {
       const sec = ms / 1000;
+      // A tick of the screen's clock just before the report, the report, then ticks after it.
+      const reads = [ready.left(T0 + ms - 30)];
       at(sec, { heaterOn: true, currentTemp: Math.round(tempAt(sec, 25, 180, 0.6)), targetTemp: sec < 30 ? 181 : 180, tempReached: false });
-      for (const behind of [150, 0]) {
-        const now = ready.left(Date.now() - behind)!;
+      reads.push(ready.left(Date.now() - 150), ready.left(Date.now()));
+      for (const now of reads) {
+        if (now === null) continue;
         expect(now).toBeLessThanOrEqual(shown);
         shown = now;
       }

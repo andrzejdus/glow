@@ -137,6 +137,8 @@ class Ready {
   private onAt = 0;
   private goal: number | undefined;
   private updated = 0;
+  /** The lowest number of seconds shown for this guess: the count never goes back up. */
+  private shown = Infinity;
   private gen = 0;
 
   /** Demo mode keeps its reheats in memory only. */
@@ -220,12 +222,17 @@ class Ready {
   }
 
   /**
-   * Whole seconds to Ready; null without a guess, 0 once the guess has run out. `now` may be the
-   * UI's last clock tick, from before the latest report: counting from it showed a second more
-   * for a moment when the report moved the end a little later.
+   * Whole seconds to Ready; null without a guess, 0 once the guess has run out ("Almost ready").
+   * Never more than it showed before: when the guess moves later, the number waits until the time
+   * catches up with it. Moving the end later only slowly still showed 23, 24 on the phone, as the
+   * screen's clock may tick just before a report. `now` may also be a tick from before the latest
+   * report, so the time counts from that report.
    */
   left(now: number): number | null {
-    return this.at ? Math.max(0, Math.ceil((this.at - Math.max(now, this.updated)) / 1000)) : null;
+    if (!this.at) return null;
+    // Not reactive state: what was shown so far, kept here so every reader sees the same count.
+    this.shown = Math.min(this.shown, Math.max(0, Math.ceil((this.at - Math.max(now, this.updated)) / 1000)));
+    return this.shown;
   }
 
   /** Earlier heat-ups of this device, loaded as the heater comes on. */
@@ -261,22 +268,20 @@ class Ready {
   }
 
   /**
-   * Moves the shown end towards a new guess, so the count runs faster or slower instead of
-   * jumping: it moves at most 0.6 s earlier or 0.5 s later per second, so the count runs between
-   * half and 1.6 times the clock's speed, never steps back up and skips at most a second. A big
-   * error takes a while to catch up; a recording on the phone showed that letting it catch up
-   * faster made the count step back up (60, 61, 57, 59). A new goal is shown at once.
-   *
-   * Once the count has run out ("Almost ready") it stays there until Ready: a guess a second later
-   * on each report showed "Almost ready" and "1 s" in turn. Without a guess the count carries on.
+   * Moves the end towards a new guess, at most 0.6 s earlier or 0.5 s later per second, so the
+   * count runs up to 1.6 times the clock's speed and a short wobble of the guess barely shows; a
+   * recording on the phone showed that catching up faster made the count jump (60, 61, 57, 59).
+   * A new goal is shown at once. Without a guess the count carries on.
    */
   private settle(end: number | null, now: number) {
-    if (end === null || (this.at && this.at <= now)) {
+    if (end === null) {
       this.updated = now;
       return;
     }
-    if (!this.at) this.at = end;
-    else {
+    if (!this.at) {
+      this.at = end;
+      this.shown = Infinity;
+    } else {
       const dt = Math.min(1000, now - this.updated);
       this.at += Math.max(-0.6 * dt, Math.min(0.5 * dt, end - this.at));
     }
