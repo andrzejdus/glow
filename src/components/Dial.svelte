@@ -15,9 +15,11 @@
     offline?: boolean;
     /** Shrinks the whole dial on short screens. */
     scale?: number;
+    /** Heat levels shown as lamps on the dial, like warning lights on a car dashboard. */
+    lamps?: { id: string; label: string; on: boolean }[];
     onstep: (delta: number) => void;
   }
-  let { current, target, min, max, heating, ready, unit, offline = false, scale = 1, onstep }: Props = $props();
+  let { current, target, min, max, heating, ready, unit, offline = false, scale = 1, lamps = [], onstep }: Props = $props();
 
   const R = 114;
   const C = 2 * Math.PI * R;
@@ -90,6 +92,13 @@
       <div class="target">No live reading on this device</div>
     {/if}
   </div>
+  {#if lamps.length}
+    <div class="lamps" role="group" aria-label="Heat level">
+      {#each lamps as l (l.id)}
+        <span class="lamp" class:on={l.on && !offline} aria-current={l.on ? 'true' : undefined}>{l.label}</span>
+      {/each}
+    </div>
+  {/if}
   <button type="button" class="round step left press" aria-label="Lower target" disabled={offline}
     onpointerdown={() => hold(-1)} onpointerup={release} onpointerleave={release} onpointercancel={release}
     onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onstep(-1)}>
@@ -145,13 +154,13 @@
     background: var(--card);
     box-shadow: 0 2px 4px rgba(0, 26, 77, 0.04), 0 24px 48px rgba(0, 26, 77, 0.1), inset 0 0 0 1px rgba(0, 40, 125, 0.05);
   }
-  /* Glows in from the rim of the face, so the numbers stay on white. */
   .tint {
     position: absolute;
     inset: 28px;
     border-radius: 50%;
     pointer-events: none;
     --led-tint: transparent;
+    /* Glows in from the rim of the face, so the numbers stay on white. */
     background: radial-gradient(circle, rgba(255, 255, 255, 0) 46%, var(--led-tint) 100%);
     transition: --led-tint 1.2s ease;
   }
@@ -180,6 +189,35 @@
   }
   .mark {
     transition: cx 0.45s ease, cy 0.45s ease;
+  }
+  /* Below the numbers, between the - and + buttons. */
+  .lamps {
+    position: absolute;
+    top: 188px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+    pointer-events: none;
+  }
+  .lamp {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    padding: 3px 6px 2px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    color: var(--faint);
+    opacity: 0.6;
+    transition: color 0.35s ease, background 0.35s ease, border-color 0.35s ease, opacity 0.35s ease, text-shadow 0.35s ease;
+  }
+  .lamp.on {
+    opacity: 1;
+    color: var(--orange);
+    border-color: color-mix(in srgb, var(--orange) 45%, transparent);
+    background: color-mix(in srgb, var(--orange) 14%, transparent);
+    text-shadow: 0 0 6px color-mix(in srgb, var(--orange) 70%, transparent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--orange) 30%, transparent);
   }
   .center {
     position: absolute;
