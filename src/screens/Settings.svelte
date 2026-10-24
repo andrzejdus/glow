@@ -6,6 +6,7 @@
   import Toggle from '../components/Toggle.svelte';
   import Diagnostics from './Diagnostics.svelte';
   import { conn } from '../lib/connection.svelte';
+  import { debugging, type DebuggingState } from '../lib/debugging';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
   import { deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
   import { usage } from '../lib/usage.svelte';
@@ -40,6 +41,11 @@
   const factory = { boost: 15, superBoost: 30 };
 
   let diagnostics = $state(false);
+  let debug = $state<DebuggingState | null>(null);
+  debugging?.get().then((s) => (debug = s), () => {});
+  function setDebugging(on: boolean) {
+    debugging?.set({ enabled: on }).then((s) => (debug = s), () => {});
+  }
   let finding = $state(false);
   function find() {
     conn.findMy();
@@ -188,6 +194,24 @@
       </div>
     </section>
   {/each}
+
+  {#if debug}
+    <section class="group rise d2">
+      <h2>App</h2>
+      <div class="card list">
+        <div class="row">
+          <div class="text">
+            <div class="name"><label for="debugging">Debugging from a computer</label></div>
+            <div class="desc">
+              Lets a computer with adb access to this phone open DevTools on Glow and read its log. The log starts
+              the next time Glow opens.{debug.debugBuild ? ' Debug builds are always open to DevTools.' : ''}
+            </div>
+          </div>
+          <Toggle id="debugging" label="Debugging from a computer" on={debug.enabled} onchange={setDebugging} />
+        </div>
+      </div>
+    </section>
+  {/if}
 
   <button type="button" class="outline press rise d3" onclick={() => conn.disconnect()}>Disconnect</button>
   {#if conn.diagnosable}

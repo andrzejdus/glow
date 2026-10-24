@@ -18,7 +18,7 @@ Glow saves this in its own private app storage on the phone:
 
 - **The device you last connected to**: its Bluetooth address, its name and its model, so Glow
   can reconnect to it when you open the app.
-- **The "Auto-connect on open" setting.**
+- **The "Auto-connect on open" and "Debugging from a computer" settings.**
 - **Hours-of-operation history**: readings of the device's own lifetime operating counter, with
   the time of each reading (at most two an hour), kept for up to 400 days. Glow uses them to
   show the usage per month.
@@ -26,6 +26,11 @@ Glow saves this in its own private app storage on the phone:
 The device's own settings (temperatures, brightness and the rest) are read from and written to
 the device itself; Glow does not keep a copy. The diagnostics change log exists only while the
 diagnostics screen is open, and is copied to the clipboard only when you tap "Copy log".
+
+"Debugging from a computer" is off unless you turn it on in Settings. While it is on, a computer
+that you have allowed to debug your phone (Android's USB or wireless debugging, in Developer
+options) can look inside Glow, including the storage listed above, and read its log. Glow sends
+nothing anywhere itself.
 
 None of this leaves the phone through Glow. If you have turned on Android's own backup for your
 phone, Android may include Glow's storage in that backup, which is kept in your Google account

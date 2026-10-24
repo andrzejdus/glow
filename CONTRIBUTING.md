@@ -70,6 +70,11 @@ usage history.
 With the phone connected, `chrome://inspect` in desktop Chrome opens DevTools for the debug app's
 WebView (console, network, breakpoints).
 
+The release app can be inspected too: turn on Settings > App > **Debugging from a computer**.
+DevTools opens at once; Capacitor's log (`adb logcat`, every plugin call in the console) starts
+the next time Glow opens. The switch is kept across updates, so a problem can be watched in the
+app that showed it, with its own remembered device and history.
+
 `./gradlew assembleRelease` without the signing secrets gives an unsigned APK that Android will
 not install; release signing only happens in CI.
 

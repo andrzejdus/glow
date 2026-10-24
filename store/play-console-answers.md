@@ -116,6 +116,7 @@ when it is sent off the device, and Glow sends nothing:
 |---|---|---|
 | Last device: Bluetooth address, name, model; the auto-connect setting | App storage on the phone only | `save('connection', …)` in `src/lib/connection.svelte.ts`, through `@capacitor/preferences` in `src/lib/prefs.ts` |
 | Hours-of-operation snapshots (device counter + time, up to 400 days) | App storage on the phone only | `save('usage:<device>', …)` in `src/lib/usage.svelte.ts` |
+| "Debugging from a computer" setting (off by default) | App storage on the phone only; while on, a computer the user has authorised for adb can inspect the WebView and read the log | `DebuggingPlugin.java`, `src/lib/debugging.ts` |
 | Device settings and live readings | Read from and written to the device over Bluetooth; not stored | `src/lib/devices/` |
 | Diagnostics change log | Memory while the screen is open; to the clipboard only on "Copy log" | `src/screens/Diagnostics.svelte` |
 | Other Bluetooth devices seen in a scan | Dropped at once unless the name matches a supported model | `src/lib/ble/native-adapter.ts` |

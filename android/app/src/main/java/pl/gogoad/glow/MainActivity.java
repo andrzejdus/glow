@@ -10,6 +10,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(DebuggingPlugin.class);
+        // With "Debugging from a computer" on, the bridge starts inspectable and logging, so the
+        // first moments (auto-connect, the first device reads) can be watched too.
+        if (DebuggingPlugin.isEnabled(this)) config = DebuggingPlugin.debuggingConfig(this);
         // After super: BridgeActivity first swaps the launch (splash) theme for AppTheme.NoActionBar.
         // Enabling edge-to-edge before that builds the window with the splash theme, which adds an
         // action bar with the splash drawable as its background over the top of the page.
