@@ -74,11 +74,42 @@ describe('heat-up curves', () => {
     const curves: HeatUp[] = [heatUpOf(s, detail)!];
     const plain = fromHistory(curves, 95)!;
     // 60° climbed in 20 s, as before: no change.
-    expect(estimate(curves, { t: 0, below: 155 }, { t: 20_000, below: 95 })).toBeCloseTo(plain, 0);
+    expect(estimate(curves, [{ t: 0, below: 155 }], { t: 20_000, below: 95 })).toBeCloseTo(plain, 0);
     // The same climb took 25 s: 25 % slower from here on too.
-    expect(estimate(curves, { t: 0, below: 155 }, { t: 25_000, below: 95 })).toBeCloseTo(plain * 1.25, 0);
+    expect(estimate(curves, [{ t: 0, below: 155 }], { t: 25_000, below: 95 })).toBeCloseTo(plain * 1.25, 0);
     // A second of climbing says little yet.
-    expect(estimate(curves, { t: 0, below: 98 }, { t: 1000, below: 95 })).toBeCloseTo(plain, 0);
+    expect(estimate(curves, [{ t: 0, below: 98 }], { t: 1000, below: 95 })).toBeCloseTo(plain, 0);
+  });
+});
+
+describe('on two CRAFTY+ heat-ups to 190° (the user\'s, 0.1.48–0.1.50)', () => {
+  // Recorded by the session log: seconds from heater on and the temperature, to just past Ready.
+  const warm = { readySec: 90, ts: [0, 5, 10, 16, 22, 27, 32, 37, 42, 49, 54, 59, 65, 70, 76, 82, 87, 92],
+    c: [47, 51, 61, 71, 81, 91, 101, 114, 123, 131, 143, 146, 157, 164, 170, 177, 183, 191] };
+  const cold = { readySec: 116, ts: [0, 5, 10, 15, 20, 26, 31, 36, 41, 46, 52, 57, 62, 67, 72, 77, 82, 87, 92, 97, 102, 108, 113, 118],
+    c: [25, 33, 43, 53, 63, 72, 81, 90, 98, 106, 114, 121, 128, 135, 141, 147, 153, 159, 165, 172, 175, 183, 187, 191] };
+  const curve = (r: typeof warm) => heatUpOf(
+    { readySec: r.readySec } as SessionSummary,
+    { ts: r.ts, c: r.c, g: r.ts.map(() => 190), events: [] },
+  )!;
+
+  /** Each guess while heating, with the other heat-up as the only earlier one, as Ready.observe makes them. */
+  const replay = (r: typeof warm, other: typeof warm) => {
+    const trail: { t: number; below: number }[] = [];
+    return r.ts.filter((t) => t <= r.readySec).map((t, i) => {
+      const now = { t: t * 1000, below: 190 - r.c[i] };
+      while (trail.length && trail[0].t <= now.t - 30_000) trail.shift();
+      if (t >= 10) trail.push(now);
+      return { t, guess: estimate([curve(other)], trail, now)!, real: r.readySec - t };
+    });
+  };
+
+  it('stays within 20 s from the start and 7 s over the last 40 %', () => {
+    for (const [r, other] of [[warm, cold], [cold, warm]]) {
+      for (const { t, guess, real } of replay(r, other)) {
+        expect(Math.abs(guess - real)).toBeLessThanOrEqual(t >= r.readySec * 0.6 ? 7 : 20);
+      }
+    }
   });
 });
 

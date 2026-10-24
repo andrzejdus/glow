@@ -12,6 +12,10 @@ const HISTORY = 8;
 /** The pace is measured over this long, and counts fully once it covers PACE_FULL_MS. */
 const PACE_MS = 30_000;
 const PACE_FULL_MS = 20_000;
+/** The heater takes a few seconds to get going (a CRAFTY+ started at 47° climbed 0.8° a second for
+ *  5 s, then 2°), which earlier heat-ups from a colder start never show at those degrees: the pace
+ *  is measured only after this. */
+const SPIN_UP_MS = 10_000;
 
 /** An earlier heat-up: degrees below the goal and the seconds it still took to Ready, in time order. */
 export interface HeatUp {
@@ -70,16 +74,31 @@ export function fromHistory(curves: HeatUp[], deg: number): number | null {
   return seen ?? median(curves.map((h) => carriedOn(h, deg)).filter((v): v is number => v !== null));
 }
 
-/** Seconds to Ready, from earlier heat-ups, scaled by the pace since `from` (the oldest reading kept). */
-export function estimate(curves: HeatUp[], from: { t: number; below: number }, now: { t: number; below: number }): number | null {
+/** How long earlier heat-ups took from `from` to `to` degrees below the goal, only those that went
+ *  through both: a carried-on guess is no yardstick for the pace. */
+function took(curves: HeatUp[], from: number, to: number): number | null {
+  return median(
+    curves
+      .map((h) => {
+        const a = leftAt(h, from);
+        const b = leftAt(h, to);
+        return a === null || b === null ? null : a - b;
+      })
+      .filter((v): v is number => v !== null),
+  );
+}
+
+/** Seconds to Ready, from earlier heat-ups, scaled by the pace over the readings in `trail`. */
+export function estimate(curves: HeatUp[], trail: { t: number; below: number }[], now: { t: number; below: number }): number | null {
   const left = fromHistory(curves, now.below);
   if (left === null) return null;
-  const then = fromHistory(curves, from.below);
-  const expected = then === null ? 0 : then - left;
-  const took = (now.t - from.t) / 1000;
+  // From the oldest reading that earlier heat-ups went through.
+  const from = trail.find((r) => curves.some((h) => r.below <= h.below[0])) ?? now;
+  const expected = took(curves, from.below, now.below) ?? 0;
+  const actual = (now.t - from.t) / 1000;
   // Too little of a climb to compare (just started, or holding near the goal): no correction.
-  if (expected < 3 || took <= 0) return left;
-  const pace = Math.max(0.5, Math.min(2.5, took / expected));
+  if (expected < 3 || actual <= 0) return left;
+  const pace = Math.max(0.5, Math.min(2.5, actual / expected));
   const weight = Math.min(1, (now.t - from.t) / PACE_FULL_MS);
   return left * (1 + weight * (pace - 1));
 }
@@ -93,6 +112,7 @@ class Ready {
   private times: number[] = [];
   private trail: { t: number; below: number }[] = [];
   private heating = false;
+  private onAt = 0;
   private goal: number | undefined;
   private updated = 0;
   private gen = 0;
@@ -105,6 +125,7 @@ class Ready {
     }
     if (!this.heating) {
       this.heating = true;
+      this.onAt = now;
       this.trail = [];
       this.at = 0;
       void this.prepare();
@@ -128,9 +149,9 @@ class Ready {
       return;
     }
     const reading = { t: now, below: goal - d.currentTemp };
-    this.trail = [...this.trail.filter((r) => r.t > now - PACE_MS), reading];
+    if (now - this.onAt >= SPIN_UP_MS) this.trail = [...this.trail.filter((r) => r.t > now - PACE_MS), reading];
     // Above the goal it has to cool down first, which earlier heat-ups say nothing about.
-    const left = reading.below < -1 ? null : estimate(this.curves, this.trail[0], reading);
+    const left = reading.below < -1 ? null : estimate(this.curves, this.trail, reading);
     this.settle(left === null ? 0 : now + left * 1000, now, fresh);
   }
 
