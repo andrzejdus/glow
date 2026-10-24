@@ -144,6 +144,9 @@
   .screen.fit {
     min-height: 100dvh;
     padding-bottom: calc(var(--sab) + 78px);
+    /* A big dial's pulsing glow and ready ring reach past the screen's edges: cut them there
+       rather than let the page scroll sideways. */
+    overflow-x: clip;
   }
   .dial-area {
     position: relative;
