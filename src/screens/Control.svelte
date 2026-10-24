@@ -9,7 +9,7 @@
   import type { DeviceState, HeatMode } from '../lib/devices/types';
   import { mmss, toUnit } from '../lib/format';
   import { ready } from '../lib/ready.svelte';
-  import { goalOf, isReady } from '../lib/sessions.svelte';
+  import { goalOf, isReady, sessions } from '../lib/sessions.svelte';
 
   const d = $derived(conn.device as DeviceState);
   let stats = $state(false);
@@ -33,7 +33,16 @@
     return () => clearInterval(timer);
   });
   const readyIn = $derived(ready.left(clock));
-  const heating = $derived(readyIn === null ? 'Heating' : readyIn === 0 ? 'Almost ready' : `Ready in ${readyIn < 120 ? `${readyIn} s` : mmss(readyIn)}`);
+  // "Heating" stays for the first 3 s after heater on, long enough to read; the count took over
+  // after a tenth of a second. Not when Glow joined a heat-up already running.
+  const heatedAt = $derived(sessions.active && !sessions.active.joined ? sessions.active.id : 0);
+  const heating = $derived(
+    readyIn === null || clock - heatedAt < 3000
+      ? 'Heating'
+      : readyIn === 0
+        ? 'Almost ready'
+        : `Ready in ${readyIn < 120 ? `${readyIn} s` : mmss(readyIn)}`,
+  );
   const status = $derived(offline ? 'Waiting for the device…' : !d.heaterOn ? 'Heater off' : reached ? 'Ready' : heating);
   const led = $derived(
     offline
