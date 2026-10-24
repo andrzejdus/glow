@@ -153,6 +153,23 @@ describe('Ready in', () => {
     expect(leftNow()).toBeLessThan(expected + 6);
   });
 
+  it('stays at "Almost ready" once the count has run out, until Ready', async () => {
+    vi.useFakeTimers();
+    await seed('ready-5', [past(T0 - 86_400_000, 25, 180)]);
+    at(0, { heaterOn: true, currentTemp: 25 });
+    await vi.advanceTimersByTimeAsync(0);
+    for (let sec = 1; sec <= 76; sec++) at(sec, { heaterOn: true, currentTemp: tempAt(sec, 25, 180), tempReached: false });
+    // At the goal, but the device has not said Ready yet: the count has run out.
+    at(85, { heaterOn: true, currentTemp: 180, tempReached: false });
+    expect(leftNow()).toBe(0);
+    // A few degrees down again would make a guess of a few seconds; the line stays as it is.
+    at(86, { heaterOn: true, currentTemp: 176, tempReached: false });
+    at(87, { heaterOn: true, currentTemp: 177, tempReached: false });
+    expect(leftNow()).toBe(0);
+    at(90, { heaterOn: true, currentTemp: 180, tempReached: true });
+    expect(leftNow()).toBeNull();
+  });
+
   it('jumps with a boost and says nothing without earlier sessions', async () => {
     vi.useFakeTimers();
     await seed('ready-3', [past(T0 - 86_400_000, 25, 180)]);

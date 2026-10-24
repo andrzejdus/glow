@@ -136,23 +136,24 @@ class Ready {
       this.at = 0;
       return;
     }
-    const fresh = goal !== this.goal;
-    if (fresh) {
+    if (goal !== this.goal) {
+      // A new goal is shown at once.
       this.goal = goal;
       this.trail = [];
+      this.at = 0;
     }
     if (d.currentTemp === undefined) {
       // VENTY/VEAZY: no live temperature, so the usual heat-up time, counted from heater on.
       const s = sessions.active;
       const usual = median(this.times);
-      this.settle(s && !s.joined && usual !== null ? s.id + usual * 1000 : 0, now, fresh);
+      this.settle(s && !s.joined && usual !== null ? s.id + usual * 1000 : null, now);
       return;
     }
     const reading = { t: now, below: goal - d.currentTemp };
     if (now - this.onAt >= SPIN_UP_MS) this.trail = [...this.trail.filter((r) => r.t > now - PACE_MS), reading];
     // Above the goal it has to cool down first, which earlier heat-ups say nothing about.
     const left = reading.below < -1 ? null : estimate(this.curves, this.trail, reading);
-    this.settle(left === null ? 0 : now + left * 1000, now, fresh);
+    this.settle(left === null ? null : now + left * 1000, now);
   }
 
   /** Whole seconds to Ready; null without a guess, 0 once the guess has run out. */
@@ -179,10 +180,17 @@ class Ready {
    * Moves the shown end towards a new guess, so the count runs a little faster or slower instead
    * of jumping. Up to 4 s off, it moves at most 0.6 s a second: the count never steps back up and
    * never skips a second. Further off, it closes a quarter of the gap a second, so a heat-up much
-   * faster or slower than the earlier ones shows within seconds. A new goal is shown at once.
+   * faster or slower than the earlier ones shows within seconds.
+   *
+   * Once the count has run out ("Almost ready") it stays there until Ready: a guess a second later
+   * on each report showed "Almost ready" and "1 s" in turn. Without a guess the count carries on.
    */
-  private settle(end: number, now: number, fresh: boolean) {
-    if (!end || !this.at || fresh) this.at = end;
+  private settle(end: number | null, now: number) {
+    if (end === null || (this.at && this.at <= now)) {
+      this.updated = now;
+      return;
+    }
+    if (!this.at) this.at = end;
     else {
       const dt = Math.min(4000, now - this.updated);
       const gap = end - this.at;
