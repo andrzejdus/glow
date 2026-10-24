@@ -35,8 +35,11 @@ export interface SessionSummary {
   batteryEnd?: number;
   /** The device reports a live temperature (CRAFTY, VOLCANO), not only the target. */
   live: boolean;
-  /** A few points of the temperature (or the goal, without a live one) for the timeline. */
+  /** A few points of the temperature (or the goal, without a live one) for the timeline, with
+   *  the time before and the cool-down after. */
   spark: number[];
+  /** First and last point of `spark` with the heater on. */
+  sparkOn?: [number, number];
   /** The Glow version that recorded it, and any it was carried on by after a restart. */
   app?: string;
 }
@@ -60,7 +63,7 @@ const COOL_MS = 120_000;
 const COOL_TO = 50;
 /** Back within this long with the heater still on, and it is the same session. */
 const RESUME_MS = 10 * 60_000;
-const SPARK = 24;
+const SPARK = 32;
 
 /** What the device heats to: the target plus the active boost, capped at its maximum. */
 export function goalOf(d: DeviceState): number | undefined {
@@ -75,13 +78,17 @@ export function isReady(d: DeviceState): boolean {
   return d.heaterOn && (d.tempReached ?? (diff !== undefined && Math.abs(diff) < 1));
 }
 
-/** The session itself, without the time before it and the cool-down after it. */
-export function spark(detail: SessionDetail, live: boolean, endSec = Infinity): number[] {
-  const values = detail.ts
-    .map((t, i) => (t < 0 || t > endSec ? null : ((live ? detail.c[i] : null) ?? detail.g[i])))
-    .filter((v): v is number => v !== null);
-  if (values.length <= SPARK) return values;
-  return Array.from({ length: SPARK }, (_, i) => values[Math.round((i * (values.length - 1)) / (SPARK - 1))]);
+/** The points for the timeline, the time before and the cool-down after included, and which of
+ *  them are the heater-on part. */
+export function sparkOf(detail: SessionDetail, live: boolean, endSec = Infinity): Pick<SessionSummary, 'spark' | 'sparkOn'> {
+  const points = detail.ts
+    .map((t, i) => ({ t, v: (live ? detail.c[i] : null) ?? detail.g[i] }))
+    .filter((p): p is { t: number; v: number } => p.v !== null);
+  const picked =
+    points.length <= SPARK ? points : Array.from({ length: SPARK }, (_, i) => points[Math.round((i * (points.length - 1)) / (SPARK - 1))]);
+  const on = picked.map((p) => p.t >= 0 && p.t <= endSec);
+  const from = on.indexOf(true);
+  return { spark: picked.map((p) => p.v), sparkOn: from < 0 ? undefined : [from, on.lastIndexOf(true)] };
 }
 
 class Sessions {
@@ -123,6 +130,21 @@ class Sessions {
     this.recent = [];
     this.details = seed?.details ?? new Map();
     this.list = seed?.list ?? (await load<SessionSummary[]>(`sessions:${key}`, []));
+    void this.redrawSparks(key);
+  }
+
+  /** Sessions saved before the timeline showed the time around them get their points again, once. */
+  private async redrawSparks(key: string) {
+    let changed = false;
+    for (const s of this.list.filter((x) => x.end !== null && !x.sparkOn)) {
+      const detail = await this.detail(s.id);
+      if (key !== this.key) return;
+      if (!detail) continue;
+      const latest = this.list.find((x) => x.id === s.id);
+      if (latest) this.replace({ ...latest, ...sparkOf(detail, latest.live, (latest.end! - latest.id) / 1000) });
+      changed = true;
+    }
+    if (changed) this.save();
   }
 
   async detail(id: number): Promise<SessionDetail | null> {
@@ -182,7 +204,7 @@ class Sessions {
     }
     const latest = this.list.find((s) => s.id === open.id)!;
     const detail = this.details.get(open.id);
-    this.replace({ ...latest, end: latest.seen, spark: detail ? spark(detail, latest.live, (latest.seen - latest.id) / 1000) : latest.spark });
+    this.replace({ ...latest, end: latest.seen, ...(detail ? sparkOf(detail, latest.live, (latest.seen - latest.id) / 1000) : {}) });
     this.save();
   }
 
@@ -317,7 +339,7 @@ class Sessions {
     this.track(last, now);
     // A reading at the very end, so the line reaches the heater-off mark.
     this.sample(last, now);
-    this.active = { ...this.active!, end: now, spark: spark(this.activeDetail!, s.live) };
+    this.active = { ...this.active!, end: now, ...sparkOf(this.activeDetail!, s.live) };
     this.flush();
     if (s.live) {
       this.cooling = { id: s.id, detail: this.activeDetail! };
@@ -352,16 +374,24 @@ class Sessions {
     };
     if (temp <= COOL_TO) return this.endCooling();
     // Saved as it goes, so an app that is closed meanwhile keeps what was recorded.
-    if (this.cooling.detail.ts.length % 6 === 0 && this.persist && this.key) save(`session:${this.key}:${c.id}`, this.cooling.detail);
+    if (this.cooling.detail.ts.length % 6 === 0) this.saveCooling();
+  }
+
+  private saveCooling() {
+    const c = this.cooling;
+    const s = c && this.list.find((x) => x.id === c.id);
+    if (!c || !s || s.end === null) return;
+    this.replace({ ...s, ...sparkOf(c.detail, s.live, (s.end - s.id) / 1000) });
+    this.details.set(c.id, c.detail);
+    if (this.persist && this.key) save(`session:${this.key}:${c.id}`, c.detail);
+    this.save();
   }
 
   private endCooling() {
-    const c = this.cooling;
-    if (!c) return;
+    if (!this.cooling) return;
+    this.saveCooling();
     this.cooling = null;
     if (!this.active) clearInterval(this.sampler);
-    this.details.set(c.id, c.detail);
-    if (this.persist && this.key) save(`session:${this.key}:${c.id}`, c.detail);
   }
 
   private event(e: SessionEvent) {
@@ -381,7 +411,7 @@ class Sessions {
   private flush() {
     clearTimeout(this.saveTimer);
     if (this.active && this.activeDetail) {
-      const s = { ...this.active, spark: spark(this.activeDetail, this.active.live) };
+      const s = { ...this.active, ...sparkOf(this.activeDetail, this.active.live) };
       this.replace(s);
       this.details.set(s.id, this.activeDetail);
       if (this.persist && this.key) save(`session:${this.key}:${s.id}`, this.activeDetail);
@@ -451,7 +481,7 @@ export function demoSessions(live: boolean, battery: boolean, now = Date.now()) 
         peak: live ? Math.round(peak * 2) / 2 : null,
         modes: { normal: length - boostSec, ...(boostSec ? { boost: boostSec } : {}) },
         live,
-        spark: spark(detail, live, length),
+        ...sparkOf(detail, live, length),
       };
       if (battery) {
         s.batteryStart = 90 - Math.round(rnd() * 30);

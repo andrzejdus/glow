@@ -48,7 +48,9 @@ describe('session log', () => {
     // The reading a second before the heater came on starts the chart, but not the timeline's line.
     expect(detail!.ts[0]).toBe(-1);
     expect(detail!.g[0]).toBeNull();
-    expect(s.spark.length).toBe(detail!.ts.filter((t) => t >= 0).length);
+    // The timeline's points include it, marked as before the heater-on part.
+    expect(s.spark.length).toBe(detail!.ts.length);
+    expect(s.sparkOn).toEqual([1, detail!.ts.length - 1]);
   });
 
   it('keeps the 10 s before the start and the cool-down after the end, to 50° or for 2 minutes', async () => {
@@ -70,6 +72,10 @@ describe('session log', () => {
     expect(detail.c[detail.c.length - 1]).toBeLessThanOrEqual(50);
     expect(after[after.length - 1]).toBeLessThanOrEqual(40 + 60);
     expect(detail.g.slice(-3)).toEqual([null, null, null]);
+    // The timeline's points take in the cool-down once it is over.
+    const s = sessions.list[0];
+    expect(s.spark[s.spark.length - 1]).toBeLessThanOrEqual(50);
+    expect(s.sparkOn![1]).toBeLessThan(s.spark.length - 1);
   });
 
   it('stops the cool-down after 2 minutes when it stays warm', async () => {

@@ -118,13 +118,17 @@
     return groups;
   });
 
-  function sparkPath(values: number[], width = 64, height = 22) {
-    if (values.length < 2) return '';
+  /** The timeline's small line in three parts: before the heater came on, on, and the cool-down. */
+  function sparkPaths(s: SessionSummary, width = 64, height = 22) {
+    const values = s.spark;
+    if (values.length < 2) return { before: '', on: '', after: '' };
     const lo = Math.min(...values);
     const hi = Math.max(...values, lo + 1);
-    return values
-      .map((v, i) => `${i ? 'L' : 'M'}${((i / (values.length - 1)) * width).toFixed(1)},${(height - 2 - ((v - lo) / (hi - lo)) * (height - 4)).toFixed(1)}`)
-      .join('');
+    const pt = (i: number) => `${((i / (values.length - 1)) * width).toFixed(1)},${(height - 2 - ((values[i] - lo) / (hi - lo)) * (height - 4)).toFixed(1)}`;
+    const part = (from: number, to: number) =>
+      to <= from ? '' : Array.from({ length: to - from + 1 }, (_, k) => `${k ? 'L' : 'M'}${pt(from + k)}`).join('');
+    const [a, b] = s.sparkOn ?? [0, values.length - 1];
+    return { before: part(0, a), on: part(a, b), after: part(b, values.length - 1) };
   }
 
   let top: HTMLElement | undefined = $state();
@@ -226,6 +230,7 @@
             {#each g.items as s (s.id)}
               {@const isShown = s.id === shown?.id}
               {@const isRunning = s.id === sessions.active?.id}
+              {@const sp = sparkPaths(s)}
               <li>
                 <span class="node" class:boost={boostSec(s) >= 1} class:running={isRunning}></span>
                 <button type="button" class="item card press" class:shown={isShown} onclick={() => open(s)}>
@@ -240,7 +245,9 @@
                       ].filter(Boolean).join(' · ')}
                     </div>
                   </div>
-                  <svg class="spark" width="64" height="22" viewBox="0 0 64 22" aria-hidden="true"><path d={sparkPath(s.spark)} /></svg>
+                  <svg class="spark" width="64" height="22" viewBox="0 0 64 22" aria-hidden="true">
+                    <path class="off" d={sp.before} /><path class="off" d={sp.after} /><path d={sp.on} />
+                  </svg>
                 </button>
               </li>
             {/each}
@@ -628,6 +635,10 @@
     stroke-width: 1.8;
     stroke-linejoin: round;
     stroke-linecap: round;
+  }
+  .spark path.off {
+    stroke: var(--faint);
+    stroke-width: 1.4;
   }
   .more {
     align-self: center;
