@@ -46,6 +46,10 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
 - 📊 **Stats.** A tab with each session as a chart (temperature against the target, Ready, boosts
   and the cool-down) and its facts, hours of operation by day, week or month, and a timeline of
   every session Glow saw. Tapping Hours of operation on the dashboard opens it.
+- 🌙 **Records in the background** (Android 12+, off until you switch it on in Settings). Android
+  wakes Glow when the device comes into range, Glow connects and logs the session with the app
+  closed (with a notification while it does), and the next time you open Glow the session is in
+  Stats as if you had watched it.
 - 🔋 **Battery.** Level, charging and charged, with the charge animating up to full.
 - 🌋 **VOLCANO workflows.** Flow 1–3 and Balloon run from the phone, step by step, with time
   running and time left.

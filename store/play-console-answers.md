@@ -116,6 +116,8 @@ when it is sent off the device, and Glow sends nothing:
 |---|---|---|
 | Last device: Bluetooth address, name, model; the auto-connect setting | App storage on the phone only | `save('connection', …)` in `src/lib/connection.svelte.ts`, through `@capacitor/preferences` in `src/lib/prefs.ts` |
 | Hours-of-operation snapshots (device counter + time, up to 400 days) | App storage on the phone only | `save('usage:<device>', …)` in `src/lib/usage.svelte.ts` |
+| Background recording: the setting and the device's address, name, model (off by default) | App storage on the phone only | `Background.java` (SharedPreferences `background`), `BackgroundPlugin.java` |
+| Background log (while background recording is on: what the device reported over Bluetooth from 15 s before heater on to 2 min after heater off, with Glow closed; deleted once replayed into the session log, or when the setting is switched off) | App storage on the phone only (`files/background/`) | `Recorder.java`, `src/lib/replay.ts` |
 | Session log (heater on/off times, target and temperature samples from 10 s before heater on to the cool-down after it, Ready, heat level, air, battery at start and end, the Glow version; kept until storage is cleared) | App storage on the phone only | `save('sessions:<device>', …)` and `save('session:<device>:<start>', …)` in `src/lib/sessions.svelte.ts` |
 | Reheats (seconds from losing Ready after a draw to Ready again, and degrees below the target with seconds to Ready from the lowest point, for the last 12) | App storage on the phone only | `save('reheats:<device>', …)` in `src/lib/ready.svelte.ts` |
 | "Debugging from a computer" setting (off by default) | App storage on the phone only; while on, a computer the user has authorised for adb can inspect the WebView and read the log | `DebuggingPlugin.java`, `src/lib/debugging.ts` |
@@ -146,11 +148,14 @@ uninstalling removes everything. No independent security review.
 |---|---|---|
 | `BLUETOOTH_SCAN` (`neverForLocation`), `BLUETOOTH_CONNECT` | None | Shown to users as "Nearby devices". |
 | `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `maxSdkVersion="30"` | None | Foreground only, Android 11 and older only, for Bluetooth scans. There is no `ACCESS_BACKGROUND_LOCATION`, so the location-permissions declaration does not come up. If a reviewer asks: "Required by Android 11 and older to scan for Bluetooth LE devices; the app never reads or stores the location." |
+| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE` | **Foreground service declaration** (App content › Foreground service permissions): type *connected device*. | `RecorderService` runs only while "Record in the background" is on and the associated device is in range or connected, with a notification. Suggested text: "When the user turns on Record in the background, Glow connects to their Bluetooth device when it comes into range and records its temperature and heater state during use, so the session history is complete even when the app was closed. The service runs only while the device is connected or in range, and shows a notification." Play asks for a short video of the feature: the setting, Android's association dialog, the notification while the device heats, and the session in Stats. |
+| `REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE`, `REQUEST_COMPANION_RUN_IN_BACKGROUND`, `REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND` | None (normal permissions) | Effective only for the device the user associated in Android's own dialog (`CompanionDeviceManager`), Android 12+. |
+| `POST_NOTIFICATIONS` | None | Asked when background recording is switched on (Android 13+); the recorder's notification is the only one. |
 | `VIBRATE` | None | Haptic tap feedback (`@capacitor/haptics`). |
 | `INTERNET` | None | The WebView needs it; the CSP blocks all requests. |
 
-No foreground service, exact alarms, accessibility service, SMS, call log, contacts, photos or
-files permissions, so none of those declarations apply.
+No exact alarms, accessibility service, SMS, call log, contacts, photos or files permissions, so
+none of those declarations apply.
 
 ## Other App content items
 
