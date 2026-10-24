@@ -53,6 +53,11 @@ class Connection {
   toast = $state<string | null>(null);
   /** When the device last reported the auto-off time left; the UI counts down from there. */
   autoOffAt = $state(0);
+  /**
+   * Whether the device's auto-off timer is running. A CRAFTY+ keeps reporting the full time while it
+   * heats up; counting down between those reports made the time left jump back every second.
+   */
+  private autoOffRunning = true;
 
   private driver: DeviceDriver | null = null;
   private generation = 0;
@@ -335,6 +340,7 @@ class Connection {
   autoOffLeft(now: number): number | undefined {
     const left = this.device?.autoShutoffRemainingSec;
     if (left === undefined) return undefined;
+    if (!this.autoOffRunning) return left;
     return Math.max(0, left - Math.floor((now - this.autoOffAt) / 1000));
   }
 
@@ -427,7 +433,11 @@ class Connection {
     const now = Date.now();
     const held = (field: string) => (this.holds.get(field) ?? 0) > now;
     const { settings, ...rest } = patch;
-    if (rest.autoShutoffRemainingSec !== undefined) this.autoOffAt = now;
+    if (rest.autoShutoffRemainingSec !== undefined) {
+      // The same value again means the device is holding its timer, not counting it down.
+      this.autoOffRunning = rest.autoShutoffRemainingSec !== d.autoShutoffRemainingSec;
+      this.autoOffAt = now;
+    }
     const fields = rest as Record<string, unknown>;
     const current = d as unknown as Record<string, unknown>;
     for (const k of Object.keys(fields)) if (held(k) && fields[k] !== current[k]) delete fields[k];

@@ -162,12 +162,13 @@ class VolcanoDriver implements DeviceDriver {
 
   private onRegister1 = (view: DataView): void => {
     const reg = uintLE(view);
+    const wasActive = this.autoShutoffActive;
     this.autoShutoffActive = (reg & REG1_AUTO_SHUTOFF_ACTIVE) !== 0;
-    this.emit({
-      heaterOn: (reg & REG1_HEATER) !== 0,
-      pumpOn: (reg & REG1_PUMP) !== 0,
-      autoShutoffRemainingSec: this.autoShutoffActive ? this.autoShutoffRemaining : undefined,
-    });
+    const patch: Partial<DeviceState> = { heaterOn: (reg & REG1_HEATER) !== 0, pumpOn: (reg & REG1_PUMP) !== 0 };
+    // The time left only when the timer starts or stops: re-sending the last value heard would pull
+    // the app's countdown back to it.
+    if (this.autoShutoffActive !== wasActive) patch.autoShutoffRemainingSec = this.autoShutoffActive ? this.autoShutoffRemaining : undefined;
+    this.emit(patch);
   };
 
   private onRegister2 = (view: DataView): void => {
