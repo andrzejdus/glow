@@ -173,6 +173,19 @@ CRAFTY+ V03.24, Device diagnostics through a whole heating session (0.1.40):
 - `0071` starts at the setting when the heater comes on and restarts at the setting on each draw
   (172 → 210 s and 182 → 210 s, at the user's inhales), so the auto-off counts from the last draw.
 
+CRAFTY+ V03.24, every notification recorded over adb in two heating sessions (0.1.42, 0.1.43):
+
+- `0071` is notified every ~2.4 s, also while it does not change. While heating up, and after a
+  draw cools the chamber below the target, it repeats the setting; it counts down only near the
+  target.
+- It starts counting up to ~1.5 s before status bit 8 (ready) is set, and it resets to the setting
+  ~1 s before that bit clears at a draw.
+- Its seconds are short: 195 counted in 188 s, 59 in 57 s (about 3–4 %).
+- Lowering the setting while counting cuts the time left at once (202 → 179 → 118 s, by the values
+  as the slider passed 3 min on its way to 2); the next draw restarts at the new setting.
+- At heater off it sends 0 about 1 s before the status does. After a session ended it was seen
+  counting down again from 206 s with the heater off.
+
 ## Other characteristics
 
 Not in the official app; three clients (J-Cat/crafty-control, duramson/vo0t, lfuelling/sbcontrol)
