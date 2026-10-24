@@ -1,0 +1,175 @@
+import type { DeviceState } from './devices/types';
+import { goalOf, isReady, sessions, type SessionDetail, type SessionSummary } from './sessions.svelte';
+
+// "Ready in …" while heating. The first guess comes from earlier sessions: how long they still
+// took to Ready when they were as many degrees below the goal as the device is now (the median
+// of the last few). While the device heats, the last half minute is compared with them over the
+// same degrees, and the guess is scaled by how much faster or slower this heat-up runs (battery,
+// charger, a warm or cold device).
+
+/** The guess is taken from this many of the latest sessions that got Ready. */
+const HISTORY = 8;
+/** The pace is measured over this long, and counts fully once it covers PACE_FULL_MS. */
+const PACE_MS = 30_000;
+const PACE_FULL_MS = 20_000;
+
+/** An earlier heat-up: degrees below the goal and the seconds it still took to Ready, in time order. */
+export interface HeatUp {
+  below: number[];
+  left: number[];
+}
+
+/** The part of a session from heater on to its first reading past Ready. */
+export function heatUpOf(s: SessionSummary, detail: SessionDetail): HeatUp | null {
+  if (s.readySec === null) return null;
+  const h: HeatUp = { below: [], left: [] };
+  for (let i = 0; i < detail.ts.length; i++) {
+    const t = detail.ts[i];
+    const c = detail.c[i];
+    const g = detail.g[i];
+    if (t < 0 || c === null || g === null) continue;
+    h.below.push(g - c);
+    h.left.push(s.readySec - t);
+    if (t >= s.readySec) break;
+  }
+  return h.below.length >= 2 ? h : null;
+}
+
+/** Seconds a heat-up still took to Ready once it was `deg` below the goal; null if it started closer. */
+export function leftAt(h: HeatUp, deg: number): number | null {
+  if (deg > h.below[0]) return null;
+  for (let i = 1; i < h.below.length; i++) {
+    if (h.below[i] > deg) continue;
+    const a = h.below[i - 1];
+    const b = h.below[i];
+    const f = a === b ? 1 : (a - deg) / (a - b);
+    return Math.max(0, h.left[i - 1] + (h.left[i] - h.left[i - 1]) * f);
+  }
+  // It never got that close: the device said Ready before.
+  return 0;
+}
+
+/** For a goal further away than a heat-up started: its whole time plus the extra degrees at its first rate. */
+function carriedOn(h: HeatUp, deg: number): number | null {
+  const k = h.left.findIndex((l) => h.left[0] - l >= 10);
+  if (k < 0) return null;
+  const rate = (h.below[0] - h.below[k]) / (h.left[0] - h.left[k]);
+  return rate > 0.2 ? h.left[0] + (deg - h.below[0]) / rate : null;
+}
+
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const v = [...values].sort((a, b) => a - b);
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
+/** Seconds to Ready from `deg` below the goal, going by earlier heat-ups. */
+export function fromHistory(curves: HeatUp[], deg: number): number | null {
+  const seen = median(curves.map((h) => leftAt(h, deg)).filter((v): v is number => v !== null));
+  return seen ?? median(curves.map((h) => carriedOn(h, deg)).filter((v): v is number => v !== null));
+}
+
+/** Seconds to Ready, from earlier heat-ups, scaled by the pace since `from` (the oldest reading kept). */
+export function estimate(curves: HeatUp[], from: { t: number; below: number }, now: { t: number; below: number }): number | null {
+  const left = fromHistory(curves, now.below);
+  if (left === null) return null;
+  const then = fromHistory(curves, from.below);
+  const expected = then === null ? 0 : then - left;
+  const took = (now.t - from.t) / 1000;
+  // Too little of a climb to compare (just started, or holding near the goal): no correction.
+  if (expected < 3 || took <= 0) return left;
+  const pace = Math.max(0.5, Math.min(2.5, took / expected));
+  const weight = Math.min(1, (now.t - from.t) / PACE_FULL_MS);
+  return left * (1 + weight * (pace - 1));
+}
+
+class Ready {
+  /** When the device should say Ready, epoch ms; 0 without a guess. */
+  at = $state(0);
+
+  private curves: HeatUp[] = [];
+  /** Seconds from heater on to Ready of earlier sessions, for devices without a live temperature. */
+  private times: number[] = [];
+  private trail: { t: number; below: number }[] = [];
+  private heating = false;
+  private goal: number | undefined;
+  private updated = 0;
+  private gen = 0;
+
+  observe(d: DeviceState, now = Date.now()) {
+    if (!d.heaterOn) {
+      this.heating = false;
+      this.at = 0;
+      return;
+    }
+    if (!this.heating) {
+      this.heating = true;
+      this.trail = [];
+      this.at = 0;
+      void this.prepare();
+    }
+    const goal = goalOf(d);
+    if (isReady(d) || goal === undefined) {
+      this.trail = [];
+      this.at = 0;
+      return;
+    }
+    const fresh = goal !== this.goal;
+    if (fresh) {
+      this.goal = goal;
+      this.trail = [];
+    }
+    if (d.currentTemp === undefined) {
+      // VENTY/VEAZY: no live temperature, so the usual heat-up time, counted from heater on.
+      const s = sessions.active;
+      const usual = median(this.times);
+      this.settle(s && !s.joined && usual !== null ? s.id + usual * 1000 : 0, now, fresh);
+      return;
+    }
+    const reading = { t: now, below: goal - d.currentTemp };
+    this.trail = [...this.trail.filter((r) => r.t > now - PACE_MS), reading];
+    // Above the goal it has to cool down first, which earlier heat-ups say nothing about.
+    const left = reading.below < -1 ? null : estimate(this.curves, this.trail[0], reading);
+    this.settle(left === null ? 0 : now + left * 1000, now, fresh);
+  }
+
+  /** Whole seconds to Ready; null without a guess, 0 once the guess has run out. */
+  left(now: number): number | null {
+    return this.at ? Math.max(0, Math.ceil((this.at - now) / 1000)) : null;
+  }
+
+  /** Earlier heat-ups of this device, loaded as the heater comes on. */
+  private async prepare() {
+    const gen = ++this.gen;
+    const past = sessions.list.filter((s) => s.end !== null && !s.joined && s.readySec !== null).slice(0, HISTORY);
+    const curves: HeatUp[] = [];
+    for (const s of past.filter((x) => x.live)) {
+      const detail = await sessions.detail(s.id);
+      if (gen !== this.gen) return;
+      const h = detail && heatUpOf(s, detail);
+      if (h) curves.push(h);
+    }
+    this.curves = curves;
+    this.times = past.map((s) => s.readySec!);
+  }
+
+  /**
+   * Moves the shown end towards a new guess, so the count runs a little faster or slower instead
+   * of jumping. Up to 4 s off, it moves at most 0.6 s a second: the count never steps back up and
+   * never skips a second. Further off, it closes a quarter of the gap a second, so a heat-up much
+   * faster or slower than the earlier ones shows within seconds. A new goal is shown at once.
+   */
+  private settle(end: number, now: number, fresh: boolean) {
+    if (!end || !this.at || fresh) this.at = end;
+    else {
+      const dt = Math.min(4000, now - this.updated);
+      const gap = end - this.at;
+      const step = Math.max(0.6 * dt, (Math.abs(gap) * dt) / 4000);
+      this.at += Math.max(-step, Math.min(step, gap));
+    }
+    this.updated = now;
+  }
+}
+
+export const ready = new Ready();

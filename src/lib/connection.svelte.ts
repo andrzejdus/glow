@@ -6,6 +6,7 @@ import { createDemoDriver } from './devices/demo';
 import { createDriver, modelNames } from './devices/registry';
 import type { DeviceCapabilities, DeviceDriver, DeviceKind, DeviceState, DiagnosticValue, HeatMode, SettingDef } from './devices/types';
 import { load, save } from './prefs';
+import { ready } from './ready.svelte';
 import { demoSessions, sessions } from './sessions.svelte';
 import { demoHistory, usage } from './usage.svelte';
 
@@ -488,6 +489,7 @@ class Connection {
     }
     usage.observe(d);
     sessions.observe(d);
+    ready.observe(d);
   }
 
   private onDisconnect(d: FoundDevice, gen: number) {

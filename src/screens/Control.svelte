@@ -7,7 +7,8 @@
   import Warmth from '../components/Warmth.svelte';
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, HeatMode } from '../lib/devices/types';
-  import { toUnit } from '../lib/format';
+  import { mmss, toUnit } from '../lib/format';
+  import { ready } from '../lib/ready.svelte';
   import { goalOf, isReady } from '../lib/sessions.svelte';
 
   const d = $derived(conn.device as DeviceState);
@@ -19,8 +20,18 @@
   // The names STORZ & BICKEL's manuals and support pages use for every device.
   const names = { normal: 'Base', boost: 'Booster', superboost: 'Superbooster' };
   const reached = $derived(isReady(d));
-  // Just the LED: red while heating, green when ready, grey when off.
-  const status = $derived(offline ? 'Waiting for the device…' : !d.heaterOn ? 'Heater off' : reached ? 'Ready' : 'Heating');
+  // The LED: red while heating, green when ready, grey when off. While it is red, the time to Ready
+  // from earlier heat-ups, once there are some. On its own clock, faster than once a second: the
+  // guess moves by fractions of a second, which a 1 s clock showed as skipped seconds.
+  let clock = $state(Date.now());
+  $effect(() => {
+    if (!d.heaterOn || reached) return;
+    const timer = setInterval(() => (clock = Date.now()), 200);
+    return () => clearInterval(timer);
+  });
+  const readyIn = $derived(ready.left(clock));
+  const heating = $derived(readyIn === null ? 'Heating' : readyIn === 0 ? 'Almost ready' : `Ready in ${readyIn < 120 ? `${readyIn} s` : mmss(readyIn)}`);
+  const status = $derived(offline ? 'Waiting for the device…' : !d.heaterOn ? 'Heater off' : reached ? 'Ready' : heating);
   const led = $derived(
     offline
       ? null
