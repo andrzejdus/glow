@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(DebuggingPlugin.class);
+        registerPlugin(BackgroundPlugin.class);
         // With "Debugging from a computer" on, the bridge starts inspectable and logging, so the
         // first moments (auto-connect, the first device reads) can be watched too.
         if (DebuggingPlugin.isEnabled(this)) config = DebuggingPlugin.debuggingConfig(this);
