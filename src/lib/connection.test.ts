@@ -168,4 +168,30 @@ describe('auto-off countdown', () => {
     emit({ autoShutoffRemainingSec: 205 }); // ready: the timer runs
     expect(conn.autoOffLeft(conn.autoOffAt + 2000)).toBe(203);
   });
+
+  it('notes when the device restarts its timer while heating, but not when the heater comes on', async () => {
+    let emit: (p: Partial<DeviceState>) => void = () => {};
+    const driver: DeviceDriver = {
+      kind: 'crafty',
+      capabilities: { pump: false, battery: true, boost: true, superBoost: true, findMy: true, heaterToggle: true },
+      settingDefs: [],
+      async start(onChange) {
+        emit = onChange;
+        onChange({ heaterOn: false, autoShutoffRemainingSec: 0 });
+      },
+      async stop() {},
+      async setTargetTemp() {},
+      async setHeater() {},
+      async setMode() {},
+      async setSetting() {},
+    };
+    const internals = conn as unknown as { attach: (...a: unknown[]) => Promise<void>; generation: number };
+    await internals.attach({ id: 'r', name: 'STORZ&BICKEL', kind: 'crafty' }, driver, internals.generation);
+    const before = conn.autoOffRestartAt;
+    emit({ heaterOn: true, autoShutoffRemainingSec: 210 });
+    emit({ autoShutoffRemainingSec: 172 });
+    expect(conn.autoOffRestartAt).toBe(before);
+    emit({ autoShutoffRemainingSec: 210 }); // a draw
+    expect(conn.autoOffRestartAt).toBeGreaterThan(before);
+  });
 });

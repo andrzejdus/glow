@@ -58,6 +58,8 @@ class Connection {
    * heats up; counting down between those reports made the time left jump back every second.
    */
   private autoOffRunning = true;
+  /** When the device last restarted its auto-off timer while heating (a CRAFTY+ does on each draw). */
+  autoOffRestartAt = $state(0);
 
   private driver: DeviceDriver | null = null;
   private generation = 0;
@@ -434,6 +436,8 @@ class Connection {
     const held = (field: string) => (this.holds.get(field) ?? 0) > now;
     const { settings, ...rest } = patch;
     if (rest.autoShutoffRemainingSec !== undefined) {
+      const shown = this.autoOffLeft(now);
+      if (d.heaterOn && shown !== undefined && shown > 0 && rest.autoShutoffRemainingSec > shown + 5) this.autoOffRestartAt = now;
       // The same value again means the device is holding its timer, not counting it down.
       this.autoOffRunning = rest.autoShutoffRemainingSec !== d.autoShutoffRemainingSec;
       this.autoOffAt = now;

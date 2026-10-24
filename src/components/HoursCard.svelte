@@ -57,7 +57,13 @@
   <div class="foot num">
     <div><span>Session</span><strong>{mmss(usage.sessionSec(usage.now))}</strong></div>
     <div><span>Avg per month</span><strong>{avg === null ? '–' : usageTime(avg)}</strong></div>
-    <div><span>Auto-off</span><strong>{autoOff}</strong></div>
+    <div>
+      <span>Auto-off</span>
+      <!-- Re-made on each restart of the device's timer, so the highlight plays again. -->
+      {#key conn.autoOffRestartAt}
+        <strong class:restarted={Date.now() - conn.autoOffRestartAt < 1500}>{autoOff}</strong>
+      {/key}
+    </div>
   </div>
 </section>
 
@@ -206,5 +212,13 @@
     font-size: 13px;
     color: var(--navy);
     white-space: nowrap;
+  }
+  /* The device restarted its auto-off timer (a draw): a short orange flash on the new time. */
+  .foot strong.restarted {
+    animation: restarted 1.4s ease-out;
+  }
+  @keyframes restarted {
+    0%, 30% { color: var(--orange-ink); text-shadow: 0 0 10px color-mix(in srgb, var(--orange) 55%, transparent); }
+    100% { color: var(--navy); text-shadow: none; }
   }
 </style>
