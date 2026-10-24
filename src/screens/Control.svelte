@@ -72,9 +72,10 @@
   let areaW = $state(320);
   // It also grows into spare room (up to 1.4x), so a tall phone shows a big dial, not empty space.
   const dialScale = $derived(Math.max(0.62, Math.min(1.4, (areaH - 38) / 262, (areaW - 8) / 262)));
-  // The status line sits in the dial's open bottom, between - and +, as high as its width lets it
-  // pass the buttons. In dial units a button's centre is 100 below the dial's centre and 86 to the
-  // side, with a radius of 26.
+  // The status line sits in the dial's open bottom, between - and +, as high as the widest status
+  // ("Waiting for the device…") lets it pass the buttons, so every status sits at the same height.
+  // In dial units a button's centre is 100 below the dial's centre and 86 to the side, with a
+  // radius of 26.
   let statusW = $state(0);
   const statusY = $derived.by(() => {
     const s = dialScale;
@@ -92,7 +93,8 @@
   <Dial scale={dialScale} current={d.currentTemp} target={goal} min={d.minTemp} max={d.maxTemp} heating={d.heaterOn} ready={reached} {unit} {offline} {lamps}
     onstep={(delta) => conn.setTarget((d.targetTemp ?? d.minTemp) + (unit === 'F' ? delta * 5 / 9 : delta))} />
   <div class="status rise d1 num" class:ready={reached} class:off={!d.heaterOn} style:top="calc(50% + {statusY - 10}px)">
-    <span class="line" bind:clientWidth={statusW}>
+    <span class="line sizer" aria-hidden="true" bind:clientWidth={statusW}>Waiting for the device…</span>
+    <span class="line">
       {#if led}
         <span class="led {led.color} {led.blink}" role="img"
           aria-label="Device LED {led.color}{led.blink === 'steady' ? '' : led.blink === 'fast' ? ', flashing fast' : ', flashing'}"></span>
@@ -173,6 +175,11 @@
     align-items: center;
     height: 20px;
     gap: 8px;
+  }
+  /* Measures the widest status for the line's height, unseen. */
+  .sizer {
+    position: absolute;
+    visibility: hidden;
   }
   .status.ready {
     color: var(--orange-ink);
