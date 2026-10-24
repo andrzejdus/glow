@@ -85,8 +85,8 @@
 
   const done = $derived(sessions.list.filter((s) => s.end !== null));
   const avgLength = $derived(done.length ? done.reduce((a, s) => a + lengthOf(s, 0), 0) / done.length : null);
-  const heatUps = $derived(sessions.list.filter((s) => !s.joined && s.readySec !== null).map((s) => s.readySec!));
-  const avgHeatUp = $derived(heatUps.length ? heatUps.reduce((a, b) => a + b, 0) / heatUps.length : null);
+  const readyTimes = $derived(sessions.list.filter((s) => !s.joined && s.readySec !== null).map((s) => s.readySec!));
+  const avgReady = $derived(readyTimes.length ? readyTimes.reduce((a, b) => a + b, 0) / readyTimes.length : null);
   const perWeek = $derived.by(() => {
     if (!sessions.list.length) return null;
     const since = sessions.list[sessions.list.length - 1].id;
@@ -159,7 +159,7 @@
         <SessionChart summary={shown} {detail} {unit} {running} />
 
         <div class="facts num">
-          <div><span>Heat-up</span><strong>{shown.readySec === null || shown.joined ? '–' : mmss(shown.readySec)}</strong></div>
+          <div><span>Ready in</span><strong>{shown.readySec === null || shown.joined ? '–' : mmss(shown.readySec)}</strong></div>
           <div><span>Target</span><strong>{deg(shown.target)}</strong></div>
           {#if shown.live}<div><span>Peak</span><strong>{deg(shown.peak)}</strong></div>{/if}
           <div><span>Boost</span><strong>{boostSec(shown) >= 1 ? mmss(boostSec(shown)) : '–'}</strong></div>
@@ -209,7 +209,7 @@
       <div class="grid num">
         <div><span>Sessions a week</span><strong>{perWeek === null ? '–' : perWeek.toFixed(1)}</strong></div>
         <div><span>Avg session</span><strong>{avgLength === null ? '–' : mmss(avgLength)}</strong></div>
-        <div><span>Avg heat-up</span><strong>{avgHeatUp === null ? '–' : mmss(avgHeatUp)}</strong></div>
+        <div><span>Avg ready in</span><strong>{avgReady === null ? '–' : mmss(avgReady)}</strong></div>
         <div><span>Outside Glow</span><strong>{outside === null ? '–' : usageTime(outside)}</strong></div>
       </div>
     </section>
