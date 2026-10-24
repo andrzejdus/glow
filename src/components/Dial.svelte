@@ -77,7 +77,7 @@
     <circle class="mark" cx={128 + R * Math.cos(angle)} cy={128 + R * Math.sin(angle)} r="8" style="fill: var(--card); stroke: var(--navy)"
       stroke-width="2.5" />
   </svg>
-  <div class="center">
+  <div class="center" class:with-lamps={lamps.length > 0}>
     {#if live}
       <div class="label">Now</div>
       <div class="now num">
@@ -193,18 +193,18 @@
   /* Below the numbers, between the - and + buttons. */
   .lamps {
     position: absolute;
-    top: 188px;
+    top: 172px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 5px;
+    gap: 4px;
     pointer-events: none;
   }
   .lamp {
     font-size: 9px;
     font-weight: 800;
-    letter-spacing: 0.12em;
-    padding: 3px 6px 2px;
+    letter-spacing: 0.08em;
+    padding: 3px 5px 2px;
     border-radius: 6px;
     border: 1px solid var(--line);
     color: var(--faint);
@@ -218,6 +218,10 @@
     background: color-mix(in srgb, var(--orange) 14%, transparent);
     text-shadow: 0 0 6px color-mix(in srgb, var(--orange) 70%, transparent);
     box-shadow: 0 0 10px color-mix(in srgb, var(--orange) 30%, transparent);
+  }
+  /* Room for the lamps under the numbers, where the face is still wide enough. */
+  .center.with-lamps {
+    padding-bottom: 34px;
   }
   .center {
     position: absolute;
