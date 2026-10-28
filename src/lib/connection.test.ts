@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ble } from './ble/adapter';
 import { conn } from './connection.svelte';
+import { sessions } from './sessions.svelte';
 import type { DeviceDriver, DeviceState } from './devices/types';
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -333,5 +334,32 @@ describe('auto-off countdown', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('a cold start while the device heats', () => {
+  it('feeds the session log only once the device has reported its heater', async () => {
+    const observed: boolean[] = [];
+    const spy = vi.spyOn(sessions, 'observe').mockImplementation((d) => void observed.push(d.heaterOn));
+    const driver: DeviceDriver = {
+      kind: 'venty',
+      capabilities: { pump: false, battery: true, boost: true, superBoost: true, findMy: true, heaterToggle: true },
+      settingDefs: [],
+      async start(onChange) {
+        // What a VENTY reports before its first status: model, serial, firmware.
+        onChange({ kind: 'venty', model: 'VENTY', minTemp: 40, maxTemp: 210 });
+        onChange({ serial: 'VY000000', firmware: 'V01.11' });
+        onChange({ heaterOn: true, battery: 80 });
+      },
+      async stop() {},
+      async setTargetTemp() {},
+      async setHeater() {},
+      async setMode() {},
+      async setSetting() {},
+    };
+    const internals = conn as unknown as { attach: (...a: unknown[]) => Promise<void>; generation: number };
+    await internals.attach({ id: 'v', name: 'S&B VY000000', kind: 'venty' }, driver, internals.generation);
+    spy.mockRestore();
+    expect(observed).toEqual([true]);
   });
 });

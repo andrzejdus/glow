@@ -84,6 +84,8 @@ class Connection {
    * not hear from the app's own connection until that log is read.
    */
   private quiet = false;
+  /** This connection has reported the heater: until then the device's heaterOn is only a default. */
+  private heaterKnown = false;
   private catchingUp: Promise<void> = Promise.resolve();
 
   async start() {
@@ -532,6 +534,7 @@ class Connection {
         settings: {},
       };
     }
+    this.heaterKnown = false;
     await withTimeout(driver.start((patch) => this.apply(patch)), 15000, 'Reading the device');
     if (gen !== this.generation) return;
     // Some drivers only know their capabilities once they have read the firmware.
@@ -603,7 +606,10 @@ class Connection {
       for (const k of Object.keys(next)) if (held(`settings.${k}`) && next[k] !== d.settings[k]) delete next[k];
       d.settings = { ...d.settings, ...next };
     }
-    if (!this.quiet) {
+    if ('heaterOn' in rest) this.heaterKnown = true;
+    // Not before the heater is known: on a cold start the default "off" would close the session the
+    // background recorder handed over, and the first real report would start a second one.
+    if (!this.quiet && this.heaterKnown) {
       usage.observe(d);
       sessions.observe(d);
     }
