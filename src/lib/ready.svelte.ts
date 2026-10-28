@@ -1,6 +1,6 @@
 import type { DeviceState } from './devices/types';
 import { load, save } from './prefs';
-import { goalOf, isReady, sessions, type SessionDetail, type SessionSummary } from './sessions.svelte';
+import { goalOf, heatUpSec, isReady, sessions, type SessionDetail, type SessionSummary } from './sessions.svelte';
 
 // "Ready in …" while heating. The first guess comes from earlier sessions: how long they still
 // took to Ready when they were as many degrees below the goal as the device is now (the median
@@ -238,7 +238,7 @@ class Ready {
   /** Earlier heat-ups of this device, loaded as the heater comes on. */
   private async prepare() {
     const gen = ++this.gen;
-    const past = sessions.list.filter((s) => s.end !== null && !s.joined && s.readySec !== null).slice(0, HISTORY);
+    const past = sessions.list.filter((s) => s.end !== null && heatUpSec(s) !== null).slice(0, HISTORY);
     const curves: HeatUp[] = [];
     for (const s of past.filter((x) => x.live)) {
       const detail = await sessions.detail(s.id);

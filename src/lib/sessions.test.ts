@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DeviceState } from './devices/types';
-import { sessions } from './sessions.svelte';
+import { heatUpSec, readyAtOnce, sessions, type SessionSummary } from './sessions.svelte';
 
 const state = (patch: Partial<DeviceState>): DeviceState => ({
   kind: 'crafty', model: 'CRAFTY+', minTemp: 40, maxTemp: 210, mode: 'normal', heaterOn: false,
@@ -138,5 +138,23 @@ describe('session log', () => {
     expect(sessions.list).toHaveLength(1);
     const detail = await sessions.detail(sessions.list[0].id);
     expect(detail!.events).toEqual([{ t: 39, k: 'lost' }, { t: 99, k: 'back' }]);
+  });
+});
+
+describe('ready time', () => {
+  const base: SessionSummary = { id: 1, end: 2, seen: 2, joined: false, readySec: 19, target: 199, peak: null, modes: {}, live: false, spark: [] };
+
+  it('counts a heat-up only when Glow saw it from the start and it took time', () => {
+    expect(heatUpSec(base)).toBe(19);
+    expect(heatUpSec({ ...base, joined: true })).toBeNull();
+    expect(heatUpSec({ ...base, readySec: null })).toBeNull();
+    // VENTY switched off and back on while still hot: Ready at the first reading.
+    expect(heatUpSec({ ...base, readySec: 0 })).toBeNull();
+  });
+
+  it('calls a session Ready at heater on "ready at once"', () => {
+    expect(readyAtOnce({ ...base, readySec: 0 })).toBe(true);
+    expect(readyAtOnce({ ...base, readySec: 0, joined: true })).toBe(false);
+    expect(readyAtOnce(base)).toBe(false);
   });
 });

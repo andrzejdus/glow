@@ -3,7 +3,7 @@
   import SessionChart from '../components/SessionChart.svelte';
   import { conn, tap } from '../lib/connection.svelte';
   import { mmss, splitHours, toUnit, usageTime } from '../lib/format';
-  import { sessions, type SessionDetail, type SessionEvent, type SessionSummary } from '../lib/sessions.svelte';
+  import { heatUpSec, readyAtOnce, sessions, type SessionDetail, type SessionEvent, type SessionSummary } from '../lib/sessions.svelte';
   import { usage } from '../lib/usage.svelte';
 
   const unit = $derived(conn.device?.unit ?? 'C');
@@ -85,7 +85,7 @@
 
   const done = $derived(sessions.list.filter((s) => s.end !== null));
   const avgLength = $derived(done.length ? done.reduce((a, s) => a + lengthOf(s, 0), 0) / done.length : null);
-  const readyTimes = $derived(sessions.list.filter((s) => !s.joined && s.readySec !== null).map((s) => s.readySec!));
+  const readyTimes = $derived(sessions.list.map(heatUpSec).filter((t): t is number => t !== null));
   const avgReady = $derived(readyTimes.length ? readyTimes.reduce((a, b) => a + b, 0) / readyTimes.length : null);
   const perWeek = $derived.by(() => {
     if (!sessions.list.length) return null;
@@ -159,7 +159,7 @@
       <SessionChart summary={shown} {detail} {unit} {running} />
 
       <div class="facts num">
-        <div><span>Ready in</span><strong>{shown.readySec === null || shown.joined ? '–' : mmss(shown.readySec)}</strong></div>
+        <div><span>Ready in</span><strong>{readyAtOnce(shown) ? 'At once' : shown.readySec === null || shown.joined ? '–' : mmss(shown.readySec)}</strong></div>
         <div><span>Target</span><strong>{deg(shown.target)}</strong></div>
         {#if shown.live}<div><span>Peak</span><strong>{deg(shown.peak)}</strong></div>{/if}
         <div><span>Boost</span><strong>{boostSec(shown) >= 1 ? mmss(boostSec(shown)) : '–'}</strong></div>
@@ -232,7 +232,7 @@
                   <div class="i-sub num">
                     {[
                       deg(s.target),
-                      s.readySec !== null && !s.joined ? `ready in ${mmss(s.readySec)}` : '',
+                      readyAtOnce(s) ? 'ready at once' : s.readySec !== null && !s.joined ? `ready in ${mmss(s.readySec)}` : '',
                       boostSec(s) >= 1 ? (s.modes.superboost ? 'Superbooster' : 'Booster') : '',
                       used(s) ? `−${used(s)} %` : '',
                     ].filter(Boolean).join(' · ')}

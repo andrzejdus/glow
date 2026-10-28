@@ -75,6 +75,20 @@ export function goalOf(d: DeviceState): number | undefined {
   return d.targetTemp === undefined ? undefined : Math.min(d.maxTemp, d.targetTemp + offset);
 }
 
+/**
+ * Seconds from heater on to Ready, for a heat-up Glow saw from its start. Null when Glow joined
+ * late, Ready never came, or it was Ready at once: the heater switched back on while the chamber was
+ * still hot (a VENTY keeps its "reached" flag through a short off). Averages and "Ready in" use only these.
+ */
+export function heatUpSec(s: SessionSummary): number | null {
+  return s.joined || s.readySec === null || s.readySec < 1 ? null : s.readySec;
+}
+
+/** Ready as the heater came on, the chamber still hot from just before. */
+export function readyAtOnce(s: SessionSummary): boolean {
+  return !s.joined && s.readySec !== null && s.readySec < 1;
+}
+
 /** The device's own flag wins (it is what drives the CRAFTY+ LED); otherwise compare temperatures. */
 export function isReady(d: DeviceState): boolean {
   const goal = goalOf(d);

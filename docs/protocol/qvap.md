@@ -54,7 +54,7 @@ Request `[01 00 …]`. Reply (≥ 15 bytes, ≥ 17 with settings2):
 | 16 | settings2 bits | bit 0 = permanent Bluetooth |
 | 17 | settings2 write mask (echo) | |
 
-Settings byte 14: bit 0 `0x01` display °F, bit 1 `0x02` setpoint reached (read-only),
+Settings byte 14: bit 0 `0x01` display °F, bit 1 `0x02` setpoint reached (read-only; seen on a VENTY to come on ~19 s after heater on from cold and to stay set through a short heater off, so a heater switched back on while hot is Ready at once),
 bit 2 `0x04` factory reset (not used by Glow), bit 3 `0x08` charge current optimization,
 bit 4 `0x10` target changed with the device's buttons, bit 5 `0x20` charge voltage limit,
 bit 6 `0x40` boost visualization. **On the VEAZY bit 6 is inverted** (1 = off).
@@ -148,8 +148,8 @@ this family. Glow offers neither.
   shows them live, with status bytes 2–3, 8–14, 16, the charging time (0x04 bytes 4–6), 0x06
   bytes 3–4 and the 0x1D flags, all from the frames the poll already gets (no extra reads).
 - **Odd status frames.** A status frame with a target outside 40–210 °C cannot be a real status.
-  Glow counts it (Device diagnostics, "Odd status frames") and ignores it. Two VENTY sessions on
-  0.1.64 ended with the battery at 0 % (46 → 0, 48 → 0) right before a normal 47 % / 11 %, which a
-  zeroed frame would explain; not confirmed yet. With the debugging switch on, the console (logcat)
+  Glow counts it (Device diagnostics, "Odd status frames") and ignores it. Seen on a VENTY
+  (V01.11, 2026-10-28): a status poll answered 15 ms later by `01` and 19 zero bytes. Before 0.1.65
+  Glow took it as heater off and battery 0 %, which split sessions and logged "−46 %". With the debugging switch on, the console (logcat)
   gets every odd frame and every status frame whose battery, heater mode or settings byte changed,
   in hex.
