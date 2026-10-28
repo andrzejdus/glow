@@ -8,6 +8,7 @@ import type { BleTransport } from '../ble/transport';
 import type {
   DeviceCapabilities,
   DeviceDriver,
+  DiagnosticValue,
   DeviceKind,
   DeviceState,
   DriverModule,
@@ -93,6 +94,14 @@ function frame(length: number, entries: Record<number, number>): DataView {
 
 function request(cmd: number): DataView {
   return frame(FRAME_LEN, { 0: cmd });
+}
+
+function bytesOf(view: DataView): Uint8Array {
+  return new Uint8Array(view.buffer, view.byteOffset, view.byteLength).slice();
+}
+
+function hex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(' ');
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -236,6 +245,11 @@ export class QvapDriver implements DeviceDriver {
   private superBoostRaw = 0;
   private modeWrite = 0;
   private pending: { target?: PendingField; boost?: PendingField; superBoost?: PendingField } = {};
+  /** The last frame the device sent for each command, for the diagnostics screen. */
+  private readonly frames = new Map<number, Uint8Array>();
+  /** Status frames whose target is outside 40–210 °C, which no real status has. */
+  private oddStatusFrames = 0;
+  private lastStatus: Uint8Array | undefined;
   private readonly pollIntervalMs: number;
   private readonly firmwareTimeoutMs: number;
 
@@ -409,6 +423,47 @@ export class QvapDriver implements DeviceDriver {
     await this.send(frame(FRAME_LEN, { 0: CMD.findMy, 1: 0x01 }));
   }
 
+  /**
+   * Bytes of the last frames that the app does not decode, or decodes from a single source, as the
+   * device sent them. Nothing is read for this: the status is polled every second anyway.
+   */
+  async diagnostics(): Promise<DiagnosticValue[]> {
+    const bytes = (cmd: number, at: number, length: number): number | null => {
+      const f = this.frames.get(cmd);
+      if (!f || f.length < at + length) return null;
+      let v = 0;
+      for (let i = length - 1; i >= 0; i--) v = v * 256 + f[at + i];
+      return v;
+    };
+    // label, command, first byte, length (little-endian), unit (plain number instead of bits), quiet (not logged)
+    const rows: [string, number, number, number, string?, boolean?][] = [
+      ['Current temperature (raw)', CMD.status, 2, 2],
+      ['Battery', CMD.status, 8, 1, '%'],
+      ['Auto-off left', CMD.status, 9, 2, 's', true],
+      ['Heater mode', CMD.status, 11, 1],
+      ['Status byte 12', CMD.status, 12, 1],
+      ['Charger', CMD.status, 13, 1],
+      ['Settings', CMD.status, 14, 1],
+      ['Settings 2', CMD.status, 16, 1],
+      ['Status bytes 18–19', CMD.status, 18, 2],
+      ['Firmware flags', CMD.firmware, 1, 1],
+      ['Firmware bytes 8–9', CMD.firmware, 8, 2],
+      ['Firmware byte 10', CMD.firmware, 10, 1],
+      ['Charging time', CMD.usage, 4, 3, 'min'],
+      ['UI bytes 3–4', CMD.ui, 3, 2],
+      ['Advertising flags', CMD.advertising, 1, 1],
+    ];
+    const out: DiagnosticValue[] = rows.map(([label, cmd, at, length, unit, quiet]) => ({
+      label,
+      source: `0x${cmd.toString(16).padStart(2, '0')} b${at}${length > 1 ? `–${at + length - 1}` : ''}`,
+      value: bytes(cmd, at, length),
+      unit,
+      quiet,
+    }));
+    out.push({ label: 'Odd status frames', source: 'target out of range', value: this.oddStatusFrames, unit: '×' });
+    return out;
+  }
+
   async refresh(): Promise<void> {
     await this.send(request(CMD.usage));
     await this.send(uiWrite(0, {}));
@@ -471,6 +526,7 @@ export class QvapDriver implements DeviceDriver {
 
   handleNotification(view: DataView): void {
     if (view.byteLength === 0) return;
+    this.frames.set(view.getUint8(0), bytesOf(view));
     switch (view.getUint8(0)) {
       case CMD.status:
         this.applyStatus(view);
@@ -511,6 +567,19 @@ export class QvapDriver implements DeviceDriver {
   private applyStatus(view: DataView): void {
     const status = parseStatus(view);
     if (!status) return;
+    // Raw frames into the console (logcat with the debugging switch on): every odd one, and every
+    // change of battery, heater mode or settings, to settle what the status bytes really do.
+    const raw = bytesOf(view);
+    if (status.targetTemp < MIN_TEMP || status.targetTemp > MAX_TEMP) {
+      // No real status has a target outside 40–210 °C: count it and do not let it reset the state.
+      this.oddStatusFrames++;
+      console.warn(`${MODELS[this.kind]} odd status ${hex(raw)}`);
+      return;
+    }
+    if (!this.lastStatus || [8, 11, 14].some((i) => this.lastStatus![i] !== raw[i])) {
+      console.info(`${MODELS[this.kind]} status ${hex(raw)}`);
+    }
+    this.lastStatus = raw;
 
     // Connected while the device was in find-my mode: the official app
     // re-reads identity and UI settings once it answers normally.

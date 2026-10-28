@@ -84,7 +84,7 @@ built from the protocol and covered by unit tests.
 | Workflows (Flow 1–3, Balloon) | — | — | — | — | — | ✓ |
 | Find My | ✓ | ✓ | ✓ | — | — | — |
 | Device settings | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Device diagnostics | — | — | ✅ | ✓ | ✓ | ✓ |
+| Device diagnostics | ✓ | ✓ | ✅ | ✓ | ✓ | ✓ |
 
 <sub>
 ¹ Only with the device's own button. ·

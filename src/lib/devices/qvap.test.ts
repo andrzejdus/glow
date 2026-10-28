@@ -201,6 +201,37 @@ describe('qvap decoding', () => {
   });
 });
 
+describe('qvap diagnostics', () => {
+  it('shows the raw bytes of the last frames without reading anything', async () => {
+    const { driver, transport } = await connect();
+    const writes = transport.writes.length;
+    const rows = Object.fromEntries((await driver.diagnostics()).map((r) => [r.source, r.value]));
+    expect(transport.writes.length).toBe(writes);
+    expect(rows).toMatchObject({
+      '0x01 b2–3': 0x0721,
+      '0x01 b8': 76,
+      '0x01 b9–10': 87,
+      '0x01 b11': 2,
+      '0x01 b14': 0x63,
+      '0x01 b16': 0x01,
+      '0x04 b4–6': 0x10,
+      '0x06 b3–4': 0,
+      '0x1d b1': 0,
+      'target out of range': 0,
+    });
+    await driver.stop();
+  });
+
+  it('counts a status frame with an impossible target and keeps the state it had', async () => {
+    const { driver, transport, state } = await connect();
+    transport.notify(pad([0x01, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+    expect(state).toMatchObject({ targetTemp: 185, battery: 76, heaterOn: true });
+    const odd = (await driver.diagnostics()).find((r) => r.source === 'target out of range');
+    expect(odd?.value).toBe(1);
+    await driver.stop();
+  });
+});
+
 describe('qvap writes', () => {
   it('setTargetTemp writes °C x10 little-endian with the target mask', async () => {
     const { transport, driver } = await connect();

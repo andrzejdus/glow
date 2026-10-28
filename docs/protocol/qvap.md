@@ -144,4 +144,12 @@ this family. Glow offers neither.
   replies.
 - **Second version string.** The app labels it "Firmware Bootloader" for this family.
   Glow puts it in `firmwareBle`, the only free field.
-- Status bytes 12, 18–19 and firmware bytes 8–10 are unknown.
+- Status bytes 12, 18–19 and firmware bytes 8–10 are unknown. Settings › Device diagnostics
+  shows them live, with status bytes 2–3, 8–14, 16, the charging time (0x04 bytes 4–6), 0x06
+  bytes 3–4 and the 0x1D flags, all from the frames the poll already gets (no extra reads).
+- **Odd status frames.** A status frame with a target outside 40–210 °C cannot be a real status.
+  Glow counts it (Device diagnostics, "Odd status frames") and ignores it. Two VENTY sessions on
+  0.1.64 ended with the battery at 0 % (46 → 0, 48 → 0) right before a normal 47 % / 11 %, which a
+  zeroed frame would explain; not confirmed yet. With the debugging switch on, the console (logcat)
+  gets every odd frame and every status frame whose battery, heater mode or settings byte changed,
+  in hex.
