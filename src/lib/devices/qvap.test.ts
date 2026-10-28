@@ -138,6 +138,7 @@ describe('qvap decoding', () => {
       autoShutoffRemainingSec: 87,
       unit: 'F',
       operatingMinutes: 300,
+      chargingMinutes: 16,
       minTemp: 40,
       maxTemp: 210,
     });

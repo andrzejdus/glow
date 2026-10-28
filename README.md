@@ -50,7 +50,8 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
   wakes Glow when the device comes into range, Glow connects and logs the session with the app
   closed (with a notification while it does), and the next time you open Glow the session is in
   Stats as if you had watched it.
-- 🔋 **Battery.** Level, charging and charged, with the charge animating up to full.
+- 🔋 **Battery.** Level, charging and charged, with the charge animating up to full. A VENTY or
+  VEAZY also shows its lifetime time on the charger.
 - 🌋 **VOLCANO workflows.** Flow 1–3 and Balloon run from the phone, step by step, with time
   running and time left.
 - ⚙️ **Settings.** Every device setting the official web app offers, plus Find My and the
@@ -78,6 +79,7 @@ built from the protocol and covered by unit tests.
 | Battery level | ✓ | ✓ | ✅ | ✓ | ✓ | — |
 | Battery voltage, current, power | — | — | ✅ | ✓⁷ | ✓⁷ | — |
 | Charging / charged | ✓ | ✓ | ✅ | ✓⁵ | — | — |
+| Lifetime charging time | ✓ | ✓ | — | — | — | — |
 | Hours of operation, usage per month | ✓ | ✓ | ✅ | ✓ | ✓ | ✓ |
 | Auto-off countdown | ✓ | ✓ | ✅ | ✓ | — | ✓ |
 | Air pump | — | — | — | — | — | ✓ |

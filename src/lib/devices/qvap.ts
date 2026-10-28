@@ -538,6 +538,9 @@ export class QvapDriver implements DeviceDriver {
         if (view.byteLength >= 4) {
           const minutes = view.getUint8(1) | (view.getUint8(2) << 8) | (view.getUint8(3) << 16);
           this.onChange({ operatingMinutes: minutes });
+          if (view.byteLength >= 7) {
+            this.onChange({ chargingMinutes: view.getUint8(4) | (view.getUint8(5) << 8) | (view.getUint8(6) << 16) });
+          }
         }
         break;
       case CMD.identity:

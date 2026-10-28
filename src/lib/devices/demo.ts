@@ -97,6 +97,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
         batteryCurrent: kind === 'crafty' ? -350 : undefined,
         charging: false,
         operatingMinutes: s.minutes,
+        chargingMinutes: kind === 'venty' || kind === 'veazy' ? 16142 : undefined,
         autoShutoffSec: isVolcano ? 1800 : 120,
         unit: 'C',
         settings: isVolcano

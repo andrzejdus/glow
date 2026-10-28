@@ -77,7 +77,7 @@ Everything else stays 0.
 | Cmd | Request | Reply |
 |---|---|---|
 | `0x02` firmware | `[02 …]` (20 B) | byte 1 flags: bit 0 = application running (else bootloader), bit 4 = invalid application, bit 5 = invalid bootloader. Bytes 2–7: firmware version, ASCII (`V01.09`). Bytes 11–16: bootloader version, ASCII |
-| `0x04` usage | `[04 …]` | bytes 1–3: heater runtime in minutes (uint24); bytes 4–6: charging time in minutes (uint24) |
+| `0x04` usage | `[04 …]` | bytes 1–3: heater runtime in minutes (uint24); bytes 4–6: charging time in minutes (uint24), shown in Settings as Charge time |
 | `0x05` identity | `[05 …]` | bytes 15–16 prefix (`VY`/`VZ`) + bytes 9–14: the serial. Byte 18: VEAZY colour (2 blue, 3 pink, 4 orange, otherwise black) |
 | `0x06` UI (**7 bytes**) | `[06 mask b2 00 00 b5 b6]`; mask 0 = read | byte 2 brightness 1–9 (mask `0x01`), byte 5 vibration 0/1 (mask `0x08`), byte 6 boost timeout disabled 0/1 (mask `0x10`, "Permanent Boost") |
 | `0x0D` find my | `[0D 01 …]` | the device signals |

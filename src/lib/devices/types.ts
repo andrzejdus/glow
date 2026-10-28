@@ -56,6 +56,8 @@ export interface DeviceState {
   batteryCurrent?: number;
   /** Lifetime hours of operation as the device reports it, in minutes. */
   operatingMinutes?: number;
+  /** Lifetime time on the charger, minutes (VENTY and VEAZY). */
+  chargingMinutes?: number;
   /** The automatic shutoff setting, seconds. */
   autoShutoffSec?: number;
   /** Seconds until automatic shutoff, only when the device reports it. */

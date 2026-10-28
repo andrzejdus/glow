@@ -65,6 +65,7 @@
   }
   // Battery voltage, current and their product. Current and power show their size only; the
   // battery state above says which way it flows (a CRAFTY+ reports charging as positive).
+  // A VENTY or VEAZY reports none of these, only its lifetime time on the charger.
   const electrics = $derived.by(() => {
     const out: { label: string; value: string; unit: string }[] = [];
     const mv = d.batteryVoltage;
@@ -72,6 +73,8 @@
     if (mv !== undefined) out.push({ label: 'Voltage', value: (mv / 1000).toFixed(2), unit: 'V' });
     if (ma !== undefined) out.push(ma < 1000 ? { label: 'Current', value: String(ma), unit: 'mA' } : { label: 'Current', value: (ma / 1000).toFixed(2), unit: 'A' });
     if (mv !== undefined && ma !== undefined) out.push({ label: 'Power', value: ((mv * ma) / 1e6).toFixed(2), unit: 'W' });
+    const cm = d.chargingMinutes;
+    if (cm !== undefined) out.push(cm < 60 ? { label: 'Charge time', value: String(cm), unit: 'min' } : { label: 'Charge time', value: String(Math.round(cm / 60)), unit: 'h' });
     return out;
   });
   const asNumber = (v: unknown, fallback: number) => (typeof v === 'number' ? v : fallback);
