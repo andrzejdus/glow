@@ -87,10 +87,9 @@
       <div class="target num">Target <strong>{target === undefined ? '–' : toUnit(target, unit)}°{unit}</strong></div>
     {:else}
       <div class="label">Target</div>
-      <div class="now num">
+      <div class="now num solo">
         {target === undefined ? '–' : toUnit(target, unit)}<span class="unit">°{unit}</span>
       </div>
-      <div class="target">No live reading on this device</div>
     {/if}
   </div>
   {#if lamps.length}
@@ -303,6 +302,15 @@
     color: var(--orange-ink);
     margin-left: 2px;
     letter-spacing: 0;
+  }
+  /* Only the target: the digits sit in the middle and the unit hangs off to their right. */
+  .now.solo {
+    position: relative;
+  }
+  .now.solo .unit {
+    position: absolute;
+    left: 100%;
+    top: 0;
   }
   .target {
     font-size: 13px;
