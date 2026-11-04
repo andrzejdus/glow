@@ -16,7 +16,7 @@
 
   const d = $derived(conn.device as DeviceState);
   const caps = $derived(conn.caps);
-  const unit = $derived(d.unit ?? locale.temperatureUnit);
+  const unit = $derived(locale.unitFor(d.unit));
   const offline = $derived(conn.phase === 'reconnecting');
   const goal = $derived(goalOf(d));
   // The names STORZ & BICKEL's manuals and support pages use for every device.

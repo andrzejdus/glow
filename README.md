@@ -59,7 +59,8 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
   running and time left.
 - ⚙️ **Settings.** Every device setting the official web app offers, plus Find My and the
   Booster / Superbooster offsets. Sliders mark the factory value where STORZ & BICKEL documents
-  one. Firmware update, factory reset and analysis are left out on purpose.
+  one. Temperatures show in the device's unit, else the phone's, unless °C or °F is chosen for
+  the app (this leaves the device's own display as it is). Firmware update, factory reset and analysis are left out on purpose.
 - 🧪 **Device diagnostics.** Live raw registers with changed bits highlighted and a copyable
   change log, for working out what undocumented bits mean.
 - 🎮 **Demo mode.** "Try without a device" on the Connect screen simulates a VENTY or a VOLCANO.

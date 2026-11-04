@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { load, save } from './prefs';
 
 // The phone's clock, calendar and temperature preferences (android/.../LocalePlugin.java). Intl in
 // the WebView follows only the language and region, so Android's 24-hour switch and its regional
@@ -31,12 +32,25 @@ export function localeDefaults(tag: string): LocalePrefs {
   return { is24Hour, firstDayOfWeek: 1, temperatureUnit: 'C' };
 }
 
+export type TempUnit = 'C' | 'F';
+/** The unit chosen in Settings › App. Auto: the device's own, else the phone's. */
+export type UnitChoice = 'auto' | TempUnit;
+
+/**
+ * The unit the app shows temperatures in: the user's choice, else the unit of the device's own
+ * display (VENTY, VEAZY, VOLCANO report it; CRAFTY does not), else the phone's.
+ */
+export function resolveUnit(choice: UnitChoice, device: TempUnit | undefined, phone: TempUnit): TempUnit {
+  return choice === 'auto' ? (device ?? phone) : choice;
+}
+
 const native = Capacitor.isNativePlatform() ? registerPlugin<LocalePlugin>('Locale') : null;
 
 class Locale {
   is24Hour = $state(true);
   firstDayOfWeek = $state(1);
-  temperatureUnit = $state<'C' | 'F'>('C');
+  temperatureUnit = $state<TempUnit>('C');
+  unitChoice = $state<UnitChoice>('auto');
 
   constructor() {
     this.apply(localeDefaults(typeof navigator === 'undefined' ? 'en' : navigator.language));
@@ -45,9 +59,22 @@ class Locale {
   /** Reads the phone's settings; again whenever the app comes back, as they may have changed meanwhile. */
   start() {
     void this.load();
+    void load<UnitChoice>('temperatureUnit', 'auto').then((c) => {
+      if (c === 'C' || c === 'F') this.unitChoice = c;
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') void this.load();
     });
+  }
+
+  /** The unit to show temperatures in, given the device's own (undefined when it reports none). */
+  unitFor(device: TempUnit | undefined): TempUnit {
+    return resolveUnit(this.unitChoice, device, this.temperatureUnit);
+  }
+
+  setUnitChoice(choice: UnitChoice) {
+    this.unitChoice = choice;
+    void save('temperatureUnit', choice);
   }
 
   private async load() {

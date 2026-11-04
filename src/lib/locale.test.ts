@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localeDefaults } from './locale.svelte';
+import { localeDefaults, resolveUnit } from './locale.svelte';
 
 describe('localeDefaults', () => {
   it("takes the language's usual clock", () => {
@@ -15,5 +15,23 @@ describe('localeDefaults', () => {
 
   it('keeps a 24-hour clock, Monday and Celsius for a tag it cannot use', () => {
     expect(localeDefaults('!!')).toEqual({ is24Hour: true, firstDayOfWeek: 1, temperatureUnit: 'C' });
+  });
+});
+
+describe('resolveUnit', () => {
+  it("takes the choice in Settings over the device's unit and the phone's", () => {
+    expect(resolveUnit('F', 'C', 'C')).toBe('F');
+    expect(resolveUnit('C', 'F', 'F')).toBe('C');
+    expect(resolveUnit('F', undefined, 'C')).toBe('F');
+  });
+
+  it("on Auto, takes the device's unit over the phone's", () => {
+    expect(resolveUnit('auto', 'F', 'C')).toBe('F');
+    expect(resolveUnit('auto', 'C', 'F')).toBe('C');
+  });
+
+  it("on Auto, takes the phone's unit when the device reports none (CRAFTY)", () => {
+    expect(resolveUnit('auto', undefined, 'F')).toBe('F');
+    expect(resolveUnit('auto', undefined, 'C')).toBe('C');
   });
 });

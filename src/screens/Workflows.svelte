@@ -10,7 +10,7 @@
   import { runner } from '../lib/workflow.svelte';
 
   const d = $derived(conn.device as DeviceState);
-  const unit = $derived(d.unit ?? locale.temperatureUnit);
+  const unit = $derived(locale.unitFor(d.unit));
   const flow = $derived(runner.flow);
   const steps = $derived(flow?.steps ?? []);
   const step = $derived(runner.step);

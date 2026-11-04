@@ -7,7 +7,7 @@
   import { locale } from '../lib/locale.svelte';
   import { usage } from '../lib/usage.svelte';
 
-  const unit = $derived(conn.device?.unit ?? locale.temperatureUnit);
+  const unit = $derived(locale.unitFor(conn.device?.unit));
   const deg = (c: number | null | undefined) => (c === null || c === undefined ? '–' : `${toUnit(c, unit)}°`);
   const names = { normal: 'Base', boost: 'Booster', superboost: 'Superbooster' };
 

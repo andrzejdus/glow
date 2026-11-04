@@ -10,7 +10,7 @@
   import { debugging, type DebuggingState } from '../lib/debugging';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
   import { decimal, deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
-  import { locale } from '../lib/locale.svelte';
+  import { locale, resolveUnit, type UnitChoice } from '../lib/locale.svelte';
   import { usage } from '../lib/usage.svelte';
 
   /** Opens the Stats screen. */
@@ -56,12 +56,25 @@
   const room = $derived(Math.max(1, Math.min(99, d.maxTemp - (d.targetTemp ?? d.minTemp))));
   const at = (offset: number | undefined) =>
     d.targetTemp === undefined || offset === undefined ? '–' : `${toUnit(Math.min(d.maxTemp, d.targetTemp + offset), unit)}°`;
-  const unit = $derived(d.unit ?? locale.temperatureUnit);
-  // CRAFTY only: in the device's unit, else the phone's, whole degrees like every other temperature here.
+  const unit = $derived(locale.unitFor(d.unit));
+  // CRAFTY only: in the unit chosen under App, whole degrees like every other temperature here.
   const temp = $derived(d.batteryTemp === undefined ? undefined : `${toUnit(d.batteryTemp, unit)} °${unit}`);
   const plus = (v: number | undefined) => (v === undefined ? '–' : `+${deltaToUnit(v, unit)}°`);
   // Factory offsets from base (S&B support): Booster +15, Superbooster +30 on CRAFTY+, VENTY and VEAZY.
   const factory = { boost: 15, superBoost: 30 };
+
+  // The app's own unit, apart from the device setting that changes the device's display.
+  const unitChoices: { id: UnitChoice; label: string }[] = [
+    { id: 'auto', label: 'Auto' },
+    { id: 'C', label: '°C' },
+    { id: 'F', label: '°F' },
+  ];
+  const unitIndex = $derived(unitChoices.findIndex((c) => c.id === locale.unitChoice));
+  const autoUnit = $derived(resolveUnit('auto', d.unit, locale.temperatureUnit));
+  function chooseUnit(choice: UnitChoice) {
+    tap();
+    locale.setUnitChoice(choice);
+  }
 
   let diagnostics = $state(false);
   let debug = $state<DebuggingState | null>(null);
@@ -267,33 +280,46 @@
     </section>
   {/each}
 
-  {#if debug}
-    <section class="group rise d2">
-      <h2>App</h2>
-      <div class="card list">
-        {#if bgShown}
-          <div class="row" class:joined={bgRestricted}>
-            <div class="text">
-              <div class="name"><label for="background">Record in the background</label></div>
-              <div class="desc">
-                Records sessions while Glow is closed: Android wakes Glow when the {d.model} is switched on nearby, and shows
-                a notification while Glow is connected. Glow lets go of the {d.model} for a moment while you allow it.
-              </div>
+  <section class="group rise d2">
+    <h2>App</h2>
+    <div class="card list">
+      <div class="row range">
+        <div class="text">
+          <div class="name" id="unitLabel">Temperature unit</div>
+          <div class="desc">Auto uses the {d.unit ? `${d.model}'s` : "phone's"} unit, now °{autoUnit}.</div>
+        </div>
+        <div class="seg" role="radiogroup" aria-labelledby="unitLabel" style:--n={unitChoices.length}>
+          <span class="thumb" style:transform="translateX({unitIndex * 100}%)"></span>
+          {#each unitChoices as c (c.id)}
+            <button type="button" role="radio" aria-checked={c.id === locale.unitChoice} class:on={c.id === locale.unitChoice}
+              onclick={() => chooseUnit(c.id)}>{c.label}</button>
+          {/each}
+        </div>
+      </div>
+      {#if bgShown}
+        <div class="row" class:joined={bgRestricted}>
+          <div class="text">
+            <div class="name"><label for="background">Record in the background</label></div>
+            <div class="desc">
+              Records sessions while Glow is closed: Android wakes Glow when the {d.model} is switched on nearby, and shows
+              a notification while Glow is connected. Glow lets go of the {d.model} for a moment while you allow it.
             </div>
-            <Toggle id="background" label="Record in the background" on={bgOn} onchange={(on) => conn.setBackground(on)} />
           </div>
-          {#if bgRestricted}
-            <div class="row hint">
-              <div class="text">
-                <div class="desc">
-                  Battery optimization can stop Glow while it records. Set Glow to “Don't optimize”. On OnePlus and some
-                  other phones, also lock Glow in the recent apps.
-                </div>
+          <Toggle id="background" label="Record in the background" on={bgOn} onchange={(on) => conn.setBackground(on)} />
+        </div>
+        {#if bgRestricted}
+          <div class="row hint">
+            <div class="text">
+              <div class="desc">
+                Battery optimization can stop Glow while it records. Set Glow to “Don't optimize”. On OnePlus and some
+                other phones, also lock Glow in the recent apps.
               </div>
-              <button type="button" class="small press" onclick={batterySettings}>Battery settings</button>
             </div>
-          {/if}
+            <button type="button" class="small press" onclick={batterySettings}>Battery settings</button>
+          </div>
         {/if}
+      {/if}
+      {#if debug}
         <div class="row">
           <div class="text">
             <div class="name"><label for="debugging">Debugging from a computer</label></div>
@@ -304,9 +330,9 @@
           </div>
           <Toggle id="debugging" label="Debugging from a computer" on={debug.enabled} onchange={setDebugging} />
         </div>
-      </div>
-    </section>
-  {/if}
+      {/if}
+    </div>
+  </section>
 
   <button type="button" class="outline press rise d3" onclick={() => conn.disconnect()}>Disconnect</button>
   {#if conn.diagnosable}
@@ -701,6 +727,40 @@
     font-size: 15px;
     font-weight: 800;
     color: var(--orange-ink);
+  }
+  .seg {
+    position: relative;
+    height: 40px;
+    border-radius: 999px;
+    background: var(--bg);
+    display: grid;
+    grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+    padding: 3px;
+    margin-top: 4px;
+  }
+  .seg .thumb {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc((100% - 6px) / var(--n));
+    border-radius: 999px;
+    background: var(--orange);
+    transition: transform 0.35s cubic-bezier(0.3, 1.3, 0.5, 1);
+  }
+  .seg button {
+    position: relative;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--navy);
+    cursor: pointer;
+  }
+  .seg button.on {
+    color: var(--navy-deep);
+    font-weight: 800;
   }
   .outline {
     height: 52px;
