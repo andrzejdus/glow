@@ -32,6 +32,11 @@ export interface Recording {
    * when cut off and not closed yet.
    */
   reason: string | null;
+  /**
+   * A cool-down recording (C line): the recorder came in after the heater went off, at `offAt`
+   * when it knows. It carries on the session that ended just before, and adds nothing otherwise.
+   */
+  cool?: { offAt: number | null };
 }
 
 const KINDS: DeviceKind[] = ['venty', 'veazy', 'volcano', 'crafty'];
@@ -61,7 +66,10 @@ export function parseLog(text: string): Recording[] {
     }
     if (!r) continue;
     if (type === 'S') started = true;
-    else if (type === 'E') {
+    else if (type === 'C') {
+      const off = Number(parts[2]);
+      if (!started) r.cool = { offAt: parts[2] !== '-' && Number.isFinite(off) && off > 0 ? off : null };
+    } else if (type === 'E') {
       r.end = t;
       r.reason = parts[2] ?? 'lost';
       r = null;
@@ -163,6 +171,9 @@ async function replayOne(r: Recording) {
     sessions.observe(d, now);
     await sessions.settled();
   };
+  // No session of its own to carry on: the readings still go through, in case the heater comes back
+  // on, but the cool-down itself goes nowhere.
+  if (r.cool) await sessions.coolOn(r.start, r.cool.offAt);
   const driver = createDriver(r.kind, transport);
   try {
     await driver.start(apply);

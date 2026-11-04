@@ -248,6 +248,11 @@ class Sessions {
       return;
     }
     // The heater went off while Glow was away: it ended about when Glow last saw it.
+    this.close(open);
+  }
+
+  /** Ends an open session at the last time Glow saw it. */
+  private close(open: SessionSummary) {
     if (this.active?.id === open.id) {
       clearInterval(this.sampler);
       this.flush();
@@ -259,6 +264,36 @@ class Sessions {
     const detail = this.details.get(open.id);
     this.replace({ ...latest, end: latest.seen, ...(detail ? sparkOf(detail, latest.live, (latest.seen - latest.id) / 1000) : {}) });
     this.save();
+  }
+
+  /**
+   * A cool-down the background recorder took over (replay.ts), from `start` on: it carries on the
+   * cool-down of the session that ended last, if that ended within COOL_MS before `start` (at
+   * `offAt`, when the recorder knows). A session still open is closed first, as on any first report
+   * with the heater off. Also after Glow was killed meanwhile: the session comes back from storage.
+   * Samples already there (the app's own, before it went off screen, or a replay read again) stay
+   * as they are; the cool-down only adds what comes after them. False when no session fits: the
+   * recording then adds nothing.
+   */
+  async coolOn(start: number, offAt: number | null): Promise<boolean> {
+    await this.settled();
+    const key = this.key;
+    const last = this.list[0];
+    if (!last || (this.active && this.active.id !== last.id)) return false;
+    const end = last.end ?? last.seen;
+    if (!last.live || end > start || start - end >= COOL_MS) return false;
+    // Ended at another time than the recorder says the heater went off: some other heat-up.
+    if (offAt !== null && Math.abs(offAt - end) > GAP_MS) return false;
+    if (last.end === null) this.close(last);
+    if (this.cooling && this.cooling.id !== last.id) this.endCooling();
+    const detail = await this.detail(last.id);
+    if (!detail || key !== this.key) return false;
+    const s = this.list.find((x) => x.id === last.id)!;
+    this.cooling = { id: s.id, detail };
+    this.coolUntil = end + COOL_MS;
+    this.lastCool = Math.max(end, s.id + Math.max(0, ...detail.ts) * 1000);
+    this.replace({ ...s, background: true });
+    return true;
   }
 
   private async resume(open: SessionSummary, now: number) {
