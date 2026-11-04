@@ -130,6 +130,7 @@
     return { before: part(0, a), on: part(a, b), after: part(b, values.length - 1) };
   }
 
+  // The session card, below Hours of operation: a session picked from the history scrolls it into view.
   let top: HTMLElement | undefined = $state();
   function open(s: SessionSummary) {
     tap();
@@ -139,50 +140,11 @@
 </script>
 
 <div class="screen">
-  <header class="rise" bind:this={top}>
+  <header class="rise">
     <h1>Stats</h1>
   </header>
 
-  {#if shown}
-    <section class="card session rise d1">
-      <div class="s-head">
-        <div>
-          <div class="label">{running ? 'Current session' : shown.id === sessions.list[0]?.id ? 'Last session' : 'Session'}</div>
-          <div class="s-when">{dayName(shown.id)}, {when(shown.id)}</div>
-        </div>
-        {#if picked !== null && sessions.active}
-          <button type="button" class="pill press" onclick={() => { tap(); picked = null; }}>Current</button>
-        {:else if status}
-          <div class="chip" class:ready={status === 'Ready'}><span></span>{status}</div>
-        {/if}
-      </div>
-      <div class="big num">{mmss(lengthOf(shown, usage.now))}</div>
-
-      <SessionChart summary={shown} {detail} {unit} {running} />
-
-      <div class="facts num">
-        <div><span>Ready in</span><strong>{readyAtOnce(shown) ? 'At once' : shown.readySec === null || shown.joined ? '–' : mmss(shown.readySec)}</strong></div>
-        <div><span>Target</span><strong>{deg(shown.target)}</strong></div>
-        {#if shown.live}<div><span>Peak</span><strong>{deg(shown.peak)}</strong></div>{/if}
-        <div><span>Boost</span><strong>{boostSec(shown) >= 1 ? mmss(boostSec(shown)) : '–'}</strong></div>
-        {#if used(shown) !== null}<div><span>Battery</span><strong>{used(shown) ? `−${used(shown)} %` : '–'}</strong></div>{/if}
-        {#if shown.airSec}<div><span>Air</span><strong>{mmss(shown.airSec)}</strong></div>{/if}
-      </div>
-
-      <ol class="events num">
-        {#each events as e, i (i)}
-          <li class={e.tone}><span class="e-t">{mmss(e.t)}</span><span class="e-dot"></span>{e.text}</li>
-        {/each}
-      </ol>
-    </section>
-  {:else}
-    <section class="card nothing rise d1">
-      <Icon name="flame" size={28} color="var(--orange)" />
-      <p>Turn the heater on and the session shows up here, with its temperature over time.</p>
-    </section>
-  {/if}
-
-  <section class="card hours rise d2">
+  <section class="card hours rise d1">
     <div class="label">Hours of operation</div>
     <div class="h-top">
       {#if parts}
@@ -215,6 +177,46 @@
       <div><span>Outside Glow</span><strong>{outside === null ? '–' : usageTime(outside)}</strong></div>
     </div>
   </section>
+
+
+  {#if shown}
+    <section class="card session rise d2" bind:this={top}>
+      <div class="s-head">
+        <div>
+          <div class="label">{running ? 'Current session' : shown.id === sessions.list[0]?.id ? 'Last session' : 'Session'}</div>
+          <div class="s-when">{dayName(shown.id)}, {when(shown.id)}</div>
+        </div>
+        {#if picked !== null && sessions.active}
+          <button type="button" class="pill press" onclick={() => { tap(); picked = null; }}>Current</button>
+        {:else if status}
+          <div class="chip" class:ready={status === 'Ready'}><span></span>{status}</div>
+        {/if}
+      </div>
+      <div class="big num">{mmss(lengthOf(shown, usage.now))}</div>
+
+      <SessionChart summary={shown} {detail} {unit} {running} />
+
+      <div class="facts num">
+        <div><span>Ready in</span><strong>{readyAtOnce(shown) ? 'At once' : shown.readySec === null || shown.joined ? '–' : mmss(shown.readySec)}</strong></div>
+        <div><span>Target</span><strong>{deg(shown.target)}</strong></div>
+        {#if shown.live}<div><span>Peak</span><strong>{deg(shown.peak)}</strong></div>{/if}
+        <div><span>Boost</span><strong>{boostSec(shown) >= 1 ? mmss(boostSec(shown)) : '–'}</strong></div>
+        {#if used(shown) !== null}<div><span>Battery</span><strong>{used(shown) ? `−${used(shown)} %` : '–'}</strong></div>{/if}
+        {#if shown.airSec}<div><span>Air</span><strong>{mmss(shown.airSec)}</strong></div>{/if}
+      </div>
+
+      <ol class="events num">
+        {#each events as e, i (i)}
+          <li class={e.tone}><span class="e-t">{mmss(e.t)}</span><span class="e-dot"></span>{e.text}</li>
+        {/each}
+      </ol>
+    </section>
+  {:else}
+    <section class="card nothing rise d2">
+      <Icon name="flame" size={28} color="var(--orange)" />
+      <p>Turn the heater on and the session shows up here, with its temperature over time.</p>
+    </section>
+  {/if}
 
   {#if sessions.list.length}
     <section class="history rise d3">
@@ -260,7 +262,6 @@
     display: flex;
     align-items: center;
     height: 44px;
-    scroll-margin-top: calc(var(--sat) + 12px);
   }
   h1 {
     margin: 0;
@@ -270,6 +271,7 @@
     letter-spacing: -0.01em;
   }
   .session {
+    scroll-margin-top: calc(var(--sat) + 12px);
     padding: 16px 16px 14px;
     display: flex;
     flex-direction: column;

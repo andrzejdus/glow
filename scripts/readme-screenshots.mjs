@@ -58,6 +58,9 @@ export async function shoot(browser, base = 'http://127.0.0.1:5791/', out = OUT)
     await tab('Stats');
     await page.locator('.history .item').nth(1).click();
     await page.waitForTimeout(1500);
+    // Picking scrolls to the session card; the shot starts at the top, Hours of operation first.
+    await page.locator('h1', { hasText: 'Stats' }).evaluate((e) => e.scrollIntoView({ block: 'start' }));
+    await page.waitForTimeout(800);
     await shot('stats');
     await tab('Settings');
     await shot('settings');
