@@ -45,14 +45,16 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
   with usage per month.
 - 📊 **Stats.** A tab with each session as a chart (temperature against the target, Ready, boosts
   and the cool-down) and its facts, hours of operation by day, week or month, and a timeline of
-  every session Glow saw. Tapping Hours of operation on the dashboard opens it.
+  every session Glow saw. Tapping Hours of operation on the dashboard or in Settings opens it.
 - 🌙 **Records in the background** (Android 12+, off until you switch it on in Settings). Android
   wakes Glow when the device comes into range, Glow connects and logs the session with the app
   closed (with a notification while it does), and the next time you open Glow the session is in
   Stats as if you had watched it. If Android's battery optimization could stop it, Settings says
   so and opens the battery settings.
-- 🔋 **Battery.** Level, charging and charged, with the charge animating up to full. A VENTY or
-  VEAZY also shows its lifetime time on the charger.
+- 🔋 **Battery.** Leads Settings: a large percentage, shown while charging too, whether it is on
+  battery, charging or charged, with the charge animating up to full. A CRAFTY+ also shows the battery
+  temperature and warns when the battery is too hot to heat; a VENTY or VEAZY shows its lifetime
+  time on the charger.
 - 🌋 **VOLCANO workflows.** Flow 1–3 and Balloon run from the phone, step by step, with time
   running and time left.
 - ⚙️ **Settings.** Every device setting the official web app offers, plus Find My and the
