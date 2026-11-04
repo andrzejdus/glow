@@ -44,7 +44,8 @@
     const days = Math.round((new Date(today.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86_400_000);
     if (days === 0) return 'Today';
     if (days === 1) return 'Yesterday';
-    return d.toLocaleDateString('en', {
+    // In the phone's language, so day and month come in its order; the rest of the UI stays English.
+    return d.toLocaleDateString(undefined, {
       weekday: 'short',
       day: 'numeric',
       month: 'short',

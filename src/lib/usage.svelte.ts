@@ -18,6 +18,12 @@ export interface UsageBar {
   current: boolean;
 }
 
+/** Set by tests; the app uses the phone's own. */
+export interface BarOptions {
+  /** Language for month names. */
+  locales?: Intl.LocalesArgument;
+}
+
 const HOUR = 3_600_000;
 const KEEP = 400 * 24 * HOUR;
 
@@ -99,12 +105,12 @@ class Usage {
   }
 
   /** Usage per calendar month, oldest first, the current month last. */
-  months(count = 8, now = this.now): UsageBar[] {
-    return this.bars('month', count, now);
+  months(count = 8, now = this.now, opts: BarOptions = {}): UsageBar[] {
+    return this.bars('month', count, now, opts);
   }
 
   /** Usage per day, week (from Monday) or calendar month, oldest first, the current one last. */
-  bars(unit: 'day' | 'week' | 'month', count: number, now = this.now): UsageBar[] {
+  bars(unit: 'day' | 'week' | 'month', count: number, now = this.now, { locales }: BarOptions = {}): UsageBar[] {
     const live = this.lifetimeSec(now);
     const today = new Date(now);
     const y = today.getFullYear();
@@ -122,11 +128,12 @@ class Usage {
       const end = current && live !== null ? live / 60 : this.at(to);
       const begin = this.at(from) ?? this.snaps.find((s) => s.t >= from && s.t < to)?.m;
       const hours = end === undefined || begin === undefined ? null : Math.max(0, end - begin) / 60;
+      // Month names and the day-month order follow the phone's language.
       const label =
         unit === 'month'
-          ? start.toLocaleString('en', { month: 'short' })
+          ? start.toLocaleString(locales, { month: 'short' })
           : unit === 'week'
-            ? start.toLocaleString('en', { month: 'short', day: 'numeric' })
+            ? start.toLocaleString(locales, { month: 'short', day: 'numeric' })
             : String(start.getDate());
       bars.push({ label, hours, current });
     }

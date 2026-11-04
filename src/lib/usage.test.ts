@@ -10,7 +10,8 @@ describe('usage months', () => {
     const bars = usage.months(8);
     expect(bars).toHaveLength(8);
     expect(bars[7].current).toBe(true);
-    expect(bars[7].label).toBe(new Date().toLocaleString('en', { month: 'short' }));
+    expect(bars[7].label).toBe(new Date().toLocaleString(undefined, { month: 'short' }));
+    expect(usage.months(8, Date.now(), { locales: 'pl' })[7].label).toBe(new Date().toLocaleString('pl', { month: 'short' }));
     expect(bars[7].hours).toBeCloseTo(4.2, 5);
     expect(bars[6].hours).toBeCloseTo(8.8, 5);
     expect(bars[0].hours).toBeCloseTo(6.1, 5);
