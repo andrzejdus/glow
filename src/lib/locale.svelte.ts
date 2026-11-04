@@ -15,10 +15,11 @@ interface LocalePlugin {
   get(): Promise<LocalePrefs>;
 }
 
-// Regions whose everyday temperatures are in Fahrenheit (CLDR's unit preferences).
-const FAHRENHEIT = new Set(['US', 'BS', 'BZ', 'KY', 'PR', 'PW']);
-
-/** What a language tag alone says: its usual clock, first weekday (Monday where unknown) and unit. */
+/**
+ * What a language tag alone says: its usual clock. The first weekday stays Monday and the unit
+ * Celsius: a phone language (often English (US)) says little about where the phone is, so only
+ * the phone's own regional preferences (LocalePlugin) change those.
+ */
 export function localeDefaults(tag: string): LocalePrefs {
   let is24Hour = true;
   try {
@@ -27,19 +28,7 @@ export function localeDefaults(tag: string): LocalePrefs {
   } catch {
     // An unusable tag keeps the 24-hour clock.
   }
-  let firstDayOfWeek = 1;
-  let temperatureUnit: 'C' | 'F' = 'C';
-  try {
-    const loc = new Intl.Locale(tag);
-    // getWeekInfo() is the current name; older engines (Chrome before 130) have a weekInfo getter.
-    const info = (loc as { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } });
-    const first = info.getWeekInfo?.().firstDay ?? info.weekInfo?.firstDay;
-    if (first) firstDayOfWeek = first % 7; // Intl counts Monday as 1 and Sunday as 7
-    if (FAHRENHEIT.has(loc.maximize().region ?? '')) temperatureUnit = 'F';
-  } catch {
-    // Without Intl.Locale: Monday and Celsius.
-  }
-  return { is24Hour, firstDayOfWeek, temperatureUnit };
+  return { is24Hour, firstDayOfWeek: 1, temperatureUnit: 'C' };
 }
 
 const native = Capacitor.isNativePlatform() ? registerPlugin<LocalePlugin>('Locale') : null;
