@@ -6,12 +6,15 @@
   import Toggle from '../components/Toggle.svelte';
   import Diagnostics from './Diagnostics.svelte';
   import { background } from '../lib/background';
-  import { conn } from '../lib/connection.svelte';
+  import { conn, tap } from '../lib/connection.svelte';
   import { debugging, type DebuggingState } from '../lib/debugging';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
   import { decimal, deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
   import { locale } from '../lib/locale.svelte';
   import { usage } from '../lib/usage.svelte';
+
+  /** Opens the Stats screen. */
+  let { onstats }: { onstats: () => void } = $props();
 
   const d = $derived(conn.device as DeviceState);
   // Setting texts name the connected model rather than "the device".
@@ -20,6 +23,20 @@
   const parts = $derived(life === null ? null : splitHours(life));
   const months = $derived(usage.months(8, usage.now));
   const thisMonth = $derived(months[months.length - 1]?.hours);
+  function openStats() {
+    tap();
+    onstats();
+  }
+
+  // A battery device leads with its battery; a VOLCANO (mains, no battery) keeps the hours there.
+  const hero = $derived(!!conn.caps?.battery && d.battery !== undefined);
+  const level = $derived(Math.max(0, Math.min(100, Math.round(d.battery ?? 0))));
+  const low = $derived(level <= 15);
+  // Older CRAFTY firmware does not report the charger, so it gets no charging state rather than a wrong one.
+  // On the charger at 100 % the battery is full; the bolt stays because it is still plugged in.
+  const batteryState = $derived(
+    d.charging ? (level >= 100 ? 'Charged' : 'Charging') : low ? 'Low battery' : d.charging === false ? 'On battery' : undefined,
+  );
 
   const titles: Record<SettingDef['group'], string> = {
     connection: 'Connection',
@@ -40,6 +57,8 @@
   const at = (offset: number | undefined) =>
     d.targetTemp === undefined || offset === undefined ? '–' : `${toUnit(Math.min(d.maxTemp, d.targetTemp + offset), unit)}°`;
   const unit = $derived(d.unit ?? locale.temperatureUnit);
+  // CRAFTY only: in the device's unit, else the phone's, whole degrees like every other temperature here.
+  const temp = $derived(d.batteryTemp === undefined ? undefined : `${toUnit(d.batteryTemp, unit)} °${unit}`);
   const plus = (v: number | undefined) => (v === undefined ? '–' : `+${deltaToUnit(v, unit)}°`);
   // Factory offsets from base (S&B support): Booster +15, Superbooster +30 on CRAFTY+, VENTY and VEAZY.
   const factory = { boost: 15, superBoost: 30 };
@@ -94,28 +113,59 @@
   </header>
 
   <section class="card device rise d1">
-    <div class="d-top">
-      {#if conn.caps?.battery && d.battery !== undefined}
-        <div class="cell">
-          <Battery level={d.battery} charging={d.charging} size="lg" />
-          <!-- Older CRAFTY firmware does not report the charger, so it gets no state rather than a wrong one. -->
-          {#if d.charging !== undefined}
-            <!-- On the charger at 100 % the battery is full; the bolt stays because it is still plugged in. -->
-            <div class="cell-state" class:charging={d.charging}>{d.charging ? (d.battery >= 100 ? 'Charged' : 'Charging') : 'On battery'}</div>
+    {#if hero && d.battery !== undefined}
+      <!-- Settings is where the battery is checked, so it leads; the hours shrink to a row that opens Stats. -->
+      <div class="d-top hero">
+        <Battery level={d.battery} charging={d.charging} size="lg" />
+        <div class="hero-text">
+          <div class="label">Battery</div>
+          <div class="pct num" class:low>{level}<span>%</span></div>
+          {#if batteryState || temp}
+            <div class="chips">
+              {#if batteryState}
+                <span class="chip" class:warm={d.charging || low}>
+                  {#if d.charging}<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor" /></svg>{/if}{batteryState}
+                </span>
+              {/if}
+              {#if temp}
+                <span class="chip t num" class:hot={d.batteryHot} aria-label="Battery temperature {temp}">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10 13.5V5a2 2 0 0 1 4 0v8.5a4 4 0 1 1-4 0z" /><path d="M12 9v7" /></svg>{temp}
+                </span>
+              {/if}
+            </div>
           {/if}
         </div>
-      {:else}
-        <Glyph kind={d.kind} scale={0.9} />
-      {/if}
-      <div>
-        <div class="label">Hours of operation</div>
-        <div class="life num">
-          {#if parts}<span class="h">{parts.h}</span><span class="u">h</span><span class="m">{parts.m}</span><span class="u">m</span>
-          {:else}<span class="h">–</span>{/if}
-        </div>
-        {#if thisMonth !== null && thisMonth !== undefined}<div class="week num">+{usageTime(thisMonth)} this month</div>{/if}
       </div>
-    </div>
+      {#if d.batteryHot}
+        <div class="too-hot" role="status">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20z" /><path d="M12 10v4" /><path d="M12 17h.01" /></svg>
+          <div>
+            <strong>Battery too hot</strong>
+            <span>Let it cool down before heating.</span>
+          </div>
+        </div>
+      {/if}
+    {:else}
+      <div class="d-top">
+        {#if conn.caps?.battery}
+          <Glyph kind={d.kind} scale={0.9} />
+        {:else}
+          <div class="mains"><Icon name="plug" size={30} stroke={2} /><span>Mains</span></div>
+        {/if}
+        <div>
+          <div class="label">Hours of operation</div>
+          <div class="life num">
+            {#if parts}<span class="h">{parts.h}</span><span class="u">h</span><span class="m">{parts.m}</span><span class="u">m</span>
+            {:else}<span class="h">–</span>{/if}
+          </div>
+          {#if thisMonth !== null && thisMonth !== undefined}
+            <button type="button" class="week num" aria-label="+{usageTime(thisMonth)} this month, open Stats" onclick={openStats}>
+              +{usageTime(thisMonth)} this month<Icon name="chevron" size={14} stroke={2.6} />
+            </button>
+          {/if}
+        </div>
+      </div>
+    {/if}
     {#if electrics.length}
       <div class="electrics" style:--n={electrics.length}>
         {#each electrics as e (e.label)}
@@ -131,6 +181,13 @@
       <div><span>Firmware</span><strong class="num">{d.firmware ?? '–'}</strong></div>
       <div><span>{d.kind === 'venty' || d.kind === 'veazy' ? 'Bootloader' : 'BLE'}</span><strong class="num">{d.firmwareBle ?? '–'}</strong></div>
     </div>
+    {#if hero}
+      <button type="button" class="hours press" aria-label="Hours of operation {parts ? `${parts.h} h ${parts.m} m` : 'unknown'}, open Stats" onclick={openStats}>
+        <span class="hours-label">Hours of operation</span>
+        <span class="hours-value num">{parts ? `${parts.h} h ${parts.m} m` : '–'}</span>
+        <Icon name="chevron" size={16} stroke={2.6} color="var(--orange-ink)" />
+      </button>
+    {/if}
     {#if conn.caps?.findMy}
       <button type="button" class="primary find press" onclick={find}>
         <span class="bell">
@@ -293,19 +350,132 @@
     align-items: center;
     gap: 16px;
   }
-  .cell {
+  .hero {
+    gap: 20px;
+  }
+  .hero-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pct {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 60px;
+    font-weight: 300;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+  .pct span {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--muted);
+  }
+  .pct.low {
+    color: var(--orange-ink);
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--card-2);
+    color: var(--ink);
+  }
+  .chip svg {
+    flex-shrink: 0;
+  }
+  .chip.t {
+    gap: 4px;
+    padding-left: 7px;
+  }
+  .chip.warm {
+    background: var(--orange-tint);
+    color: var(--orange-ink);
+  }
+  /* The same deep orange in both themes, so white text keeps its contrast on it. */
+  .chip.hot {
+    background: #c44b00;
+    color: #fff;
+  }
+  .too-hot {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: var(--orange-tint);
+    border: 1px solid color-mix(in srgb, var(--orange-ink) 35%, transparent);
+    color: var(--orange-ink);
+  }
+  .too-hot svg {
+    flex-shrink: 0;
+  }
+  .too-hot strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .too-hot span {
+    display: block;
+    font-size: 13px;
+    color: var(--muted-2);
+    margin-top: 1px;
+  }
+  .mains {
+    width: 64px;
+    height: 88px;
+    flex-shrink: 0;
+    border-radius: 18px;
+    background: var(--card-2);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 6px;
   }
-  .cell-state {
-    font-size: 11px;
+  .mains span {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted-2);
+  }
+  .hours {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 12px 0 14px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--bg);
+    color: var(--navy);
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+  .hours-label {
+    flex-grow: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted-2);
+  }
+  .hours-value {
+    font-size: 15px;
     font-weight: 700;
-    color: var(--muted);
-  }
-  .cell-state.charging {
-    color: var(--orange-ink);
   }
   .life {
     display: flex;
@@ -329,10 +499,18 @@
     color: var(--muted);
   }
   .week {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
     font-size: 13px;
     font-weight: 700;
     color: var(--orange-ink);
     margin-top: 4px;
+    cursor: pointer;
   }
   .electrics {
     display: grid;

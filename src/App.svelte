@@ -40,7 +40,7 @@
       {:else if tab === 'stats'}
         <Stats />
       {:else}
-        <Settings />
+        <Settings onstats={() => select('stats')} />
       {/if}
     </main>
   {/key}

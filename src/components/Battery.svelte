@@ -35,10 +35,9 @@
       <!-- glass highlight -->
       <rect x="14" y="21" width="6" height="78" rx="3" fill="#FFFFFF" opacity="0.28" />
     </g>
+    <!-- The percentage sits beside the cell (Settings), so the bolt never hides it. -->
     {#if charging}
       <path class="bolt" d="M35 30 L23 56 H31 L28 78 L41 50 H33 Z" fill="#FFFFFF" stroke="#001A4D" stroke-width="2.5" stroke-linejoin="round" />
-    {:else}
-      <text x="32" y="66" text-anchor="middle" class="pct" style:fill={pct >= 55 ? '#001A4D' : 'var(--navy)'}>{pct}%</text>
     {/if}
   </svg>
 {:else}
@@ -108,11 +107,5 @@
   @keyframes pulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.08); }
-  }
-  .pct {
-    font-family: var(--font);
-    font-size: 15px;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
   }
 </style>
