@@ -8,6 +8,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.List;
 
 /**
@@ -34,20 +35,19 @@ public class LocalePlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("is24Hour", DateFormat.is24HourFormat(getContext()));
         ret.put("firstDayOfWeek", firstDayOfWeek());
-        // Only a unit the user chose in Android's regional preferences (Android 14+). Without one,
-        // androidx guesses from the language, and an English (US) phone in Europe would get °F.
+        // The unit chosen in Android's regional preferences (Android 14+), else the one the phone's
+        // language and region imply. Settings › App in Glow overrides either.
         // Kelvin is a choice Android offers but Glow does not show; Celsius is its nearest.
-        ret.put("temperatureUnit", LocalePreferences.TemperatureUnit.FAHRENHEIT.equals(LocalePreferences.getTemperatureUnit(false)) ? "F" : "C");
+        ret.put("temperatureUnit", LocalePreferences.TemperatureUnit.FAHRENHEIT.equals(LocalePreferences.getTemperatureUnit()) ? "F" : "C");
         call.resolve(ret);
     }
 
     /**
-     * 0 for Sunday to 6 for Saturday: the user's regional preference (Android 14+), else Monday.
-     * The language alone is a poor guess here: English (US) is a common phone language far from
-     * the US, and would start every week on Sunday.
+     * 0 for Sunday to 6 for Saturday: the user's regional preference (Android 14+), else what the
+     * phone's language and region imply. Settings › App in Glow overrides either.
      */
     private static int firstDayOfWeek() {
-        int day = DAYS.indexOf(LocalePreferences.getFirstDayOfWeek(false));
-        return day >= 0 ? day : 1;
+        int day = DAYS.indexOf(LocalePreferences.getFirstDayOfWeek());
+        return day >= 0 ? day : Calendar.getInstance().getFirstDayOfWeek() - Calendar.SUNDAY;
     }
 }

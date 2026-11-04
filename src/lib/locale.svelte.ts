@@ -16,10 +16,13 @@ interface LocalePlugin {
   get(): Promise<LocalePrefs>;
 }
 
+// Regions whose everyday temperatures are in Fahrenheit (CLDR's unit preferences).
+const FAHRENHEIT = new Set(['US', 'BS', 'BZ', 'KY', 'PR', 'PW']);
+
 /**
- * What a language tag alone says: its usual clock. The first weekday stays Monday and the unit
- * Celsius: a phone language (often English (US)) says little about where the phone is, so only
- * the phone's own regional preferences (LocalePlugin) change those.
+ * What a language tag says: its usual clock, and the first weekday (Monday where unknown) and unit
+ * chosen in it (-u-fw-, -u-mu-), else its region's. A phone language says little about where the
+ * phone is (English (US) is common far from the US), so Settings › App can override both.
  */
 export function localeDefaults(tag: string): LocalePrefs {
   let is24Hour = true;
@@ -29,7 +32,22 @@ export function localeDefaults(tag: string): LocalePrefs {
   } catch {
     // An unusable tag keeps the 24-hour clock.
   }
-  return { is24Hour, firstDayOfWeek: 1, temperatureUnit: 'C' };
+  let firstDayOfWeek = 1;
+  let temperatureUnit: 'C' | 'F' = 'C';
+  try {
+    const loc = new Intl.Locale(tag);
+    // getWeekInfo() is the current name; older engines (Chrome before 130) have a weekInfo getter.
+    const info = (loc as { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } });
+    const first = info.getWeekInfo?.().firstDay ?? info.weekInfo?.firstDay;
+    if (first) firstDayOfWeek = first % 7; // Intl counts Monday as 1 and Sunday as 7
+    // A unit written into the tag (-u-mu-, as Android 14's regional preferences do) beats the region's.
+    const chosen = /-u(?:-[a-z0-9]{2,8})*-mu-([a-z0-9]{3,8})/i.exec(tag)?.[1]?.toLowerCase();
+    if (chosen === 'fahrenhe') temperatureUnit = 'F';
+    else if (chosen === undefined && FAHRENHEIT.has(loc.maximize().region ?? '')) temperatureUnit = 'F';
+  } catch {
+    // Without Intl.Locale: Monday and Celsius.
+  }
+  return { is24Hour, firstDayOfWeek, temperatureUnit };
 }
 
 export type TempUnit = 'C' | 'F';
