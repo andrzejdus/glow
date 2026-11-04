@@ -54,6 +54,8 @@ export interface DeviceState {
   batteryVoltage?: number;
   /** Battery current, mA, as the device reports it (which sign means charging is not known). */
   batteryCurrent?: number;
+  /** Battery temperature, °C (CRAFTY: to 0.1 °C), when the device reports it. */
+  batteryTemp?: number;
   /** Lifetime hours of operation as the device reports it, in minutes. */
   operatingMinutes?: number;
   /** Lifetime time on the charger, minutes (VENTY and VEAZY). */

@@ -198,6 +198,8 @@ V03.24 session that started on the charger at 100 %, then unplugged and heated t
 | `00b3` | battery voltage, mV. Seen: 4180 on the charger at 100 %, about 3070–3100 under the heater's load, 3817 at rest at 73 %. Glow shows it in Settings when it is 2.5–4.5 V |
 | `00c3` | mains voltage, mV. Seen: 4974 on the charger; off it not 0 but 281–675, rising as the device heated |
 | `00e3` | battery current, mA, signed: positive charges, negative drains. Seen: +483 on the charger at 100 %, −2000 to −7100 while heating, 0 with the heater off. Glow shows its size in Settings when it is at most 10 A |
+| `0113` | battery temperature, °C × 10 (below) |
+| `0123`, `0133` | lowest and highest battery temperature, °C × 10 (below) |
 
 The same clients subscribe to battery status `0063`. Glow subscribes too and counts the pushes in
 Device diagnostics. A CRAFTY+ pushed it when the charger came out and when bit 5 (heater power)
@@ -206,3 +208,25 @@ changed: 7 pushes in the session. A push when the charger goes in has not been s
 
 On the phone one pass over these 13 registers took about 8–13 s, so Device diagnostics sees a
 change up to that late, not within a second.
+
+## Battery temperature
+
+Three more characteristics in service `0003` that the official app does not read. duramson/vo0t,
+joaorafaelm/crafty and NopeNix/ESP32-Crafty-Control all name them the battery temperature and its
+minimum and maximum, read like the other temperatures: uint16 LE, °C × 10.
+
+| Char | Meaning |
+|---|---|
+| `0113` | battery temperature |
+| `0123` | lowest battery temperature (since when is unknown) |
+| `0133` | highest battery temperature (since when is unknown) |
+
+The only value seen so far is from vo0t's published diagnostics of a CRAFTY+: 27.9 °C (`17 01`).
+
+Glow reads `0113` on connect and with `refresh()` (every ~30 s; it changes slowly, so not with the 3 s
+charger poll) and reports it as `batteryTemp` with one decimal. It decodes it as signed, so a battery
+below 0 °C would come out right, and ignores `0xffff` and anything outside −40…100 °C. If the first
+read fails (firmware without the characteristic), Glow does not ask again until the next connection.
+
+Open: not yet seen on our own CRAFTY+ (V03.24); whether the original CRAFTY has these characteristics;
+whether `0123` / `0133` cover the battery's life, a charge or a session.

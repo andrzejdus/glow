@@ -41,6 +41,11 @@ const CHR = {
   batteryVoltage: uuid(0xb3),
   mainsVoltage: uuid(0xc3),
   batteryCurrent: uuid(0xe3),
+  // Battery temperature and its minimum and maximum, named so by duramson/vo0t, joaorafaelm/crafty
+  // and NopeNix/ESP32-Crafty-Control.
+  batteryTemp: uuid(0x113),
+  batteryTempMin: uuid(0x123),
+  batteryTempMax: uuid(0x133),
   securityCode: uuid(0x1b3),
   status2: uuid(0x1c3),
   useMinutes: uuid(0x1e3),
@@ -166,6 +171,17 @@ export function decodeCurrentTemp(view: DataView): number {
   return Math.round(readU16(view) / 10);
 }
 
+/**
+ * Battery temperature (0113, and its minimum 0123 and maximum 0133): °C × 10. Read as signed so a
+ * battery below freezing would still come out right; positive values are the same either way.
+ * Undefined for 0xffff (most likely "no value") and anything outside -40…100 °C.
+ */
+export function decodeBatteryTemp(view: DataView): number | undefined {
+  if (view.byteLength < 2 || view.getUint16(0, true) === 0xffff) return undefined;
+  const c = view.getInt16(0, true) / 10;
+  return c >= -40 && c <= 100 ? c : undefined;
+}
+
 export interface CraftyFirmware {
   major: number;
   minor: number;
@@ -228,6 +244,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private chargerTimer: ReturnType<typeof setInterval> | undefined;
   /** Battery status updates the device pushed by itself (unknown whether it does; three clients subscribe). */
   private batteryStatusPushes = 0;
+  /** Whether 0113 can be read: firmware without it is asked once per connection, not every refresh. */
+  private hasBatteryTemp: boolean | undefined;
 
   constructor(private readonly ble: BleTransport) {}
 
@@ -363,6 +381,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     await this.subscribe(SVC_CONTROL, CHR.battery, this.onBattery);
     this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
     await this.readBatteryStats();
+    await this.readBatteryTemp();
 
     if (!this.legacy) await this.subscribe(SVC_SYSTEM, CHR.status, this.onStatus);
     this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
@@ -393,6 +412,19 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     const c = await this.read(SVC_SYSTEM, CHR.batteryCurrent).catch(() => null);
     const ma = c ? readI16(c) : undefined;
     if (ma !== undefined && Math.abs(ma) <= 10000) this.emit({ batteryCurrent: ma });
+  }
+
+  /**
+   * 0113 battery temperature. It changes slowly, so it is read on connect and with refresh(), not
+   * with the 3 s charger poll. A first read that fails (older firmware may not have it) stops further
+   * reads until the next connection; a later failed read just keeps the last value.
+   */
+  private async readBatteryTemp() {
+    if (this.hasBatteryTemp === false) return;
+    const v = await this.read(SVC_SYSTEM, CHR.batteryTemp).catch(() => null);
+    this.hasBatteryTemp ??= v !== null;
+    const c = v ? decodeBatteryTemp(v) : undefined;
+    if (c !== undefined) this.emit({ batteryTemp: c });
   }
 
   private async readCharger() {
@@ -536,6 +568,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.emit({ settings: this.currentSettings() });
     this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
     await this.readBatteryStats();
+    await this.readBatteryTemp();
     // Legacy firmware does not notify the status register.
     if (this.legacy) this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
   }

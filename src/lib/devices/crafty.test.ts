@@ -337,6 +337,30 @@ describe('crafty driver', () => {
     await odd.driver.stop();
   });
 
+  it('reads the battery temperature on connect and with refresh', async () => {
+    // 27.9 °C as duramson/vo0t's published CRAFTY+ diagnostics show it: an open-source report, not
+    // yet a capture of our own.
+    const t = craftyPlus({ [U.batteryTemp]: [0x17, 0x01] });
+    const { driver, state } = await started(t);
+    expect(state.batteryTemp).toBe(27.9);
+    t.values.set(U.batteryTemp, le16(312));
+    await driver.refresh!();
+    expect(state.batteryTemp).toBe(31.2);
+    t.values.set(U.batteryTemp, le16(0xffff)); // no value: the last one stays
+    await driver.refresh!();
+    expect(state.batteryTemp).toBe(31.2);
+    await driver.stop();
+  });
+
+  it('stops asking for the battery temperature when the firmware has none', async () => {
+    const t = craftyPlus(); // reading 0113 fails
+    const { driver, state } = await started(t);
+    expect(state.batteryTemp).toBeUndefined();
+    await driver.refresh!();
+    expect(t.ops.some((o) => o.chr === U.batteryTemp)).toBe(false);
+    await driver.stop();
+  });
+
   it('leaves charging unknown when the battery status cannot be read', async () => {
     const { driver, state } = await started(craftyPlus());
     expect(state.charging).toBeUndefined();
