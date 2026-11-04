@@ -45,6 +45,8 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     pump: false,
     minutes: isVolcano ? 811 * 60 + 42 : 142 * 60 + 18,
     battery: 78,
+    // CRAFTY: the battery warms slowly while heating and cools back towards the room.
+    batteryTemp: 27.9,
   };
   // Offsets from the base temperature; the Superbooster sits on top of the Booster.
   const offsets = { boost: 10, superboost: 25 };
@@ -57,7 +59,9 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     const k = s.heater ? (s.current < g ? 0.06 : 0.2) : 0.01;
     s.current += (g - s.current) * k + (s.heater && s.current < g ? 0.08 : 0);
     if (s.heater) s.minutes += 0.5 / 60;
+    s.batteryTemp += ((s.heater ? 38 : 24) - s.batteryTemp) * 0.002;
     emit({
+      ...(kind === 'crafty' ? { batteryTemp: Math.round(s.batteryTemp * 10) / 10 } : {}),
       ...(live ? { currentTemp: Math.round(s.current * 10) / 10 } : {}),
       operatingMinutes: s.minutes,
       tempReached: s.heater && Math.abs(goal() - s.current) < 1,
@@ -95,6 +99,8 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
         battery: isVolcano ? undefined : s.battery,
         batteryVoltage: kind === 'crafty' ? 3639 : undefined,
         batteryCurrent: kind === 'crafty' ? -350 : undefined,
+        batteryTemp: kind === 'crafty' ? s.batteryTemp : undefined,
+        batteryHot: kind === 'crafty' ? false : undefined,
         charging: false,
         operatingMinutes: s.minutes,
         chargingMinutes: kind === 'venty' || kind === 'veazy' ? 16142 : undefined,
@@ -150,6 +156,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     { label: 'Battery', source: '0x0041', value: s.battery, unit: '%' },
     { label: 'Auto-off setting', source: '0x0061', value: 120, unit: 's' },
     { label: 'Auto-off left', source: '0x0071', value: 120, unit: 's', quiet: true },
+    { label: 'Battery temperature', source: '0x0113', value: Math.round(s.batteryTemp * 10), unit: '°C', quiet: true, scale: 0.1 },
   ];
   // Like the real CRAFTY+, the demo switches levels only with the (imaginary) device button.
   return kind === 'crafty' ? Object.assign(driver, { modeSwitchable: false as const, diagnostics }) : driver;
