@@ -105,7 +105,8 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
         operatingMinutes: s.minutes,
         chargingMinutes: kind === 'venty' || kind === 'veazy' ? 16142 : undefined,
         autoShutoffSec: isVolcano ? 1800 : 120,
-        unit: 'C',
+        // CRAFTY reports no display unit, so Auto falls back to the phone's there too.
+        unit: kind === 'crafty' ? undefined : 'C',
         settings: isVolcano
           ? { vibration: true, displayOnCooling: false, brightness: 70, autoShutoff: 1800 }
           : kind === 'crafty'
