@@ -75,6 +75,12 @@ const STATUS2_PERMANENT_BLE = 1 << 12;
  * the system status. Glow reads bit 7. The register is not notified, so it is polled.
  */
 const BATTERY_STATUS_CHARGER = 1 << 7;
+/**
+ * Battery status bits 8 and 14: the official app asks the user to let the device cool down when either
+ * is set. duramson/vo0t reads the register differently (bit 10 a temperature warning, bits 12–13 cool
+ * down); none of these has been seen set on hardware yet, so Device diagnostics keeps the raw bits.
+ */
+const BATTERY_STATUS_HOT = 0x4100;
 const CHARGER_POLL_MS = 3000;
 /** In the background nobody sees the battery, so the charger is not polled. */
 const pageHidden = () => globalThis.document?.visibilityState === 'hidden';
@@ -429,13 +435,20 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
   private async readCharger() {
     const v = await this.read(SVC_SYSTEM, CHR.batteryStatus).catch(() => null);
-    if (v) this.emit({ charging: (readU16(v) & BATTERY_STATUS_CHARGER) !== 0 });
+    if (v) this.onBatteryStatusValue(readU16(v));
   }
 
   private onBatteryStatus = (v: DataView) => {
     this.batteryStatusPushes++;
-    this.emit({ charging: (readU16(v) & BATTERY_STATUS_CHARGER) !== 0 });
+    this.onBatteryStatusValue(readU16(v));
   };
+
+  private onBatteryStatusValue(status: number) {
+    this.emit({
+      charging: (status & BATTERY_STATUS_CHARGER) !== 0,
+      batteryHot: (status & BATTERY_STATUS_HOT) !== 0,
+    });
+  }
 
   private async readOperatingTime() {
     const hours = readU16(await this.read(SVC_SYSTEM, CHR.useHours));

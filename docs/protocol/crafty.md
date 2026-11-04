@@ -121,9 +121,9 @@ The official app keeps one GATT operation in flight at a time; Glow puts every o
 ## Unsure / not implemented
 
 - **Charging**: the official app shows only the battery percentage; no charging flag is decoded.
-  The battery status registers (`0063`, `0073`) probably hold one, but their bits are only used for
-  analysis messages (`0x0003` = charge the device, `0x4100` = let it cool down, `0x0200` error,
-  `0x8000` in register 2 = use another charger). `charging` stays unset.
+  Its battery status bits (`0063`, `0073`) are only used for analysis messages (`0x0003` = charge
+  the device, `0x4100` = let it cool down, `0x0200` error, `0x8000` in register 2 = use another
+  charger). Glow found its own charger bit (see Charger) and uses `0x4100` (see Battery too hot).
 - The legacy-firmware check is the official one verbatim; it misclassifies e.g. `V01.60` as non-legacy.
 - Whether the original CRAFTY (firmware 2.x) ever sets the superboost bit is unknown.
 - Left out on purpose: firmware update, factory reset, analysis.
@@ -230,3 +230,15 @@ read fails (firmware without the characteristic), Glow does not ask again until 
 
 Open: not yet seen on our own CRAFTY+ (V03.24); whether the original CRAFTY has these characteristics;
 whether `0123` / `0133` cover the battery's life, a charge or a session.
+
+## Battery too hot
+
+The official app tells the user to let the device cool down when battery status `0063` has bit 8 or
+bit 14 set (mask `0x4100`). Glow reports that as `batteryHot`, from the same reads and pushes as the
+charger bit (current firmware only).
+
+duramson/vo0t reads the same register differently: `0x0400` (bit 10) a battery temperature warning
+and `0x3000` (bits 12–13) "overheating, let it cool down". The two readings do not agree, and none of
+these bits has been seen set on our CRAFTY+ (V03.24). Glow follows the official app; Device
+diagnostics shows `0063` bit by bit, so the bit that actually comes on when the battery gets hot can
+be checked there. No "too cold" flag is known.

@@ -361,9 +361,26 @@ describe('crafty driver', () => {
     await driver.stop();
   });
 
+  it('reports a too hot battery from battery status bits 8 and 14, like the official app', async () => {
+    // Not captured: no CRAFTY+ has been seen setting these bits. 0x0050 and 0x80d4 are real readings.
+    const t = craftyPlus({ [U.batteryStatus]: le16(0x0050) });
+    const { driver, state } = await started(t);
+    expect(state.batteryHot).toBe(false);
+    t.push(U.batteryStatus, le16(0x80d4)); // charger plugged in
+    expect(state.batteryHot).toBe(false);
+    t.push(U.batteryStatus, le16(0x4050));
+    expect(state.batteryHot).toBe(true);
+    t.push(U.batteryStatus, le16(0x0150));
+    expect(state.batteryHot).toBe(true);
+    t.push(U.batteryStatus, le16(0x3450)); // what duramson/vo0t calls a temperature warning and cool down
+    expect(state.batteryHot).toBe(false);
+    await driver.stop();
+  });
+
   it('leaves charging unknown when the battery status cannot be read', async () => {
     const { driver, state } = await started(craftyPlus());
     expect(state.charging).toBeUndefined();
+    expect(state.batteryHot).toBeUndefined();
     await driver.stop();
   });
 

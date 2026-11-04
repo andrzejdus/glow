@@ -56,6 +56,11 @@ export interface DeviceState {
   batteryCurrent?: number;
   /** Battery temperature, °C (CRAFTY: to 0.1 °C), when the device reports it. */
   batteryTemp?: number;
+  /**
+   * The device says its battery is too hot and should cool down. Undefined when the device does not
+   * report it. No "too cold" flag is known.
+   */
+  batteryHot?: boolean;
   /** Lifetime hours of operation as the device reports it, in minutes. */
   operatingMinutes?: number;
   /** Lifetime time on the charger, minutes (VENTY and VEAZY). */
