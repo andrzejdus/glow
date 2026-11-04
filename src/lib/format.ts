@@ -20,6 +20,22 @@ export function toUnit(celsius: number, unit: 'C' | 'F' = 'C'): number {
   return Math.round(unit === 'F' ? (celsius * 9) / 5 + 32 : celsius);
 }
 
+/** A whole number of degrees in `unit` back to °C, unrounded. */
+export function fromUnit(value: number, unit: 'C' | 'F' = 'C'): number {
+  return unit === 'F' ? ((value - 32) * 5) / 9 : value;
+}
+
+/**
+ * The target after a tap on - or +, in whole °C (all a device takes). The step is `delta` degrees
+ * in the unit shown; in °F that is the nearest whole °C, and at least one, so a tap never stands
+ * still: 1 °F is less than 1 °C, so the °F shown moves by 1 or 2.
+ */
+export function stepTarget(celsius: number, delta: number, unit: 'C' | 'F' = 'C'): number {
+  const c = Math.round(celsius);
+  const next = Math.round(fromUnit(toUnit(c, unit) + delta, unit));
+  return next === c ? c + Math.sign(delta) : next;
+}
+
 /** A temperature difference (boost offsets). */
 export function deltaToUnit(celsius: number, unit: 'C' | 'F' = 'C'): number {
   return Math.round(unit === 'F' ? (celsius * 9) / 5 : celsius);

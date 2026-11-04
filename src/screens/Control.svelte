@@ -6,7 +6,7 @@
   import Warmth from '../components/Warmth.svelte';
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, HeatMode } from '../lib/devices/types';
-  import { mmss, toUnit } from '../lib/format';
+  import { mmss, stepTarget, toUnit } from '../lib/format';
   import { locale } from '../lib/locale.svelte';
   import { ready } from '../lib/ready.svelte';
   import { goalOf, isReady, sessions } from '../lib/sessions.svelte';
@@ -116,7 +116,7 @@
 
   <div class="dial-area" bind:clientHeight={areaH} bind:clientWidth={areaW}>
   <Dial scale={dialScale} current={d.currentTemp} target={goal} min={d.minTemp} max={d.maxTemp} heating={d.heaterOn} ready={reached} {unit} {offline} {lamps}
-    onstep={(delta) => conn.setTarget((d.targetTemp ?? d.minTemp) + (unit === 'F' ? delta * 5 / 9 : delta))} />
+    onstep={(delta) => conn.setTarget(stepTarget(d.targetTemp ?? d.minTemp, delta, unit))} />
   <div class="status rise d1 num" class:ready={reached} class:off={!d.heaterOn} style:top="calc(50% + {statusY - 10}px)">
     <span class="line sizer" aria-hidden="true" bind:clientWidth={statusW}>Waiting for the device…</span>
     <span class="line">

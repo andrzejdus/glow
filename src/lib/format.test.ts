@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockTime, decimal, duration, usageTime } from './format';
+import { clockTime, decimal, duration, fromUnit, stepTarget, toUnit, usageTime } from './format';
 
 describe('usageTime', () => {
   it('counts in minutes, with hours once there are 60 of them', () => {
@@ -53,5 +53,36 @@ describe('clockTime', () => {
 
   it('adds seconds when asked', () => {
     expect(clockTime(t, true, true, 'en-US')).toBe('21:05:09');
+  });
+});
+
+describe('temperature units', () => {
+  it('shows every whole °C target as °F and reads it back as the same °C', () => {
+    for (let c = 40; c <= 230; c++) {
+      expect(Math.round(fromUnit(toUnit(c, 'F'), 'F'))).toBe(c);
+      expect(fromUnit(toUnit(c, 'C'), 'C')).toBe(c);
+    }
+    expect(toUnit(180, 'F')).toBe(356);
+    expect(toUnit(210, 'F')).toBe(410);
+  });
+
+  it('steps a °C target by one degree', () => {
+    expect(stepTarget(180, 1, 'C')).toBe(181);
+    expect(stepTarget(180, -1, 'C')).toBe(179);
+  });
+
+  it('steps a °F target to the next whole °C, so the °F shown always moves the way tapped', () => {
+    for (let c = 40; c <= 230; c++) {
+      for (const delta of [1, -1]) {
+        const next = stepTarget(c, delta, 'F');
+        expect(Number.isInteger(next)).toBe(true);
+        expect(next - c).toBe(delta);
+        expect(Math.sign(toUnit(next, 'F') - toUnit(c, 'F'))).toBe(delta);
+      }
+    }
+    // 183 °C shows as 361 °F: 362 °F would round back to 183 °C, so the tap goes on to 184 °C (363 °F).
+    expect(stepTarget(183, 1, 'F')).toBe(184);
+    // A larger step in °F lands on the nearest whole °C.
+    expect(stepTarget(180, 10, 'F')).toBe(186);
   });
 });
