@@ -21,7 +21,7 @@
     "@fontsource-variable/roboto-flex": "^5.3.0"
   },
   "devDependencies": {
-    "@capacitor/assets": "^3.0.5",
+    "@capacitor/assets": "^4.0.0",
     "@capacitor/cli": "^8.6.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/web-bluetooth": "^0.0.22",
@@ -30,5 +30,10 @@
     "typescript": "~6.0.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "@trapezedev/project": {
+      "xcode": "^4.0.0"
+    }
   }
 }
