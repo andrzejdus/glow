@@ -14,6 +14,7 @@ import android.bluetooth.BluetoothStatusCodes;
 import android.content.Context;
 import android.os.Build;
 import android.os.Handler;
+import android.os.PowerManager;
 import android.util.Log;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -76,6 +77,12 @@ final class Recorder {
     private static final long READY_MS = 20_000;
     /** Waiting this long for a device that does not answer, the recorder leaves it to the system's next sighting. */
     private static final long WAIT_MS = 120_000;
+    /**
+     * The longest a recording keeps the CPU awake: the wake lock lets go by itself then, should an
+     * exit path ever miss it. Notifications still wake the phone after that, only the 1 s tick and
+     * the VENTY/VEAZY polls slow down.
+     */
+    private static final long WAKE_MS = 30 * 60_000;
 
     private static final UUID CCCD = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
@@ -140,6 +147,8 @@ final class Recorder {
     private boolean recording;
     private boolean heater;
     private long offAt;
+    /** Held while a recording runs, so the tick and the polls keep time with the screen off. */
+    private PowerManager.WakeLock wake;
     private final Map<String, Entry> latest = new LinkedHashMap<>();
     /** Values as they stood PRE_MS ago. */
     private final Map<String, Entry> base = new LinkedHashMap<>();
@@ -241,6 +250,8 @@ final class Recorder {
         handler.removeCallbacksAndMessages(null);
         synchronized (Background.LOCK) {
             if (recording && !handedOver) end(System.currentTimeMillis(), reason);
+            // Ended above, or handed over (stop() ends it): either way nothing is recorded any more.
+            awake(false);
         }
         if (gatt != null) {
             gatt.disconnect();
@@ -536,6 +547,7 @@ final class Recorder {
         ring.clear();
         Background.append(context, lines);
         recording = true;
+        awake(true);
         Log.i(TAG, "recording");
     }
 
@@ -543,10 +555,25 @@ final class Recorder {
     private void end(long now, String reason) {
         Background.append(context, Collections.singletonList(now + " E " + reason));
         recording = false;
+        awake(false);
         base.clear();
         base.putAll(latest);
         ring.clear();
         Log.i(TAG, "recording ended: " + reason);
+    }
+
+    /** Takes (for WAKE_MS from now) or lets go of the wake lock. Holds LOCK. */
+    private void awake(boolean on) {
+        if (on && wake == null) {
+            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            if (pm == null) return;
+            wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "glow:recording");
+            // One hold, renewed by each recording, released once.
+            wake.setReferenceCounted(false);
+        }
+        if (wake == null) return;
+        if (on) wake.acquire(WAKE_MS);
+        else if (wake.isHeld()) wake.release();
     }
 
     private final class Entry {

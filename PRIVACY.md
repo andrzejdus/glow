@@ -80,6 +80,7 @@ applies.
 | Location (approximate and precise), Android 11 and older only | Those Android versions allow Bluetooth scans only with location access. Glow never reads your location, asks for it only while the app is open, and never in the background. |
 | Companion device: device presence, running and starting in the background (Android 12 and newer) | Only after you turn on "Record in the background" and allow Android's dialog: Android then tells Glow when that one device comes into range, and lets Glow start its recorder while Glow is closed. |
 | Foreground service (connected device) | The background recorder runs as a foreground service, with a notification, while it is connected to the device or waiting for it. |
+| Keep awake (wake lock) | Only while the background recorder records a session, from heater on until the cool-down ends, for at most 30 minutes at a time: the phone's processor stays awake so readings keep coming with the screen off. The screen is not kept on. |
 | Notifications, Android 13 and newer | To show that notification. Glow asks when you turn on "Record in the background", and shows no other notifications. |
 | Vibration | A short tap of feedback when you press a control. |
 | Internet | Needed by the system WebView to start; Glow itself sends nothing (see above). |
