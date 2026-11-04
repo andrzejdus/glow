@@ -137,7 +137,32 @@ final class Background {
         synchronized (Background.class) {
             visible = on;
         }
+        // On screen, the app records any cool-down itself; it says again as it leaves.
+        if (on) prefs(c).edit().remove(COOLING_SAID).remove(COOLING_OFF).apply();
         sync(c);
+    }
+
+    private static final String COOLING_SAID = "coolingSaid";
+    private static final String COOLING_OFF = "coolingOff";
+
+    /**
+     * The app is going off screen: `heaterOffAt` is when the heater went off while the app was
+     * still recording the cool-down, 0 when it was not. The recorder carries such a cool-down on
+     * (see Recorder). Kept in the settings, so a recorder restarted after a kill still knows.
+     */
+    static void setCooling(Context c, long heaterOffAt) {
+        prefs(c).edit().putLong(COOLING_SAID, System.currentTimeMillis()).putLong(COOLING_OFF, heaterOffAt).apply();
+        Recorder r;
+        synchronized (LOCK) {
+            r = recorder;
+        }
+        if (r != null) r.coolingHint();
+    }
+
+    /** { when the app said, heater off or 0 }; { 0, 0 } when it has said nothing since it was last on screen. */
+    static long[] cooling(Context c) {
+        SharedPreferences p = prefs(c);
+        return new long[] { p.getLong(COOLING_SAID, 0), p.getLong(COOLING_OFF, 0) };
     }
 
     /** The app's own connection came up (true) or ended (false). */

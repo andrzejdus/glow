@@ -143,7 +143,10 @@ public class RecorderService extends Service {
         String model = Background.model(this);
         String title;
         String text;
-        if (recorder != null && recorder.recording()) {
+        if (recorder != null && recorder.coolingDown()) {
+            title = "Recording the cool-down";
+            text = "The " + model + " is cooling down. Glow records it in the background.";
+        } else if (recorder != null && recorder.recording()) {
             title = "Recording a session";
             text = "The " + model + " is heating. Glow records it in the background.";
         } else if (recorder != null && recorder.answering()) {

@@ -193,6 +193,13 @@ class Sessions {
     }
   }
 
+  /** When the heater went off, while its cool-down is still being recorded; null otherwise. */
+  coolingSince(now = Date.now()): number | null {
+    const c = this.cooling;
+    if (!c || now > this.coolUntil) return null;
+    return this.list.find((s) => s.id === c.id)?.end ?? null;
+  }
+
   /** While a background recording is replayed, times come from the log, not the clock. */
   pause(on: boolean) {
     this.replaying = on;

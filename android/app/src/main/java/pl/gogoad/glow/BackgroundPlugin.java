@@ -112,6 +112,17 @@ public class BackgroundPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /**
+     * The app is going off screen; `heaterOffAt`: when the heater went off, while the app still
+     * records the cool-down (null otherwise), for the recorder to carry it on.
+     */
+    @PluginMethod
+    public void hide(PluginCall call) {
+        Object at = call.getData().opt("heaterOffAt");
+        Background.setCooling(getContext(), at instanceof Number ? ((Number) at).longValue() : 0);
+        call.resolve();
+    }
+
     /** The app has stored what it replayed. */
     @PluginMethod
     public void done(PluginCall call) {

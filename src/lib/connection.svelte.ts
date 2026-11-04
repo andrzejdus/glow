@@ -102,6 +102,9 @@ class Connection {
       if (document.visibilityState !== 'visible') {
         // Android stops the page soon after this, and the background recorder connects alongside.
         if (this.phase === 'connected' && this.recordsInBackground()) {
+          // A cool-down the app is recording stops with the page: the recorder carries it on. The
+          // call reaches Android at once, even if the page stops before it resolves.
+          background?.hide({ heaterOffAt: sessions.coolingSince() }).catch(() => undefined);
           this.quiet = true;
           sessions.suspend();
         }

@@ -35,8 +35,18 @@ import java.util.UUID;
  * from heater on until COOL_MS after heater off. A device that stays connected for hours (Permanent
  * Bluetooth) costs a few lines per session, not a line a second.
  *
+ * A cool-down recording: Glow went off screen (or lost the device) after the heater went off, while
+ * it was still recording the cool-down, and the recorder came in with the heater off. The recorder
+ * never saw the heater go off, so it goes by when the app says it did (Background.setCooling), or
+ * by its own sighting after a lost link, or, with neither, by the temperature alone: above COOL_TO,
+ * the device is still cooling down from something. It records until COOL_TO, or COOL_MS after heater
+ * off (after its own start when that is unknown), and turns into an ordinary recording if the
+ * heater comes back on. The app adds it to the session that ended just before, or drops it.
+ *
  * Log lines, one per entry, the time in ms since the epoch first:
  *   t B address kind name    a recording starts
+ *   t C off                  right after B: it is a cool-down recording; off is when the heater went
+ *                            off, or - when that is unknown
  *   t V service char hex     a value as it stood when the recording starts
  *   t S                      the values are complete: the app starts its driver here
  *   t R service char hex     a value read
@@ -65,6 +75,8 @@ final class Recorder {
     private static final long PRE_MS = 15_000;
     /** The app shows up to 2 minutes of cool-down after heater off. */
     private static final long COOL_MS = 125_000;
+    /** The app's cool-down stops at this temperature (°C), as sessions.svelte.ts does. */
+    private static final int COOL_TO = 50;
     private static final long TICK_MS = 1000;
     private static final long REFRESH_MS = 30_000;
     private static final long IDLE_REFRESH_MS = 300_000;
@@ -145,7 +157,10 @@ final class Recorder {
     // Guarded by Background.LOCK: the app takes the log over from another thread.
     private boolean handedOver;
     private boolean recording;
+    /** The recording is a cool-down: the heater was off when it began, and has not come on since. */
+    private boolean cooling;
     private boolean heater;
+    /** When the heater went off, as far as the recorder knows (0: never seen). */
     private long offAt;
     /** Held while a recording runs, so the tick and the polls keep time with the screen off. */
     private PowerManager.WakeLock wake;
@@ -181,6 +196,29 @@ final class Recorder {
         synchronized (Background.LOCK) {
             return recording;
         }
+    }
+
+    /** Recording a cool-down, not a heat. */
+    boolean coolingDown() {
+        synchronized (Background.LOCK) {
+            return recording && cooling;
+        }
+    }
+
+    /** The app said when the heater went off (Background.setCooling): it may begin or bound a cool-down. */
+    void coolingHint() {
+        handler.post(() -> {
+            synchronized (Background.LOCK) {
+                long now = System.currentTimeMillis();
+                if (recording && cooling) {
+                    long[] hint = Background.cooling(context);
+                    // The app was not recording a cool-down after all: nothing to add it to.
+                    if (hint[1] == 0) end(now, "idle");
+                    else offAt = hint[1];
+                } else maybeCool(now);
+            }
+            events.changed();
+        });
     }
 
     void start() {
@@ -328,7 +366,8 @@ final class Recorder {
             lastRefresh = now;
             lastPoll = now;
             synchronized (Background.LOCK) {
-                if (heater && !recording) begin(now);
+                if (heater && !recording) begin(now, -1);
+                else maybeCool(now);
             }
             events.changed();
             handler.postDelayed(tick, TICK_MS);
@@ -456,6 +495,43 @@ final class Recorder {
         return (uintLE(v) & CRAFTY_HEATER) != 0;
     }
 
+    /** The temperature in °C when this entry is the live temperature (CRAFTY, VOLCANO), else null. */
+    private Integer tempOf(Entry e) {
+        if (qvap || e.value == null || e.value.length < 2) return null;
+        if (!e.chr.equals(kind.equals("volcano") ? volcano("10110001") : crafty(0x11))) return null;
+        long c = Math.round(((e.value[0] & 0xff) | (e.value[1] & 0xff) << 8) / 10.0);
+        // 0xffff-ish: no reading.
+        return c < 6536 ? (int) c : null;
+    }
+
+    /**
+     * Begins a cool-down recording if the heater went off less than COOL_MS ago and the device is
+     * still above COOL_TO (see the class comment). Holds LOCK.
+     */
+    private void maybeCool(long now) {
+        if (!ready || recording || heater || handedOver || stopped) return;
+        Integer temp = null;
+        for (Entry e : latest.values()) {
+            Integer t = tempOf(e);
+            if (t != null) temp = t;
+        }
+        // No live temperature (VENTY/VEAZY): the app records no cool-down for them either.
+        if (temp == null || temp <= COOL_TO) return;
+        long[] hint = Background.cooling(context);
+        long off;
+        // Whichever was learnt last: the recorder's own sighting, or what the app said as it left.
+        if (offAt > 0 && offAt > hint[0]) off = offAt;
+        else if (hint[0] > 0) off = hint[1];
+        else off = -1;
+        // The app said it was not recording a cool-down.
+        if (off == 0) return;
+        if (off > 0 && now - off >= COOL_MS) return;
+        if (!begin(now, Math.max(off, 0))) return;
+        cooling = true;
+        // Unknown: COOL_MS from now, at most. The tick ends it then.
+        offAt = off > 0 ? off : now;
+    }
+
     private static long uintLE(byte[] v) {
         long out = 0;
         for (int i = Math.min(v.length, 4) - 1; i >= 0; i--) out = out * 256 + (v[i] & 0xff);
@@ -508,11 +584,21 @@ final class Recorder {
                 ring.add(e);
                 trim(e.t);
             }
+            if (recording && cooling && !heater) {
+                Integer temp = tempOf(e);
+                // Cooled down: the app stops there too.
+                if (temp != null && temp <= COOL_TO) {
+                    end(e.t, "idle");
+                    events.changed();
+                }
+            }
             Boolean on = e.value == null ? null : heaterOf(e);
             if (on == null) return;
             if (on && !heater) {
                 heater = true;
-                if (ready && !recording) begin(e.t);
+                // Back on during a cool-down: from here it is a session like any other.
+                cooling = false;
+                if (ready && !recording) begin(e.t, -1);
             } else if (!on && heater) {
                 heater = false;
                 offAt = e.t;
@@ -529,11 +615,15 @@ final class Recorder {
         }
     }
 
-    /** Starts a recording with the values from PRE_MS ago and the readings since. Holds LOCK. */
-    private void begin(long now) {
+    /**
+     * Starts a recording with the values from PRE_MS ago and the readings since; `cool` -1 for an
+     * ordinary one, else a cool-down from heater off at `cool` (0: unknown). False when the log is
+     * full. Holds LOCK.
+     */
+    private boolean begin(long now, long cool) {
         if (Background.logFull(context)) {
             Log.w(TAG, "log full until the app reads it");
-            return;
+            return false;
         }
         long t0 = ring.isEmpty() ? now : ring.peekFirst().t;
         // Each value as it stood at t0: the one before the ring if there is one, else its first in it.
@@ -541,6 +631,7 @@ final class Recorder {
         for (Entry e : ring) if (e.key != null && !head.containsKey(e.key)) head.put(e.key, e);
         List<String> lines = new ArrayList<>();
         lines.add(t0 + " B " + address + " " + kind + " " + name);
+        if (cool >= 0) lines.add(t0 + " C " + (cool > 0 ? Long.toString(cool) : "-"));
         for (Entry e : head.values()) lines.add(t0 + " V " + e.service + " " + e.chr + " " + hex(e.value));
         lines.add(t0 + " S");
         for (Entry e : ring) lines.add(e.line());
@@ -548,13 +639,15 @@ final class Recorder {
         Background.append(context, lines);
         recording = true;
         awake(true);
-        Log.i(TAG, "recording");
+        Log.i(TAG, cool >= 0 ? "recording the cool-down" : "recording");
+        return true;
     }
 
     /** Holds LOCK. */
     private void end(long now, String reason) {
         Background.append(context, Collections.singletonList(now + " E " + reason));
         recording = false;
+        cooling = false;
         awake(false);
         base.clear();
         base.putAll(latest);
