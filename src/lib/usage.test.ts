@@ -51,3 +51,31 @@ describe('usage counting', () => {
     vi.useRealTimers();
   });
 });
+
+describe('usage weeks', () => {
+  // One hour of use every day, read at noon, from October 1 to Wednesday, November 4.
+  const noon = (day: number) => new Date(2026, 9, day, 12).getTime(); // day 32 is November 1
+  const snaps = Array.from({ length: 35 }, (_, i) => ({ t: noon(i + 1), m: 60 * (i + 1) }));
+  const now = noon(35);
+  const reading = { kind: 'crafty' as const, model: 'CRAFTY+', minTemp: 40, maxTemp: 210, mode: 'normal' as const,
+    heaterOn: false, operatingMinutes: 60 * 35, settings: {} };
+
+  it("start on the phone's first day of the week, from the same stored history", async () => {
+    await usage.bind('weeks', snaps);
+    usage.observe(reading, now);
+    const monday = usage.bars('week', 3, now, { locales: 'en', firstDayOfWeek: 1 });
+    const sunday = usage.bars('week', 3, now, { locales: 'en', firstDayOfWeek: 0 });
+    expect(monday.map((b) => b.label)).toEqual(['Oct 19', 'Oct 26', 'Nov 2']);
+    expect(sunday.map((b) => b.label)).toEqual(['Oct 18', 'Oct 25', 'Nov 1']);
+    // Readings come at noon, so a week counts from the noon before it began.
+    expect(monday.map((b) => b.hours)).toEqual([7, 7, 3]);
+    expect(sunday.map((b) => b.hours)).toEqual([7, 7, 4]);
+  });
+
+  it('puts today in the current week when today is the first day', async () => {
+    await usage.bind('weeks-wednesday', snaps);
+    usage.observe(reading, now);
+    const wednesday = usage.bars('week', 1, now, { firstDayOfWeek: 3 });
+    expect(wednesday[0].hours).toBe(1);
+  });
+});

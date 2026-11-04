@@ -1,4 +1,5 @@
 import type { DeviceState } from './devices/types';
+import { locale } from './locale.svelte';
 import { load, save } from './prefs';
 
 // Hours of operation. The device only reports its lifetime total, so Glow keeps
@@ -22,6 +23,8 @@ export interface UsageBar {
 export interface BarOptions {
   /** Language for month names. */
   locales?: Intl.LocalesArgument;
+  /** 0 for Sunday to 6 for Saturday. */
+  firstDayOfWeek?: number;
 }
 
 const HOUR = 3_600_000;
@@ -109,19 +112,28 @@ class Usage {
     return this.bars('month', count, now, opts);
   }
 
-  /** Usage per day, week (from Monday) or calendar month, oldest first, the current one last. */
-  bars(unit: 'day' | 'week' | 'month', count: number, now = this.now, { locales }: BarOptions = {}): UsageBar[] {
+  /**
+   * Usage per day, week or calendar month, oldest first, the current one last. Weeks start on the
+   * phone's first day of the week. Every bar is worked out from the snapshots when it is drawn, so
+   * a different week start regroups the whole history at once; nothing stored depends on it.
+   */
+  bars(
+    unit: 'day' | 'week' | 'month',
+    count: number,
+    now = this.now,
+    { locales, firstDayOfWeek = locale.firstDayOfWeek }: BarOptions = {},
+  ): UsageBar[] {
     const live = this.lifetimeSec(now);
     const today = new Date(now);
     const y = today.getFullYear();
     const mo = today.getMonth();
-    const monday = today.getDate() - ((today.getDay() + 6) % 7);
+    const weekStart = today.getDate() - ((today.getDay() - firstDayOfWeek + 7) % 7);
     const bars: UsageBar[] = [];
     for (let i = count - 1; i >= 0; i--) {
       const start =
-        unit === 'month' ? new Date(y, mo - i, 1) : unit === 'week' ? new Date(y, mo, monday - 7 * i) : new Date(y, mo, today.getDate() - i);
+        unit === 'month' ? new Date(y, mo - i, 1) : unit === 'week' ? new Date(y, mo, weekStart - 7 * i) : new Date(y, mo, today.getDate() - i);
       const next =
-        unit === 'month' ? new Date(y, mo - i + 1, 1) : unit === 'week' ? new Date(y, mo, monday - 7 * i + 7) : new Date(y, mo, today.getDate() - i + 1);
+        unit === 'month' ? new Date(y, mo - i + 1, 1) : unit === 'week' ? new Date(y, mo, weekStart - 7 * i + 7) : new Date(y, mo, today.getDate() - i + 1);
       const from = start.getTime();
       const to = next.getTime();
       const current = i === 0;
