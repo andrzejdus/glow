@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localeDefaults, resolveUnit } from './locale.svelte';
+import { localeDefaults, resolveUnit, resolveWeekStart } from './locale.svelte';
 
 describe('localeDefaults', () => {
   it("takes the language's usual clock, first weekday and temperature unit", () => {
@@ -39,5 +39,17 @@ describe('resolveUnit', () => {
   it("on Auto, takes the phone's unit when the device reports none (CRAFTY)", () => {
     expect(resolveUnit('auto', undefined, 'F')).toBe('F');
     expect(resolveUnit('auto', undefined, 'C')).toBe('C');
+  });
+});
+
+describe('resolveWeekStart', () => {
+  it("takes the choice in Settings over the phone's first day", () => {
+    expect(resolveWeekStart(1, 0)).toBe(1);
+    expect(resolveWeekStart(0, 1)).toBe(0);
+  });
+
+  it("on Auto, takes the phone's first day", () => {
+    expect(resolveWeekStart('auto', 0)).toBe(0);
+    expect(resolveWeekStart('auto', 1)).toBe(1);
   });
 });

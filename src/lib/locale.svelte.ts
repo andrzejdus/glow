@@ -62,6 +62,15 @@ export function resolveUnit(choice: UnitChoice, device: TempUnit | undefined, ph
   return choice === 'auto' ? (device ?? phone) : choice;
 }
 
+/** The first day of the week chosen in Settings › App, as Date.getDay() counts. Auto: the phone's. */
+export type WeekChoice = 'auto' | 0 | 1;
+const WEEK_CHOICES: readonly WeekChoice[] = ['auto', 1, 0];
+
+/** The day weeks start on: the user's choice, else the phone's. */
+export function resolveWeekStart(choice: WeekChoice, phone: number): number {
+  return choice === 'auto' ? phone : choice;
+}
+
 const native = Capacitor.isNativePlatform() ? registerPlugin<LocalePlugin>('Locale') : null;
 
 class Locale {
@@ -69,6 +78,7 @@ class Locale {
   firstDayOfWeek = $state(1);
   temperatureUnit = $state<TempUnit>('C');
   unitChoice = $state<UnitChoice>('auto');
+  weekChoice = $state<WeekChoice>('auto');
 
   constructor() {
     this.apply(localeDefaults(typeof navigator === 'undefined' ? 'en' : navigator.language));
@@ -79,6 +89,9 @@ class Locale {
     void this.load();
     void load<UnitChoice>('temperatureUnit', 'auto').then((c) => {
       if (c === 'C' || c === 'F') this.unitChoice = c;
+    });
+    void load<WeekChoice>('firstDayOfWeek', 'auto').then((c) => {
+      if (WEEK_CHOICES.includes(c)) this.weekChoice = c;
     });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') void this.load();
@@ -93,6 +106,16 @@ class Locale {
   setUnitChoice(choice: UnitChoice) {
     this.unitChoice = choice;
     void save('temperatureUnit', choice);
+  }
+
+  /** The day weeks start on, 0 for Sunday to 6 for Saturday. */
+  get weekStart(): number {
+    return resolveWeekStart(this.weekChoice, this.firstDayOfWeek);
+  }
+
+  setWeekChoice(choice: WeekChoice) {
+    this.weekChoice = choice;
+    void save('firstDayOfWeek', choice);
   }
 
   private async load() {

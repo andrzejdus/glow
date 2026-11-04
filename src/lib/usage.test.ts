@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { locale } from './locale.svelte';
 import { demoHistory, usage } from './usage.svelte';
 
 describe('usage months', () => {
@@ -70,6 +71,22 @@ describe('usage weeks', () => {
     // Readings come at noon, so a week counts from the noon before it began.
     expect(monday.map((b) => b.hours)).toEqual([7, 7, 3]);
     expect(sunday.map((b) => b.hours)).toEqual([7, 7, 4]);
+  });
+
+  it('start on the day chosen in Settings, else the phone\'s', async () => {
+    await usage.bind('weeks-chosen', snaps);
+    usage.observe(reading, now);
+    const labels = () => usage.bars('week', 1, now, { locales: 'en' }).map((b) => b.label);
+    locale.firstDayOfWeek = 0;
+    locale.setWeekChoice('auto');
+    expect(labels()).toEqual(['Nov 1']);
+    locale.setWeekChoice(1);
+    expect(labels()).toEqual(['Nov 2']);
+    locale.firstDayOfWeek = 1;
+    locale.setWeekChoice(0);
+    expect(labels()).toEqual(['Nov 1']);
+    locale.setWeekChoice('auto');
+    expect(labels()).toEqual(['Nov 2']);
   });
 
   it('puts today in the current week when today is the first day', async () => {

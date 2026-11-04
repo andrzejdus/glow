@@ -10,7 +10,7 @@
   import { debugging, type DebuggingState } from '../lib/debugging';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
   import { decimal, deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
-  import { locale, resolveUnit, type UnitChoice } from '../lib/locale.svelte';
+  import { locale, resolveUnit, type UnitChoice, type WeekChoice } from '../lib/locale.svelte';
   import { usage } from '../lib/usage.svelte';
 
   /** Opens the Stats screen. */
@@ -74,6 +74,20 @@
   function chooseUnit(choice: UnitChoice) {
     tap();
     locale.setUnitChoice(choice);
+  }
+
+  // Where weeks start in Stats. Saturday (parts of the Middle East) stays with Auto: a fourth
+  // full day name does not fit the row on a narrow phone.
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const weekChoices: { id: WeekChoice; label: string }[] = [
+    { id: 'auto', label: 'Auto' },
+    { id: 1, label: 'Monday' },
+    { id: 0, label: 'Sunday' },
+  ];
+  const weekIndex = $derived(weekChoices.findIndex((c) => c.id === locale.weekChoice));
+  function chooseWeek(choice: WeekChoice) {
+    tap();
+    locale.setWeekChoice(choice);
   }
 
   let diagnostics = $state(false);
@@ -293,6 +307,19 @@
           {#each unitChoices as c (c.id)}
             <button type="button" role="radio" aria-checked={c.id === locale.unitChoice} class:on={c.id === locale.unitChoice}
               onclick={() => chooseUnit(c.id)}>{c.label}</button>
+          {/each}
+        </div>
+      </div>
+      <div class="row range">
+        <div class="text">
+          <div class="name" id="weekLabel">First day of week</div>
+          <div class="desc">Auto uses the phone's, now {days[locale.firstDayOfWeek]}.</div>
+        </div>
+        <div class="seg" role="radiogroup" aria-labelledby="weekLabel" style:--n={weekChoices.length}>
+          <span class="thumb" style:transform="translateX({weekIndex * 100}%)"></span>
+          {#each weekChoices as c (c.id)}
+            <button type="button" role="radio" aria-checked={c.id === locale.weekChoice} class:on={c.id === locale.weekChoice}
+              onclick={() => chooseWeek(c.id)}>{c.label}</button>
           {/each}
         </div>
       </div>

@@ -116,6 +116,7 @@ when it is sent off the device, and Glow sends nothing:
 |---|---|---|
 | Last device: Bluetooth address, name, model; the auto-connect setting | App storage on the phone only | `save('connection', …)` in `src/lib/connection.svelte.ts`, through `@capacitor/preferences` in `src/lib/prefs.ts` |
 | "Temperature unit" setting (Auto, °C or °F; Auto by default) | App storage on the phone only | `save('temperatureUnit', …)` in `src/lib/locale.svelte.ts`, through `@capacitor/preferences` in `src/lib/prefs.ts` |
+| "First day of week" setting (Auto, Monday or Sunday; Auto by default) | App storage on the phone only | `save('firstDayOfWeek', …)` in `src/lib/locale.svelte.ts`, through `@capacitor/preferences` in `src/lib/prefs.ts` |
 | Hours-of-operation snapshots (device counter + time, up to 400 days) | App storage on the phone only | `save('usage:<device>', …)` in `src/lib/usage.svelte.ts` |
 | Background recording: the setting, the device's address, name, model, and whether it was last in range (off by default) | App storage on the phone only | `Background.java` (SharedPreferences `background`), `BackgroundPlugin.java` |
 | Background log (while background recording is on: what the device reported over Bluetooth from 15 s before heater on to 2 min after heater off, with Glow closed; deleted once replayed into the session log, or when the setting is switched off) | App storage on the phone only (`files/background/`) | `Recorder.java`, `src/lib/replay.ts` |

@@ -19,7 +19,7 @@ export interface UsageBar {
   current: boolean;
 }
 
-/** Set by tests; the app uses the phone's own. */
+/** Set by tests; the app uses the phone's own and the week start chosen in Settings. */
 export interface BarOptions {
   /** Language for month names. */
   locales?: Intl.LocalesArgument;
@@ -114,14 +114,14 @@ class Usage {
 
   /**
    * Usage per day, week or calendar month, oldest first, the current one last. Weeks start on the
-   * phone's first day of the week. Every bar is worked out from the snapshots when it is drawn, so
+   * day chosen in Settings › App, else the phone's first day of the week. Every bar is worked out from the snapshots when it is drawn, so
    * a different week start regroups the whole history at once; nothing stored depends on it.
    */
   bars(
     unit: 'day' | 'week' | 'month',
     count: number,
     now = this.now,
-    { locales, firstDayOfWeek = locale.firstDayOfWeek }: BarOptions = {},
+    { locales, firstDayOfWeek = locale.weekStart }: BarOptions = {},
   ): UsageBar[] {
     const live = this.lifetimeSec(now);
     const today = new Date(now);

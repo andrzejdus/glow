@@ -18,8 +18,8 @@ Glow saves this in its own private app storage on the phone:
 
 - **The device you last connected to**: its Bluetooth address, its name and its model, so Glow
   can reconnect to it when you open the app.
-- **The "Auto-connect on open", "Temperature unit", "Record in the background" and "Debugging
-  from a computer" settings**, and for "Record in the background" the device it records: its
+- **The "Auto-connect on open", "Temperature unit", "First day of week", "Record in the
+  background" and "Debugging from a computer" settings**, and for "Record in the background" the device it records: its
   Bluetooth address, name and model, and whether it was last in range, so the recorder can carry
   on if Android restarts it.
 - **Hours-of-operation history**: readings of the device's own lifetime operating counter, with
