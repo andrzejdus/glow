@@ -49,7 +49,8 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
 - 🌙 **Records in the background** (Android 12+, off until you switch it on in Settings). Android
   wakes Glow when the device comes into range, Glow connects and logs the session with the app
   closed (with a notification while it does), and the next time you open Glow the session is in
-  Stats as if you had watched it. If Android's battery optimization could stop it, Settings says
+  Stats as if you had watched it, even with the device switched off by then. Leave Glow while the
+  device cools down and it records the rest of the cool-down too. If Android's battery optimization could stop it, Settings says
   so and opens the battery settings.
 - 🔋 **Battery.** Leads Settings: a large percentage, shown while charging too, whether it is on
   battery, charging or charged, with the charge animating up to full. A CRAFTY+ also shows the battery
