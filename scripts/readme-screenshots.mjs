@@ -23,6 +23,8 @@ export async function shoot(browser, base = 'http://127.0.0.1:5791/', out = OUT)
     hasTouch: true,
     locale: 'en-US',
   });
+  // The README shows °C: under en-US, Auto would pick °F for a device that names no unit (CRAFTY+).
+  await ctx.addInitScript(() => localStorage.setItem('CapacitorStorage.temperatureUnit', '"C"'));
   const page = await ctx.newPage();
   const shots = [];
   const status = () => page.locator('.status .line:not(.sizer)');
