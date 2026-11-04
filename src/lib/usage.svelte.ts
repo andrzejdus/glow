@@ -50,8 +50,15 @@ class Usage {
     setInterval(() => (this.now = Date.now()), 1000);
   }
 
-  async bind(key: string, seed?: Snap[]) {
-    if (key === this.key) return;
+  /** Bound to the same key again (a replay and a connection at once), it waits for the first load. */
+  bind(key: string, seed?: Snap[]): Promise<void> {
+    if (key !== this.key) this.binding = this.open(key, seed);
+    return this.binding;
+  }
+
+  private binding: Promise<void> = Promise.resolve();
+
+  private async open(key: string, seed?: Snap[]) {
     this.key = key;
     this.shown = 0;
     this.reading = null;

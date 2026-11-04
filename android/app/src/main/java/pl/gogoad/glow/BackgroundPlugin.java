@@ -113,6 +113,17 @@ public class BackgroundPlugin extends Plugin {
     }
 
     /**
+     * The log, for the app to replay without a connection of its own (the device may be off or
+     * gone): any recording ends, as on screen it would anyway, and the device is not taken as held.
+     */
+    @PluginMethod
+    public void take(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("log", Background.take(getContext()));
+        call.resolve(ret);
+    }
+
+    /**
      * The app is going off screen; `heaterOffAt`: when the heater went off, while the app still
      * records the cool-down (null otherwise), for the recorder to carry it on.
      */

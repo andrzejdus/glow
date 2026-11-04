@@ -138,9 +138,18 @@ class Sessions {
   private replaying = false;
   private resuming: Promise<void> | null = null;
 
-  /** Demo mode passes made-up sessions, which are never saved. */
-  async bind(key: string, seed?: { list: SessionSummary[]; details: Map<number, SessionDetail> }) {
-    if (key === this.key) return;
+  /**
+   * Demo mode passes made-up sessions, which are never saved. Bound to the same key again (a replay
+   * and a connection at once), it waits for the first load.
+   */
+  bind(key: string, seed?: { list: SessionSummary[]; details: Map<number, SessionDetail> }): Promise<void> {
+    if (key !== this.key) this.binding = this.open(key, seed);
+    return this.binding;
+  }
+
+  private binding: Promise<void> = Promise.resolve();
+
+  private async open(key: string, seed?: { list: SessionSummary[]; details: Map<number, SessionDetail> }) {
     this.endCooling();
     this.flush();
     this.key = key;

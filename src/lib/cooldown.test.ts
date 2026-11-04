@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CRAFTY_UUIDS as C } from './devices/crafty';
 import type { DeviceState } from './devices/types';
 
@@ -13,14 +13,39 @@ vi.mock('./prefs', () => ({
   save: async (key: string, value: unknown) => void store.set(key, JSON.stringify(value)),
 }));
 
-/** A fresh Glow, bound to the device: new modules, the same storage. */
-async function launch(id: string) {
+// The background plugin, with the recorder's log.
+const bg = vi.hoisted(() => {
+  const self = {
+    id: '',
+    log: '',
+    calls: [] as string[],
+    status: async () => ({ supported: true, enabled: true, id: self.id }),
+    hold: async () => self.give('hold'),
+    take: async () => self.give('take'),
+    give(call: string) {
+      self.calls.push(call);
+      const log = self.log;
+      self.log = '';
+      return { log };
+    },
+    done: async () => void self.calls.push('done'),
+    release: async () => void self.calls.push('release'),
+    hide: async () => undefined,
+  };
+  return self;
+});
+vi.mock('./background', () => ({ background: bg }));
+
+/** A fresh Glow (new modules, the same storage), bound to the device unless it is the connection's to bind. */
+async function launch(id?: string) {
   vi.resetModules();
   const { sessions } = await import('./sessions.svelte');
   const { replay } = await import('./replay');
   const { usage } = await import('./usage.svelte');
-  await usage.bind(id);
-  await sessions.bind(id);
+  if (id) {
+    await usage.bind(id);
+    await sessions.bind(id);
+  }
   return { sessions, replay, usage };
 }
 
@@ -206,5 +231,70 @@ describe('cool-down after Glow leaves the screen', () => {
     await app.replay(coolLog(id, 600, null, (sec) => 120 - (sec - 600)), id);
     expect(app.sessions.list).toHaveLength(1);
     expect((await cooldown(app)).length).toBe(stored);
+  });
+});
+
+describe('replaying the background log without a connection', () => {
+  const listeners = new Map<string, () => void>();
+  const page = { visibilityState: 'visible', addEventListener: (type: string, f: () => void) => listeners.set(type, f) };
+
+  beforeEach(() => {
+    store.clear();
+    bg.calls = [];
+    bg.log = '';
+    vi.stubGlobal('location', { search: '' });
+    vi.stubGlobal('document', page);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Glow with its connection module, the remembered device's recording switched on. */
+  async function withConnection(id: string) {
+    bg.id = id;
+    store.set('connection', JSON.stringify({ last: { id, name: 'Storz&Bickel', kind: 'crafty' }, autoConnect: true }));
+    const app = await launch();
+    const { conn } = await import('./connection.svelte');
+    const { ble } = await import('./ble/adapter');
+    // Switched off, or gone: it never connects.
+    Object.assign(ble, { connect: async () => Promise.reject(new Error('out of range')), known: async () => [] });
+    return { ...app, conn };
+  }
+
+  it('fills the cool-down on a cold start, with the device switched off', async () => {
+    const id = 'AA:BB:CC:00:00:07';
+    const before = await launch(id);
+    onScreen(before);
+    before.sessions.suspend();
+    // Killed off screen while the recorder took the cool-down over.
+    bg.log = coolLog(id, 68, 60, fast);
+    const app = await withConnection(id);
+    await app.conn.start();
+    await vi.waitFor(() => expect(bg.calls).toEqual(['take', 'done']));
+    const after = await cooldown(app);
+    expect(after.length).toBeGreaterThanOrEqual(12);
+    expect(after.at(-1)!.c).toBeLessThanOrEqual(50);
+  });
+
+  it('replays on screen again after the device dropped meanwhile, while it does not come back', async () => {
+    const id = 'AA:BB:CC:00:00:08';
+    const app = await withConnection(id);
+    await app.conn.start();
+    await vi.waitFor(() => expect(bg.calls).toEqual(['take', 'done']));
+    // Heated with Glow on screen, off screen 5 s after heater off; the device was then switched off.
+    onScreen(app);
+    app.sessions.suspend();
+    const internals = app.conn as unknown as { away: boolean; target: unknown; phase: string; generation: number };
+    Object.assign(internals, { away: true, target: { id, name: 'Storz&Bickel', kind: 'crafty' }, phase: 'reconnecting' });
+    bg.log = coolLog(id, 68, 60, fast, { end: 'lost', until: 100 });
+    listeners.get('visibilitychange')!();
+    try {
+      await vi.waitFor(() => expect(bg.calls).toEqual(['take', 'done', 'take', 'done']));
+      expect(app.conn.phase).toBe('reconnecting');
+      const after = await cooldown(app);
+      expect(after.at(-1)!.t).toBeGreaterThan(30);
+      expect(after.at(-1)!.t).toBeLessThanOrEqual(100 - 11);
+      expect(app.sessions.cooling).toBeNull();
+    } finally {
+      internals.generation++; // stops the reconnect loop
+    }
   });
 });

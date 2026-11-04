@@ -23,6 +23,8 @@ interface BackgroundPlugin {
   disable(): Promise<BackgroundState>;
   /** The app's own connection is up: recording stops, and the log so far comes back. */
   hold(): Promise<{ log: string }>;
+  /** The log so far, with no connection of the app's own (the device may be off or gone). */
+  take(): Promise<{ log: string }>;
   /**
    * The app is going off screen. `heaterOffAt`: when the heater went off, while the app still records
    * the cool-down; the recorder carries it on.

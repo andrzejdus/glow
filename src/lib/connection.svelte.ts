@@ -96,7 +96,13 @@ class Connection {
     const demo = new URLSearchParams(location.search).get('demo');
     if (demo === 'venty' || demo === 'volcano' || demo === 'crafty') return this.startDemo(demo);
 
-    background?.status().then((s) => (this.bg = s), () => undefined);
+    background?.status().then(
+      (s) => {
+        this.bg = s;
+        this.replayAway();
+      },
+      () => undefined,
+    );
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') {
@@ -112,6 +118,7 @@ class Connection {
       }
       // Back from Android's battery settings, say: Settings › App shows whether Glow is exempt.
       background?.status().then((s) => (this.bg = s), () => undefined);
+      this.replayAway();
       if (this.away) this.comeBack();
       else if (this.phase === 'idle' && this.native && this.autoConnect && !this.userDisconnect) this.search();
       else if (this.phase === 'connected') {
@@ -286,6 +293,18 @@ class Connection {
 
   private recordsInBackground() {
     return !!this.bg?.enabled && !this.demo && this.bg.id?.toUpperCase() === this.target?.id.toUpperCase();
+  }
+
+  /**
+   * Back on screen or started from cold without the device: replays what the recorder logged
+   * meanwhile all the same. A device switched off or gone does not connect, and its log holds the
+   * heater going off and the cool-down; waiting for a connection left the session open without
+   * them. A connection that comes up later reads what is new, in turn (catchUp).
+   */
+  private replayAway() {
+    const d = this.target ?? this.last;
+    if (!d || this.demo || this.phase === 'connected' || !this.bg?.enabled || this.bg.id?.toUpperCase() !== d.id.toUpperCase()) return;
+    void this.catchUp(d, false);
   }
 
   /** Closes the connection without marking a drop in the session log. */
@@ -490,14 +509,16 @@ class Connection {
   /**
    * The app's own connection is up, or back on screen: the background recorder stops, and what it
    * recorded since the app last heard the device is replayed first, so the live readings carry on
-   * from it. One at a time: coming back on screen and reconnecting can both ask at once.
+   * from it. One at a time: coming back on screen and reconnecting can both ask at once, and each
+   * reads only what the one before left. `held`: the app's own connection is up (hold()); without
+   * it the log is only taken, so the recorder does not count the device as the app's.
    */
-  private catchUp(d: FoundDevice): Promise<void> {
-    this.catchingUp = this.catchingUp.then(() => this.readLog(d));
+  private catchUp(d: FoundDevice, held = true): Promise<void> {
+    this.catchingUp = this.catchingUp.then(() => this.readLog(d, held));
     return this.catchingUp;
   }
 
-  private async readLog(d: FoundDevice) {
+  private async readLog(d: FoundDevice, held: boolean) {
     if (!background) {
       this.quiet = false;
       return;
@@ -505,7 +526,12 @@ class Connection {
     // The sampler would carry the session on to now before the log fills in the time between.
     sessions.pause(true);
     try {
-      const { log } = await background.hold();
+      if (!held) {
+        // Bound by connectTo otherwise.
+        await usage.bind(d.id);
+        await sessions.bind(d.id);
+      }
+      const { log } = await (held ? background.hold() : background.take());
       if (log) {
         const before = sessions.list.length;
         await replay(log, d.id);
