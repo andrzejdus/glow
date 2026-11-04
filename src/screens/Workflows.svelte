@@ -6,10 +6,11 @@
   import type { DeviceState } from '../lib/devices/types';
   import type { VolcanoWorkflowStep } from '../lib/devices/volcano';
   import { mmss, toUnit } from '../lib/format';
+  import { locale } from '../lib/locale.svelte';
   import { runner } from '../lib/workflow.svelte';
 
   const d = $derived(conn.device as DeviceState);
-  const unit = $derived(d.unit ?? 'C');
+  const unit = $derived(d.unit ?? locale.temperatureUnit);
   const flow = $derived(runner.flow);
   const steps = $derived(flow?.steps ?? []);
   const step = $derived(runner.step);

@@ -7,6 +7,7 @@
   import { conn } from '../lib/connection.svelte';
   import type { DeviceState, HeatMode } from '../lib/devices/types';
   import { mmss, toUnit } from '../lib/format';
+  import { locale } from '../lib/locale.svelte';
   import { ready } from '../lib/ready.svelte';
   import { goalOf, isReady, sessions } from '../lib/sessions.svelte';
 
@@ -15,7 +16,7 @@
 
   const d = $derived(conn.device as DeviceState);
   const caps = $derived(conn.caps);
-  const unit = $derived(d.unit ?? 'C');
+  const unit = $derived(d.unit ?? locale.temperatureUnit);
   const offline = $derived(conn.phase === 'reconnecting');
   const goal = $derived(goalOf(d));
   // The names STORZ & BICKEL's manuals and support pages use for every device.

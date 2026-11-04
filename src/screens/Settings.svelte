@@ -10,6 +10,7 @@
   import { debugging, type DebuggingState } from '../lib/debugging';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
   import { decimal, deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
+  import { locale } from '../lib/locale.svelte';
   import { usage } from '../lib/usage.svelte';
 
   const d = $derived(conn.device as DeviceState);
@@ -38,7 +39,7 @@
   const room = $derived(Math.max(1, Math.min(99, d.maxTemp - (d.targetTemp ?? d.minTemp))));
   const at = (offset: number | undefined) =>
     d.targetTemp === undefined || offset === undefined ? '–' : `${toUnit(Math.min(d.maxTemp, d.targetTemp + offset), unit)}°`;
-  const unit = $derived(d.unit ?? 'C');
+  const unit = $derived(d.unit ?? locale.temperatureUnit);
   const plus = (v: number | undefined) => (v === undefined ? '–' : `+${deltaToUnit(v, unit)}°`);
   // Factory offsets from base (S&B support): Booster +15, Superbooster +30 on CRAFTY+, VENTY and VEAZY.
   const factory = { boost: 15, superBoost: 30 };
@@ -176,7 +177,7 @@
                 <span class="temp"><span>Superbooster</span><strong>{at(d.superBoostOffset)}</strong></span>
               </div>
               {#if crafty}
-                <div class="desc">Fixed on CRAFTY+: always 15 °C above the Booster, so it follows the Booster offset.</div>
+                <div class="desc">Fixed on CRAFTY+: always {deltaToUnit(15, unit)} °{unit} above the Booster, so it follows the Booster offset.</div>
               {/if}
               <Slider id="superBoostOffset" min={Math.min(room, (d.boostOffset ?? 0) + 1)} max={room} step={1} value={Math.min(room, d.superBoostOffset)}
                 defaultValue={factory.superBoost} disabled={crafty} onchange={(v) => conn.setSuperBoostOffset(v)} />
