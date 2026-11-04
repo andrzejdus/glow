@@ -207,7 +207,8 @@ changed: 7 pushes in the session. A push when the charger goes in has not been s
 3 s poll of `0063` stays.
 
 On the phone one pass over these 13 registers took about 8–13 s, so Device diagnostics sees a
-change up to that late, not within a second.
+change up to that late, not within a second. The three battery temperatures (below) make the pass
+longer still.
 
 ## Battery temperature
 
@@ -227,6 +228,7 @@ Glow reads `0113` on connect and with `refresh()` (every ~30 s; it changes slowl
 charger poll) and reports it as `batteryTemp` with one decimal. It decodes it as signed, so a battery
 below 0 °C would come out right, and ignores `0xffff` and anything outside −40…100 °C. If the first
 read fails (firmware without the characteristic), Glow does not ask again until the next connection.
+Device diagnostics shows all three in °C with the raw value in hex next to it.
 
 Open: not yet seen on our own CRAFTY+ (V03.24); whether the original CRAFTY has these characteristics;
 whether `0123` / `0133` cover the battery's life, a charge or a session.

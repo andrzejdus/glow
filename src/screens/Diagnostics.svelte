@@ -9,7 +9,7 @@
   let { onclose }: { onclose: () => void } = $props();
 
   /** A register change, or a mark the user set ("the LED just turned green"); both with the temperatures then. */
-  type Change = { time: string; label: string; source: string; from: number | null; to: number | null; temps: string; mark?: boolean; regs?: string; unit?: string };
+  type Change = { time: string; label: string; source: string; from: number | null; to: number | null; temps: string; mark?: boolean; regs?: string; unit?: string; scale?: number };
 
   let rows = $state<DiagnosticValue[]>([]);
   /** The values bits are compared against; set by the first reading and by "Mark as baseline". */
@@ -24,9 +24,11 @@
     const c = d?.currentTemp === undefined ? '–' : `${d.currentTemp.toFixed(1)} °C`;
     return `${c}, target ${d?.targetTemp ?? '–'} °C${d?.mode && d.mode !== 'normal' ? ` (${d.mode})` : ''}`;
   };
-  /** A number with a unit as it is, a register as hex. */
-  const show = (v: number | null, unit?: string) => (unit ? (v === null ? '–' : `${v} ${unit}`) : hex(v));
-  const hex = (v: number | null) => (v === null ? '–' : `0x${v.toString(16).padStart(4, '0')}`);
+  /** A number with a unit as it is, or scaled with the raw value in hex too ("27.9 °C (0x0117)"); a register as hex. */
+  const show = (v: number | null, unit?: string, scale?: number) =>
+    !unit ? hex(v) : v === null ? '–' : scale ? `${scaled(v, scale)} ${unit} (${hex(v)})` : `${v} ${unit}`;
+  const scaled = (v: number, scale: number) => (v * scale).toFixed(Math.max(0, -Math.floor(Math.log10(scale))));
+  const hex = (v: number | null) => (v === null ? '–' : `0x${(v & 0xffff).toString(16).padStart(4, '0')}`);
   const bit = (v: number | null, i: number) => (v === null ? '·' : (v >> i) & 1 ? '1' : '0');
   const changed = (source: string, v: number | null, i: number) => {
     const b = baseline[source];
@@ -59,7 +61,7 @@
               ? was != null && r.value != null && r.value - was > Math.max(5, Math.abs(was) * 0.1)
               : was !== r.value;
             if (before.has(r.source) && logged) {
-              log = [{ time, label: r.label, source: r.source, from: was ?? null, to: r.value, temps: temps(), unit: r.unit }, ...log].slice(0, 200);
+              log = [{ time, label: r.label, source: r.source, from: was ?? null, to: r.value, temps: temps(), unit: r.unit, scale: r.scale }, ...log].slice(0, 200);
             }
           }
           rows = next;
@@ -75,7 +77,7 @@
   function mark() {
     tap();
     // Every register's value at that moment, so a bit that did not change is in the log too.
-    const regs = rows.map((r) => `${r.source}=${show(r.value, r.unit)}`).join(' ');
+    const regs = rows.map((r) => `${r.source}=${show(r.value, r.unit, r.scale)}`).join(' ');
     log = [{ time: clock(), label: 'Marked', source: '', from: null, to: null, temps: temps(), mark: true, regs }, ...log].slice(0, 200);
   }
 
@@ -90,14 +92,14 @@
       `Glow ${__APP_VERSION__} · ${d?.model ?? ''} firmware ${d?.firmware ?? '–'} BLE ${d?.firmwareBle ?? '–'}`,
       `Battery ${d?.battery ?? '–'} %`,
       '',
-      ...rows.map((r) => `${r.label} ${r.source}: ${show(r.value, r.unit)} (baseline ${show(baseline[r.source] ?? null, r.unit)})`),
+      ...rows.map((r) => `${r.label} ${r.source}: ${show(r.value, r.unit, r.scale)} (baseline ${show(baseline[r.source] ?? null, r.unit, r.scale)})`),
       '',
       'Changes, newest first:',
       ...(log.length
         ? log.map((c) =>
             c.mark
               ? `${c.time} MARKED at ${c.temps}; ${c.regs}`
-              : `${c.time} ${c.label} ${c.source}: ${show(c.from, c.unit)} → ${show(c.to, c.unit)} ${c.unit ? '' : flips(c.from, c.to)} at ${c.temps}`,
+              : `${c.time} ${c.label} ${c.source}: ${show(c.from, c.unit, c.scale)} → ${show(c.to, c.unit, c.scale)} ${c.unit ? '' : flips(c.from, c.to)} at ${c.temps}`,
           )
         : ['none']),
     ].join('\n');
@@ -148,7 +150,7 @@
           <div class="r-top">
             <span class="r-label">{r.label}</span>
             <span class="r-src num">{r.source}</span>
-            <span class="r-hex num">{show(r.value, r.unit)}</span>
+            <span class="r-hex num">{show(r.value, r.unit, r.scale)}</span>
           </div>
           {#if !r.unit}
             <span class="cells num">
@@ -176,7 +178,7 @@
             {#if c.mark}
               <span class="c-what">Marked</span>
             {:else}
-              <span class="c-what">{c.label} {show(c.from, c.unit)} → {show(c.to, c.unit)}</span>
+              <span class="c-what">{c.label} {show(c.from, c.unit, c.scale)} → {show(c.to, c.unit, c.scale)}</span>
               {#if !c.unit}<span class="c-bits">{flips(c.from, c.to)}</span>{/if}
             {/if}
             <span class="c-temps">{c.temps}</span>

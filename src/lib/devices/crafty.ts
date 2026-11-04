@@ -546,8 +546,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
   async diagnostics(): Promise<DiagnosticValue[]> {
     // The official app reads the last three only for its analysis; their bits are undocumented.
-    // label, service, characteristic, unit (plain number instead of bits), quiet (not logged), signed
-    const registers: [string, string, string, string?, boolean?, boolean?][] = [
+    // label, service, characteristic, unit (plain number instead of bits), quiet (not logged), signed, scale
+    const registers: [string, string, string, string?, boolean?, boolean?, number?][] = [
       ['Project status', SVC_SYSTEM, CHR.status],
       ['Project status 2', SVC_SYSTEM, CHR.status2],
       ['System status', SVC_SYSTEM, CHR.systemStatus],
@@ -561,11 +561,15 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
       ['Battery voltage', SVC_SYSTEM, CHR.batteryVoltage, 'mV', true],
       ['Mains voltage', SVC_SYSTEM, CHR.mainsVoltage, 'mV', true],
       ['Battery current', SVC_SYSTEM, CHR.batteryCurrent, 'mA', true, true],
+      // °C × 10. The lowest and highest change seldom, so each change of theirs is logged.
+      ['Battery temperature', SVC_SYSTEM, CHR.batteryTemp, '°C', true, true, 0.1],
+      ['Battery temp. min', SVC_SYSTEM, CHR.batteryTempMin, '°C', false, true, 0.1],
+      ['Battery temp. max', SVC_SYSTEM, CHR.batteryTempMax, '°C', false, true, 0.1],
     ];
     const out: DiagnosticValue[] = [];
-    for (const [label, service, chr, unit, quiet, signed] of registers) {
+    for (const [label, service, chr, unit, quiet, signed, scale] of registers) {
       const value = await this.read(service, chr).then(signed ? readI16 : readU16, () => null);
-      out.push({ label, source: `0x${chr.slice(4, 8)}`, value, unit, quiet });
+      out.push({ label, source: `0x${chr.slice(4, 8)}`, value, unit, quiet, scale });
     }
     out.push({ label: 'Battery status pushes', source: 'notify 0x0063', value: this.batteryStatusPushes, unit: '×' });
     return out;

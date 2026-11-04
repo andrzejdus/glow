@@ -83,6 +83,8 @@ export interface DiagnosticValue {
   value: number | null;
   /** Set for a plain number (shown with this unit, no bits), e.g. "%" or "s". */
   unit?: string;
+  /** With a unit: shown as value × scale (0.1 for °C × 10), with the raw value in hex next to it. */
+  scale?: number;
   /** Changes all the time (a countdown): shown, but not written to the change log. */
   quiet?: boolean;
 }

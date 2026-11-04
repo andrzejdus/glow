@@ -343,6 +343,11 @@ describe('crafty driver', () => {
     const t = craftyPlus({ [U.batteryTemp]: [0x17, 0x01] });
     const { driver, state } = await started(t);
     expect(state.batteryTemp).toBe(27.9);
+    expect((await driver.diagnostics!()).find((r) => r.source === '0x0113')).toMatchObject({
+      value: 0x0117,
+      unit: '°C',
+      scale: 0.1,
+    });
     t.values.set(U.batteryTemp, le16(312));
     await driver.refresh!();
     expect(state.batteryTemp).toBe(31.2);
@@ -411,6 +416,9 @@ describe('crafty driver', () => {
       ['0x00b3', null],
       ['0x00c3', null],
       ['0x00e3', null],
+      ['0x0113', null],
+      ['0x0123', null],
+      ['0x0133', null],
       ['notify 0x0063', 0],
     ]);
   });
