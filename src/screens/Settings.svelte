@@ -5,6 +5,7 @@
   import Icon from '../components/Icon.svelte';
   import Toggle from '../components/Toggle.svelte';
   import Diagnostics from './Diagnostics.svelte';
+  import { background } from '../lib/background';
   import { conn } from '../lib/connection.svelte';
   import { debugging, type DebuggingState } from '../lib/debugging';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
@@ -51,6 +52,11 @@
   // Background recording is set up for one device: the switch shows it on only for that one.
   const bgShown = $derived(!!conn.bg?.supported && !conn.demo);
   const bgOn = $derived(!!conn.bg?.enabled && conn.bg.id?.toUpperCase() === conn.target?.id.toUpperCase());
+  // Android's battery optimization may stop the recorder; only Android's own settings can exempt Glow.
+  const bgRestricted = $derived(bgOn && conn.bg?.unrestricted === false);
+  function batterySettings() {
+    background?.openBatterySettings().catch(() => undefined);
+  }
   let finding = $state(false);
   function find() {
     conn.findMy();
@@ -208,7 +214,7 @@
       <h2>App</h2>
       <div class="card list">
         {#if bgShown}
-          <div class="row">
+          <div class="row" class:joined={bgRestricted}>
             <div class="text">
               <div class="name"><label for="background">Record in the background</label></div>
               <div class="desc">
@@ -218,6 +224,17 @@
             </div>
             <Toggle id="background" label="Record in the background" on={bgOn} onchange={(on) => conn.setBackground(on)} />
           </div>
+          {#if bgRestricted}
+            <div class="row hint">
+              <div class="text">
+                <div class="desc">
+                  Battery optimization can stop Glow while it records. Set Glow to “Don't optimize”. On OnePlus and some
+                  other phones, also lock Glow in the recent apps.
+                </div>
+              </div>
+              <button type="button" class="small press" onclick={batterySettings}>Battery settings</button>
+            </div>
+          {/if}
         {/if}
         <div class="row">
           <div class="text">
@@ -516,6 +533,30 @@
     font-weight: 800;
     cursor: pointer;
     margin-top: 6px;
+  }
+  .row.joined {
+    border-bottom: 0;
+  }
+  .hint {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding-top: 0;
+  }
+  .hint .desc {
+    margin-top: 0;
+  }
+  .small {
+    flex-shrink: 0;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1.5px solid var(--orange-ink);
+    background: transparent;
+    color: var(--orange-ink);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
   }
   .diag {
     align-self: center;

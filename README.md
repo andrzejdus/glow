@@ -49,7 +49,8 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
 - 🌙 **Records in the background** (Android 12+, off until you switch it on in Settings). Android
   wakes Glow when the device comes into range, Glow connects and logs the session with the app
   closed (with a notification while it does), and the next time you open Glow the session is in
-  Stats as if you had watched it.
+  Stats as if you had watched it. If Android's battery optimization could stop it, Settings says
+  so and opens the battery settings.
 - 🔋 **Battery.** Level, charging and charged, with the charge animating up to full. A VENTY or
   VEAZY also shows its lifetime time on the charger.
 - 🌋 **VOLCANO workflows.** Flow 1–3 and Balloon run from the phone, step by step, with time

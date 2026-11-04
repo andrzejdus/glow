@@ -6,13 +6,18 @@ import android.companion.AssociationInfo;
 import android.companion.AssociationRequest;
 import android.companion.BluetoothLeDeviceFilter;
 import android.companion.CompanionDeviceManager;
+import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.bluetooth.le.ScanFilter;
 import android.net.MacAddress;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -121,10 +126,40 @@ public class BackgroundPlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * Android's battery optimization list, where the user can exempt Glow (there is no per-app
+     * screen to open directly without REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, which Play restricts);
+     * Glow's app info where that list is missing.
+     */
+    @PluginMethod
+    public void openBatterySettings(PluginCall call) {
+        Context c = getContext();
+        try {
+            getActivity().startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+        } catch (ActivityNotFoundException e) {
+            try {
+                getActivity().startActivity(
+                    new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", c.getPackageName(), null))
+                );
+            } catch (ActivityNotFoundException e2) {
+                call.reject("No battery settings on this phone");
+                return;
+            }
+        }
+        call.resolve();
+    }
+
+    /** Whether Android's battery optimization leaves Glow alone (it may stop the recorder otherwise). */
+    private boolean unrestricted() {
+        PowerManager pm = getContext().getSystemService(PowerManager.class);
+        return pm == null || pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+    }
+
     private JSObject state() {
         JSObject ret = new JSObject();
         ret.put("supported", Background.supported());
         ret.put("enabled", Background.enabled(getContext()));
+        ret.put("unrestricted", unrestricted());
         String address = Background.address(getContext());
         if (address != null) ret.put("id", address);
         return ret;

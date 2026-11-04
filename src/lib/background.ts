@@ -12,6 +12,8 @@ export interface BackgroundState {
   id?: string;
   /** The system dialog was dismissed. */
   cancelled?: boolean;
+  /** Android's battery optimization leaves Glow alone; otherwise it may stop the recorder. */
+  unrestricted?: boolean;
 }
 
 interface BackgroundPlugin {
@@ -25,6 +27,8 @@ interface BackgroundPlugin {
   done(): Promise<void>;
   /** The app's own connection ended; `present` when it let a device that is still on go. */
   release(options: { present: boolean }): Promise<void>;
+  /** Opens Android's battery optimization settings (Glow's app info where there are none). */
+  openBatterySettings(): Promise<void>;
 }
 
 export const background = Capacitor.isNativePlatform() ? registerPlugin<BackgroundPlugin>('Background') : null;

@@ -107,6 +107,8 @@ class Connection {
         }
         return;
       }
+      // Back from Android's battery settings, say: Settings › App shows whether Glow is exempt.
+      background?.status().then((s) => (this.bg = s), () => undefined);
       if (this.away) this.comeBack();
       else if (this.phase === 'idle' && this.native && this.autoConnect && !this.userDisconnect) this.search();
       else if (this.phase === 'connected') {
