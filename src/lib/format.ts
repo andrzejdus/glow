@@ -42,9 +42,25 @@ export function usageTime(hours: number): string {
   return rest ? `${Math.floor(minutes / 60)} h ${rest} min` : `${minutes / 60} h`;
 }
 
-export function duration(seconds: number): string {
-  if (seconds >= 3600) return `${Math.round(seconds / 360) / 10} h`;
+const numberFormats = new Map<string, Intl.NumberFormat>();
+
+/**
+ * A number with the phone's decimal separator ("3,5" in Polish), between `min` and `max` decimals.
+ * The formatters are kept, as some of these numbers change every second.
+ */
+export function decimal(value: number, min: number, max = min, locales?: string): string {
+  const key = `${locales ?? ''}|${min}|${max}`;
+  let format = numberFormats.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(locales, { minimumFractionDigits: min, maximumFractionDigits: max });
+    numberFormats.set(key, format);
+  }
+  return format.format(value);
+}
+
+export function duration(seconds: number, locales?: string): string {
+  if (seconds >= 3600) return `${decimal(seconds / 3600, 0, 1, locales)} h`;
   // One decimal, so the CRAFTY's 30 s steps show as they are: 210 s is 3.5 min, not 4.
-  if (seconds >= 60) return `${Math.round(seconds / 6) / 10} min`;
+  if (seconds >= 60) return `${decimal(seconds / 60, 0, 1, locales)} min`;
   return `${Math.round(seconds)} s`;
 }

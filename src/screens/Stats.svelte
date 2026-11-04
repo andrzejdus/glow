@@ -2,7 +2,7 @@
   import Icon from '../components/Icon.svelte';
   import SessionChart from '../components/SessionChart.svelte';
   import { conn, tap } from '../lib/connection.svelte';
-  import { clockTime, mmss, splitHours, toUnit, usageTime } from '../lib/format';
+  import { clockTime, decimal, mmss, splitHours, toUnit, usageTime } from '../lib/format';
   import { heatUpSec, readyAtOnce, sessions, type SessionDetail, type SessionEvent, type SessionSummary } from '../lib/sessions.svelte';
   import { locale } from '../lib/locale.svelte';
   import { usage } from '../lib/usage.svelte';
@@ -201,7 +201,7 @@
     <div class="bars" style:--n={bars.length} role="img" aria-label="Hours used per {period}">
       {#each bars as b, i (period + b.label + i)}
         <div class="col">
-          <div class="val num" class:current={b.current}>{!b.hours || b.hours * 60 < 1 ? '' : b.hours < 1 ? `${Math.round(b.hours * 60)}m` : b.hours.toFixed(1)}</div>
+          <div class="val num" class:current={b.current}>{!b.hours || b.hours * 60 < 1 ? '' : b.hours < 1 ? `${Math.round(b.hours * 60)}m` : decimal(b.hours, 1)}</div>
           <div class="bar" class:current={b.current} class:empty={!b.hours}
             style:height="{!b.hours ? 4 : Math.max(6, Math.round((b.hours / max) * 64))}px" style:animation-delay="{i * 0.03}s"></div>
           <div class="wk" class:current={b.current}>{b.label}</div>
@@ -209,7 +209,7 @@
       {/each}
     </div>
     <div class="grid num">
-      <div><span>Sessions a week</span><strong>{perWeek === null ? '–' : perWeek.toFixed(1)}</strong></div>
+      <div><span>Sessions a week</span><strong>{perWeek === null ? '–' : decimal(perWeek, 1)}</strong></div>
       <div><span>Avg session</span><strong>{avgLength === null ? '–' : mmss(avgLength)}</strong></div>
       <div><span>Avg ready in</span><strong>{avgReady === null ? '–' : mmss(avgReady)}</strong></div>
       <div><span>Outside Glow</span><strong>{outside === null ? '–' : usageTime(outside)}</strong></div>

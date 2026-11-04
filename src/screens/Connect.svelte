@@ -5,6 +5,7 @@
   import Toggle from '../components/Toggle.svelte';
   import { conn, tap } from '../lib/connection.svelte';
   import { modelNames } from '../lib/devices/registry';
+  import { decimal } from '../lib/format';
 
   const who = $derived(conn.target ?? conn.last);
   const model = $derived(who ? modelNames[who.kind] : null);
@@ -18,7 +19,7 @@
             : done ? 4 : -1,
   );
   const steps = $derived([
-    { label: 'Bluetooth ready', meta: `${(conn.meta.bluetoothMs / 1000).toFixed(1)} s` },
+    { label: 'Bluetooth ready', meta: `${decimal(conn.meta.bluetoothMs / 1000, 1)} s` },
     { label: `${model ?? 'Device'} found`, meta: conn.meta.rssi !== undefined ? `${conn.meta.rssi} dBm` : '' },
     { label: 'Connecting', meta: '' },
     { label: 'Syncing settings', meta: conn.meta.values ? `${conn.meta.values} values` : '' },

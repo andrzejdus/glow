@@ -9,7 +9,7 @@
   import { conn } from '../lib/connection.svelte';
   import { debugging, type DebuggingState } from '../lib/debugging';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
-  import { deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
+  import { decimal, deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
   import { usage } from '../lib/usage.svelte';
 
   const d = $derived(conn.device as DeviceState);
@@ -66,7 +66,7 @@
 
   function show(def: SettingDef, value: number) {
     if (def.unit === 's') return duration(value);
-    if (def.unit === 'min') return value >= 60 ? `${Math.round(value / 6) / 10} h` : `${value} min`;
+    if (def.unit === 'min') return value >= 60 ? `${decimal(value / 60, 0, 1)} h` : `${value} min`;
     return `${value}${def.unit ?? ''}`;
   }
   // Battery voltage, current and their product. Current and power show their size only; the
@@ -76,9 +76,9 @@
     const out: { label: string; value: string; unit: string }[] = [];
     const mv = d.batteryVoltage;
     const ma = d.batteryCurrent === undefined ? undefined : Math.abs(d.batteryCurrent);
-    if (mv !== undefined) out.push({ label: 'Voltage', value: (mv / 1000).toFixed(2), unit: 'V' });
-    if (ma !== undefined) out.push(ma < 1000 ? { label: 'Current', value: String(ma), unit: 'mA' } : { label: 'Current', value: (ma / 1000).toFixed(2), unit: 'A' });
-    if (mv !== undefined && ma !== undefined) out.push({ label: 'Power', value: ((mv * ma) / 1e6).toFixed(2), unit: 'W' });
+    if (mv !== undefined) out.push({ label: 'Voltage', value: decimal(mv / 1000, 2), unit: 'V' });
+    if (ma !== undefined) out.push(ma < 1000 ? { label: 'Current', value: String(ma), unit: 'mA' } : { label: 'Current', value: decimal(ma / 1000, 2), unit: 'A' });
+    if (mv !== undefined && ma !== undefined) out.push({ label: 'Power', value: decimal((mv * ma) / 1e6, 2), unit: 'W' });
     const cm = d.chargingMinutes;
     if (cm !== undefined) out.push(cm < 60 ? { label: 'Charge time', value: String(cm), unit: 'min' } : { label: 'Charge time', value: String(Math.round(cm / 60)), unit: 'h' });
     return out;
