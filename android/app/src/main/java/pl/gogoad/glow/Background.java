@@ -12,6 +12,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -27,6 +28,11 @@ import java.util.List;
  * TypeScript.
  *
  * Settings live in their own SharedPreferences file; the log lives in files/background/.
+ *
+ * Android may kill Glow while it records (memory, battery savers) and restart the service later
+ * (START_STICKY) in a new process, where the fields below start empty. So whether the device was
+ * around is kept in the settings too, for restore(), and a recording the kill cut off is closed
+ * with "E killed" before anything else is written to the log.
  */
 final class Background {
 
@@ -86,13 +92,37 @@ final class Background {
 
     static void save(Context c, boolean on, String address, String name, String kind, String model) {
         // commit, not apply: the service may read them right after.
-        prefs(c).edit()
-            .putBoolean("enabled", on)
+        SharedPreferences.Editor edit = prefs(c).edit();
+        // Switched off: nothing to come back to after a restart.
+        if (!on) edit.putBoolean(AROUND, false);
+        edit.putBoolean("enabled", on)
             .putString("address", address)
             .putString("name", name)
             .putString("kind", kind)
             .putString("model", model)
             .commit();
+    }
+
+    /** Whether the device was around, for a restart in a new process: see restore(). */
+    private static final String AROUND = "around";
+
+    /** Holds Background.class. apply() writes it to disk soon, off this thread. */
+    private static void persist(Context c) {
+        prefs(c).edit().putBoolean(AROUND, present || held).apply();
+    }
+
+    /**
+     * The system restarted the recorder after it killed Glow. The device was around then and has not
+     * been reported gone since, so the recorder connects again: if it is no longer there, the
+     * recorder's own timeouts give up on it as on any device that does not answer. The app's
+     * connection died with the process, so a device it held counts as present.
+     */
+    static void restore(Context c) {
+        boolean around = enabled(c) && prefs(c).getBoolean(AROUND, false);
+        Log.i(TAG, "restarted, device " + (around ? "around" : "not around"));
+        synchronized (Background.class) {
+            if (around) present = true;
+        }
     }
 
     static synchronized Mode mode(Context c) {
@@ -115,6 +145,7 @@ final class Background {
         synchronized (Background.class) {
             held = on;
             if (!on && stillPresent) present = true;
+            persist(c);
         }
         sync(c);
     }
@@ -125,6 +156,7 @@ final class Background {
             if (held) present = true;
             held = false;
             visible = false;
+            persist(c);
         }
         sync(c);
     }
@@ -136,6 +168,7 @@ final class Background {
         Log.i(TAG, "device " + (on ? "appeared" : "disappeared"));
         synchronized (Background.class) {
             present = on;
+            persist(c);
         }
         sync(c);
     }
@@ -145,6 +178,7 @@ final class Background {
         synchronized (Background.class) {
             present = false;
             held = false;
+            persist(c);
         }
         sync(c);
     }
@@ -202,13 +236,65 @@ final class Background {
     /** Appends lines to the log. Callers hold LOCK. */
     static void append(Context c, List<String> lines) {
         if (lines.isEmpty()) return;
+        closeCutOff(c);
         StringBuilder out = new StringBuilder();
         for (String line : lines) out.append(line).append('\n');
+        write(c, out.toString());
+    }
+
+    private static void write(Context c, String text) {
         try (OutputStream o = new FileOutputStream(current(c), true)) {
-            o.write(out.toString().getBytes(StandardCharsets.UTF_8));
+            o.write(text.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             Log.w(TAG, "cannot write the log", e);
         }
+    }
+
+    /** The log was checked for a recording cut off by a kill, once per process. Guarded by LOCK. */
+    private static boolean checked;
+
+    /**
+     * A recording that was running when Glow was killed has no E line. Before this process writes
+     * or hands over the log, it gets one ("E killed", at the time of its last line), so the app
+     * replays it as a drop, and a recording the restarted recorder begins starts on a line of its own.
+     * Holds LOCK.
+     */
+    private static void closeCutOff(Context c) {
+        if (checked) return;
+        checked = true;
+        File f = current(c);
+        long size = f.length();
+        if (size == 0) return;
+        // Lines are short: the last few kilobytes hold the last whole one.
+        long from = Math.max(0, size - 4096);
+        String tail;
+        try (RandomAccessFile in = new RandomAccessFile(f, "r")) {
+            byte[] buf = new byte[(int) (size - from)];
+            in.seek(from);
+            in.readFully(buf);
+            tail = new String(buf, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            Log.w(TAG, "cannot read the log", e);
+            return;
+        }
+        StringBuilder out = new StringBuilder();
+        // A line the kill cut short is left as it is, ended, for the app to skip.
+        boolean whole = tail.endsWith("\n");
+        if (!whole) out.append('\n');
+        String[] lines = tail.split("\n");
+        int last = lines.length - (whole ? 1 : 2);
+        // The first piece of the tail may start mid-line.
+        String[] parts = last > 0 || (last == 0 && from == 0) ? lines[last].split(" ") : new String[0];
+        if (parts.length >= 2 && !parts[1].equals("E")) {
+            try {
+                long t = Long.parseLong(parts[0]);
+                out.append(t).append(" E killed\n");
+                Log.i(TAG, "closed a recording cut off at " + t);
+            } catch (NumberFormatException e) {
+                // Not a line Recorder wrote.
+            }
+        }
+        if (out.length() > 0) write(c, out.toString());
     }
 
     /**
@@ -218,6 +304,7 @@ final class Background {
     static String take(Context c) {
         synchronized (LOCK) {
             if (recorder != null) recorder.handOver();
+            closeCutOff(c);
             File now = current(c);
             File old = taken(c);
             if (now.exists()) {

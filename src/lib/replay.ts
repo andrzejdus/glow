@@ -27,7 +27,10 @@ export interface Recording {
   entries: Line[];
   /** When it ended; the last entry's time when the log was cut off. */
   end: number;
-  /** idle, lost, app, off; null when cut off (Glow was killed while recording). */
+  /**
+   * idle, lost, app, off, killed (Glow was killed while recording, closed after the restart); null
+   * when cut off and not closed yet.
+   */
   reason: string | null;
 }
 
@@ -176,7 +179,8 @@ async function replayOne(r: Recording) {
   } finally {
     await driver.stop().catch(() => undefined);
   }
-  // Handed to the app: its own connection carries on from here, unmarked. Otherwise the device was gone.
+  // Handed to the app: its own connection carries on from here, unmarked. Otherwise the device was
+  // gone, or Glow was: a recording after the restart carries the session on, marked as a drop.
   if (r.reason === 'app') sessions.suspend();
   else sessions.lost(r.end);
 }
@@ -192,9 +196,10 @@ export async function replay(text: string, id: string): Promise<number> {
   sessions.pause(true);
   try {
     for (const r of recordings) {
-      // Read before (a replay cut short): its sessions start within it, or one carried on through it.
+      // Read before (a replay cut short): its sessions start within it, or one carried on into it
+      // (through a recording after a restart, say).
       const covered = sessions.list.some(
-        (s) => (s.id >= r.start && s.id <= r.end) || (s.id < r.start && Math.max(s.seen, s.end ?? 0) >= r.end),
+        (s) => (s.id >= r.start && s.id <= r.end) || (s.id < r.start && Math.max(s.seen, s.end ?? 0) > r.start),
       );
       if (covered) continue;
       try {

@@ -13,6 +13,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
+import android.util.Log;
 import androidx.core.app.NotificationCompat;
 
 /**
@@ -49,10 +50,16 @@ public class RecorderService extends Service {
         // Started again while stopping: Android keeps this instance, so it carries on.
         instance = this;
         stopping = false;
+        // Restarted by the system after it killed Glow (no intent then): what the old process knew
+        // about the device is gone with it, so read back whether it was around.
+        if (intent == null) Background.restore(this);
         // Within seconds of startForegroundService(), whatever happens next.
-        show(true);
+        if (!show(true)) {
+            instance = null;
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         sync();
-        // Restarted by the system after it killed Glow: sync() works out again whether to record.
         return START_STICKY;
     }
 
@@ -129,9 +136,10 @@ public class RecorderService extends Service {
         return null;
     }
 
-    private void show(boolean starting) {
+    /** False when Android would not let the service run in the foreground. */
+    private boolean show(boolean starting) {
         // A change reported after the service was told to stop would leave a stray notification.
-        if (stopping) return;
+        if (stopping) return true;
         String model = Background.model(this);
         String title;
         String text;
@@ -145,7 +153,7 @@ public class RecorderService extends Service {
             title = "Waiting for the " + model;
             text = "Glow records sessions in the background.";
         }
-        if (!starting && (title + text).equals(shown)) return;
+        if (!starting && (title + text).equals(shown)) return true;
         shown = title + text;
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm.getNotificationChannel(CHANNEL) == null) {
@@ -168,14 +176,22 @@ public class RecorderService extends Service {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build();
-        if (starting) {
+        if (!starting) {
+            nm.notify(NOTIFICATION, n);
+            return true;
+        }
+        try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIFICATION, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
             } else {
                 startForeground(NOTIFICATION, n);
             }
-        } else {
-            nm.notify(NOTIFICATION, n);
+            return true;
+        } catch (RuntimeException e) {
+            // ForegroundServiceStartNotAllowedException, say on a restart Android does not count as
+            // the companion device's: the device's next sighting starts the recorder again.
+            Log.w("GlowBackground", "cannot run in the foreground", e);
+            return false;
         }
     }
 }

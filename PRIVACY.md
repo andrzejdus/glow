@@ -20,7 +20,8 @@ Glow saves this in its own private app storage on the phone:
   can reconnect to it when you open the app.
 - **The "Auto-connect on open", "Record in the background" and "Debugging from a computer"
   settings**, and for "Record in the background" the device it records: its Bluetooth address,
-  name and model.
+  name and model, and whether it was last in range, so the recorder can carry on if Android
+  restarts it.
 - **Hours-of-operation history**: readings of the device's own lifetime operating counter, with
   the time of each reading (at most two an hour), kept for up to 400 days. Glow uses them to
   show the usage per month.

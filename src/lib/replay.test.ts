@@ -132,6 +132,55 @@ describe('background recording replay', () => {
     expect(detail.ts).toContain(40);
   });
 
+  it('reads a recording closed after a restart as killed, ending at its last line', () => {
+    const log = craftyLog('AA:BB:CC:DD:EE:01', '').split('\n').filter((l) => Number(l.split(' ')[0]) <= T0 + 60_000);
+    const recs = parseLog([...log, `${T0 + 60_000} E killed`].join('\n'));
+    expect(recs).toHaveLength(1);
+    expect(recs[0].reason).toBe('killed');
+    expect(recs[0].end).toBe(T0 + 60_000);
+  });
+
+  it('carries a session on through a kill and the restarted recorder, marked as a drop', async () => {
+    const id = 'AA:BB:CC:DD:EE:06';
+    await usage.bind(id);
+    await sessions.bind(id);
+    // Killed 60 s in, while heating; restarted 40 s later, the heater still on, until it cools down.
+    const before = craftyLog(id, '').split('\n').filter((l) => Number(l.split(' ')[0]) <= T0 + 60_000);
+    const after = craftyHead(id, T0 + 100_000, 0x110, 1800);
+    for (let sec = 101; sec <= 130; sec++) after.push(`${T0 + sec * 1000} N ${C.SVC_CONTROL} ${C.currentTemp} ${u16(1800)}`);
+    after.push(`${T0 + 131_000} N ${C.SVC_SYSTEM} ${C.status} ${u16(0)}`);
+    for (let sec = 133; sec <= 251; sec += 2) after.push(`${T0 + sec * 1000} N ${C.SVC_CONTROL} ${C.currentTemp} ${u16(Math.max(300, 1800 - (sec - 131) * 25))}`);
+    after.push(`${T0 + 260_000} E idle`);
+    // The restarted recorder closes the cut-off recording before it writes its own.
+    const log = [...before, `${T0 + 60_000} E killed`, ...after].join('\n');
+    expect(await replay(log, id)).toBe(2);
+    expect(sessions.list).toHaveLength(1);
+    const [s] = sessions.list;
+    expect(s.id).toBe(T0 + 14_000);
+    expect(s.end).toBe(T0 + 131_000);
+    expect(s.readySec).toBe(26);
+    const detail = (await sessions.detail(s.id))!;
+    expect(detail.events.filter((e) => e.k === 'lost' || e.k === 'back')).toEqual([
+      { t: 46, k: 'lost' },
+      { t: 86, k: 'back' },
+    ]);
+    // Read again: nothing doubles.
+    expect(await replay(log, id)).toBe(0);
+    expect(sessions.list).toHaveLength(1);
+  });
+
+  it('carries on the same way when the cut-off recording was never closed', async () => {
+    const id = 'AA:BB:CC:DD:EE:07';
+    await usage.bind(id);
+    await sessions.bind(id);
+    const before = craftyLog(id, '').split('\n').filter((l) => Number(l.split(' ')[0]) <= T0 + 60_000);
+    const after = craftyHead(id, T0 + 100_000, 0x110, 1800);
+    after.push(`${T0 + 101_000} N ${C.SVC_SYSTEM} ${C.status} ${u16(0)}`, `${T0 + 102_000} E app`);
+    expect(await replay([...before, ...after].join('\n'), id)).toBe(2);
+    expect(sessions.list).toHaveLength(1);
+    expect(sessions.list[0].end).toBe(T0 + 101_000);
+  });
+
   it('turns a VENTY recording into a session, answering its requests from the log', async () => {
     const id = 'AA:BB:CC:DD:EE:04';
     await usage.bind(id);

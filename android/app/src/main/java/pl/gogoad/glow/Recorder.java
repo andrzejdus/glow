@@ -42,7 +42,11 @@ import java.util.UUID;
  *   t N service char hex     a notification
  *   t F                      a round of re-reads is complete (the app calls the driver's refresh())
  *   t E reason               the recording ends: idle (cooled down), lost (link gone), app (the app
- *                            took over), off (switched off)
+ *                            took over), off (switched off), killed (Glow was killed meanwhile:
+ *                            written after the restart, at the time of the last line before it)
+ *
+ * After a restart (see Background.restore) the recorder starts afresh: a heater still on begins a
+ * new recording with a B line of its own, which the app's session log carries on from the one cut off.
  */
 @SuppressLint("MissingPermission") // The app has BLUETOOTH_CONNECT before recording can be switched on.
 final class Recorder {
