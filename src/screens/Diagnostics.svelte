@@ -3,6 +3,8 @@
   import Icon from '../components/Icon.svelte';
   import { conn, tap } from '../lib/connection.svelte';
   import type { DiagnosticValue } from '../lib/devices/types';
+  import { clockTime } from '../lib/format';
+  import { locale } from '../lib/locale.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -16,7 +18,7 @@
   let copied = $state(false);
 
   const bits = Array.from({ length: 16 }, (_, i) => 15 - i);
-  const clock = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const clock = () => clockTime(Date.now(), locale.is24Hour, true);
   const temps = () => {
     const d = conn.device;
     const c = d?.currentTemp === undefined ? '–' : `${d.currentTemp.toFixed(1)} °C`;

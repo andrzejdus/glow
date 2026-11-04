@@ -3,6 +3,19 @@ export function mmss(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/**
+ * A time of day in the phone's language, on the clock the phone is set to: Intl alone cannot see
+ * Android's 24-hour switch, only what is usual for the language.
+ */
+export function clockTime(t: number, is24Hour: boolean, seconds = false, locales?: Intl.LocalesArgument): string {
+  return new Date(t).toLocaleTimeString(locales, {
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(seconds ? { second: '2-digit' } : {}),
+    hourCycle: is24Hour ? 'h23' : 'h12',
+  });
+}
+
 export function toUnit(celsius: number, unit: 'C' | 'F' = 'C'): number {
   return Math.round(unit === 'F' ? (celsius * 9) / 5 + 32 : celsius);
 }

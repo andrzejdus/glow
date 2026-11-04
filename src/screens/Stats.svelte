@@ -2,8 +2,9 @@
   import Icon from '../components/Icon.svelte';
   import SessionChart from '../components/SessionChart.svelte';
   import { conn, tap } from '../lib/connection.svelte';
-  import { mmss, splitHours, toUnit, usageTime } from '../lib/format';
+  import { clockTime, mmss, splitHours, toUnit, usageTime } from '../lib/format';
   import { heatUpSec, readyAtOnce, sessions, type SessionDetail, type SessionEvent, type SessionSummary } from '../lib/sessions.svelte';
+  import { locale } from '../lib/locale.svelte';
   import { usage } from '../lib/usage.svelte';
 
   const unit = $derived(conn.device?.unit ?? 'C');
@@ -36,7 +37,7 @@
   const used = (s: SessionSummary) =>
     s.batteryStart !== undefined && s.batteryEnd !== undefined ? Math.max(0, s.batteryStart - s.batteryEnd) : null;
 
-  const when = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const when = (t: number) => clockTime(t, locale.is24Hour);
   function dayName(t: number) {
     const d = new Date(t);
     const today = new Date();
