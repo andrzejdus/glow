@@ -25,6 +25,11 @@ describe('battery on the session chart', () => {
     expect(batteryValues(b, 'power')![1]).toBeNull();
     expect(batteryValues(b, 'voltage')).toEqual([3.1, null, 4.18]);
     expect(batteryValues(b, 'batteryTemp')).toEqual([27.9, 28, null]);
+    // A reading of 0 is 0, not -0, which reads "-0.0 A".
+    const idle: BatterySamples = { ts: [0], p: [80], v: [3550], i: [0], w: [0] };
+    expect(Object.is(batteryValues(idle, 'current')[0], 0)).toBe(true);
+    expect(Object.is(batteryValues(idle, 'power')[0], 0)).toBe(true);
+    expect(Object.is(batteryValues({ ...idle, w: undefined }, 'power')[0], 0)).toBe(true);
   });
 
   it('picks round steps for the right-hand scale', () => {

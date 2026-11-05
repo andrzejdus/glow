@@ -35,13 +35,14 @@ export function batteryValues(b: BatterySamples | undefined, key: Exclude<Series
         return b.p[i];
       case 'voltage':
         return v === null ? null : v / 1000;
+      // 0 - x, not -x: a reading of 0 is no "-0.0 A".
       case 'current':
-        return a === null ? null : -a / 1000;
+        return a === null ? null : 0 - a / 1000;
       case 'power': {
         // The mean of voltage × current where the readings were averaged, else this reading's.
         const w = at(b.w, i);
-        if (w !== null) return -w / 1000;
-        return v === null || a === null ? null : (-v * a) / 1e6;
+        if (w !== null) return 0 - w / 1000;
+        return v === null || a === null ? null : (0 - v * a) / 1e6;
       }
       case 'batteryTemp': {
         const t = at(b.t, i);
