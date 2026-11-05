@@ -208,7 +208,11 @@ changed: 7 pushes in the session. A push when the charger goes in has not been s
 
 On the phone one pass over these 13 registers took about 8–13 s, so Device diagnostics sees a
 change up to that late, not within a second. The three battery temperatures (below) make the pass
-longer still.
+longer still. That is the time each read takes, not spacing in Glow's queue: in a logcat of
+2026-11-05 (CRAFTY+ V03.24, ~4100 reads) a read took 0.39 s from the call to its answer (median;
+0.32 s at the 10th percentile), and answers land on a 0.4 s grid while notifications land on a 0.2 s
+one, so the link runs at a ~200 ms connection interval and a read takes two of them. Notifications
+do not wait for reads: `0011` came every ~2.6 s whether or not a read was in flight.
 
 ## Battery temperature
 
@@ -247,12 +251,25 @@ be checked there. No "too cold" flag is known.
 
 ## Battery poll and capacity
 
-While the heater is on, the app calls `pollBattery()` every ~5 s: it reads voltage `00b3`, current
-`00e3` and battery temperature `0113` for the session log, and the 3 s charger poll then reads only
-`0063`. With the heater off the charger poll reads voltage and current as before (on screen only).
-The background recorder (`Recorder.java`) does the same reads every 5 s with the heater on and logs
-a `P` line after each round, on which the replay calls `pollBattery()`; it reads `0113` and `0153`
-on connect and with its refresh too.
+While the heater is on, the app calls `pollBattery()` every ~2 s: it reads voltage `00b3` and
+current `00e3`, and every ~5 s battery temperature `0113` too, for the session log; the 3 s charger
+poll then reads only `0063`. With the heater off the charger poll reads voltage and current as
+before (on screen only). The session log keeps one battery sample every 5 s as before, now the
+time-weighted mean of the readings since the sample before (voltage, current, and the mean of
+voltage × current as the power), plus the lowest current and power read, for the true peak. Up to
+0.1.76 it kept a single reading every 5 s.
+
+The cadence is what the link allows. Each read takes ~0.4 s (above), so voltage and current take
+~0.8 s of every 2 s: with the charger poll (one read every 3 s), the battery temperature (every 5 s)
+and the 30 s refresh (ten reads) the link is busy about three quarters of the time while heating,
+against about half with the 5 s poll. Every second would need more than the link has. Polls wait
+behind commands in the driver's queue, so a target, heater or setting change waits at most for the
+one read in flight (~0.4 s); a round still waiting is skipped, not queued again. The background
+recorder (`Recorder.java`) does the same reads with the heater on, only when nothing else is waiting,
+and logs a `P` line after each round, on which the replay calls `pollBattery()`; it reads `0113` and
+`0153` on connect and with its refresh too. Device diagnostics had read registers back to back
+(~2.5 reads a second) through whole heating sessions before, with no dropped link or late
+notifications seen.
 
 Five more characteristics in service `0003` that the official app does not read. J-Cat/crafty-control
 and duramson/vo0t name them so and read them as uint16 LE; vo0t's published CRAFTY+ diagnostics show
@@ -288,6 +305,11 @@ writable; Glow never writes them.
 The current scale is mA as read, checked on our CRAFTY+ (V03.24, Glow 0.1.76, 2026-11-05): a
 230 s session to 190 °C on battery took `0153` from 1403 to 1134 mAh (−269), and `00e3` read every
 5 s adds up to 312 mAh (1.12 Wh). The 16 % gap is the 5 s steps against a heater current that jumps
-between 0 and about −8 A (seen −8069 mA at 3.53 V, ~28 W). `0113` went 31.5 → 38.6 °C in the same
+between 0 and about −8 A (seen −8069 mA at 3.53 V, ~28 W): steady at ~−8 A for the 80 s heat-up,
+then, holding, readings 5 s apart that look unrelated (0, −5811, −7999, −3945, −632…), so the
+switching is faster than 5 s; its period is not known. The in-between values suggest `00e3` is
+itself averaged over a short time. On a made-up current switching every 0.5–4 s, 5 s readings add up
+~9–10 % off on average (up to ~20–30 %), 2 s means ~3 % and 3 s means ~4–5 % (`sessions.test.ts`
+and a simulation over 200 sessions); to be checked against `0153` on the device. `0113` went 31.5 → 38.6 °C in the same
 session. Open: whether older firmware has these characteristics; why `0153` read only 1403 mAh at
 98 % (vo0t's CRAFTY+ showed a 3300 mAh design capacity).
