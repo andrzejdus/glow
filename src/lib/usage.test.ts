@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { locale } from './locale.svelte';
-import { demoHistory, usage } from './usage.svelte';
+import { demoHistory, plausible, usage } from './usage.svelte';
 
 describe('usage months', () => {
   it('splits the lifetime counter into calendar months, current month last', async () => {
+    // Late enough in the month for the made-up 4.2 hours of it.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
     const minutes = 142 * 60 + 18;
     await usage.bind('test-device', demoHistory(minutes));
     usage.observe({ kind: 'venty', model: 'VENTY', minTemp: 40, maxTemp: 210, mode: 'normal', heaterOn: false,
@@ -16,6 +19,7 @@ describe('usage months', () => {
     expect(bars[7].hours).toBeCloseTo(4.2, 5);
     expect(bars[6].hours).toBeCloseTo(8.8, 5);
     expect(bars[0].hours).toBeCloseTo(6.1, 5);
+    vi.useRealTimers();
   });
 });
 
@@ -94,5 +98,78 @@ describe('usage weeks', () => {
     usage.observe(reading, now);
     const wednesday = usage.bars('week', 1, now, { firstDayOfWeek: 3 });
     expect(wednesday[0].hours).toBe(1);
+  });
+});
+
+describe('usage plausibility', () => {
+  // CRAFTY+ hours 0x036d (877) and minutes 0x2b (43); the swapped read gave hours 74 e0 (57460, the
+  // battery current) and minutes 72 01 (370, the battery temperature): docs/protocol/crafty.md.
+  const real = 877 * 60 + 43;
+  const swapped = 0xe074 * 60 + 0x0172;
+  const state = (minutes: number) => ({
+    kind: 'crafty' as const, model: 'CRAFTY+', minTemp: 40, maxTemp: 210, mode: 'normal' as const, heaterOn: false,
+    operatingMinutes: minutes, settings: {},
+  });
+  const t0 = new Date(2026, 10, 5, 3, 46).getTime();
+  const MIN = 60_000;
+
+  it('takes the counter moving at most a minute a minute, and never back', () => {
+    expect(plausible({ t: t0, m: real }, { t: t0 + 5 * MIN, m: real + 5 })).toBe(true);
+    expect(plausible({ t: t0, m: real }, { t: t0 + 5 * MIN, m: real + 7 })).toBe(true); // rounding
+    expect(plausible({ t: t0, m: real }, { t: t0 + 5 * MIN, m: real + 8 })).toBe(false);
+    expect(plausible({ t: t0, m: real }, { t: t0 + MIN, m: real - 1 })).toBe(true);
+    expect(plausible({ t: t0, m: real }, { t: t0 + MIN, m: real - 2 })).toBe(false);
+    expect(plausible({ t: t0, m: real }, { t: t0 + 30_000, m: swapped })).toBe(false);
+  });
+
+  it('ignores a reading that jumps ahead of the clock, and keeps the next good one', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(t0);
+    await usage.bind('swap-up', []);
+    usage.observe(state(real));
+    vi.setSystemTime(t0 + 30_000);
+    usage.observe(state(swapped));
+    usage.observe({ ...state(swapped), heaterOn: true }); // the same driver state again
+    expect(usage.reading?.m).toBe(real);
+    expect(usage.lifetimeSec(Date.now())).toBe(real * 60);
+    vi.setSystemTime(t0 + 60_000);
+    usage.observe(state(real));
+    expect(usage.snaps.map((s) => s.m)).toEqual([real]);
+    expect(usage.hoursSince(t0 - MIN, Date.now())).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it('ignores a reading that goes back', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(t0);
+    await usage.bind('swap-down', []);
+    usage.observe(state(real));
+    vi.setSystemTime(t0 + 30_000);
+    usage.observe(state(48 * 60 + 41)); // 0x0030 and 0x29, two other registers
+    expect(usage.reading?.m).toBe(real);
+    vi.useRealTimers();
+  });
+
+  it('checks the first reading after a start against the stored history and the time since', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(t0 + 10 * MIN);
+    await usage.bind('after-restart', [{ t: t0, m: real }]);
+    usage.observe(state(real + 60));
+    expect(usage.reading).toBeNull();
+    usage.observe(state(real + 9));
+    expect(usage.reading?.m).toBe(real + 9);
+    vi.useRealTimers();
+  });
+
+  it('believes a counter that really moved once readings agree with each other', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(t0);
+    await usage.bind('reset', [{ t: t0 - MIN, m: real }]);
+    for (let i = 0; i < 3; i++) {
+      vi.setSystemTime(t0 + i * MIN);
+      usage.observe(state(5 + i));
+    }
+    expect(usage.reading?.m).toBe(7);
+    vi.useRealTimers();
   });
 });

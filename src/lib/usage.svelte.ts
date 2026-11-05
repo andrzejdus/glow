@@ -6,7 +6,7 @@ import { load, save } from './prefs';
 // a snapshot of it every time it is connected (one per hour at most) and works
 // out the monthly usage from those snapshots.
 
-interface Snap {
+export interface Snap {
   /** epoch ms */
   t: number;
   /** operating minutes */
@@ -29,6 +29,20 @@ export interface BarOptions {
 
 const HOUR = 3_600_000;
 const KEEP = 400 * 24 * HOUR;
+/** Minutes a reading may run back, or ahead of the clock, before it is taken as wrong: rounding at both ends. */
+const BACK = 1;
+const AHEAD = 2;
+/** Readings in a row that agree with each other, though not with the last one, before they are believed. */
+const RUN = 3;
+
+/**
+ * Whether the device's counter can have gone from `a` to `b`: it never runs back, and counts at most
+ * one minute a minute. A read answered with another register's value (docs/protocol/crafty.md,
+ * "Reads answered out of turn") once showed 57466 hours on a CRAFTY+ with 877.
+ */
+export function plausible(a: Snap, b: Snap): boolean {
+  return b.m >= a.m - BACK && b.m <= a.m + Math.max(0, b.t - a.t) / 60_000 + AHEAD;
+}
 
 class Usage {
   now = $state(Date.now());
@@ -43,6 +57,8 @@ class Usage {
 
   private key = '';
   private shown = 0;
+  /** Readings in a row that were not believed, while they agree with each other. */
+  private doubt: Snap[] = [];
   private lastTemp: { t: number; c: number } | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -62,11 +78,35 @@ class Usage {
     this.key = key;
     this.shown = 0;
     this.reading = null;
+    this.doubt = [];
     this.snaps = seed ?? (await load<Snap[]>(`usage:${key}`, []));
   }
 
+  /**
+   * Whether a new reading can be right, against the last one (this connection's, else the stored
+   * history's). A counter that really moved on its own (a reset, say) reads alike from then on:
+   * RUN readings in a row that agree with each other are believed.
+   */
+  private believe(m: number, t: number): boolean {
+    const last = this.reading ?? this.snaps[this.snaps.length - 1];
+    if (!last || plausible(last, { m, t })) {
+      this.doubt = [];
+      return true;
+    }
+    const prev = this.doubt[this.doubt.length - 1];
+    // The same reading again: the driver's state, not a new read.
+    if (prev?.m === m) return false;
+    this.doubt = prev && plausible(prev, { m, t }) ? [...this.doubt, { m, t }] : [{ m, t }];
+    if (this.doubt.length >= RUN) {
+      this.doubt = [];
+      return true;
+    }
+    console.warn(`Glow: hours of operation ignored: ${m} min after ${last.m} min`);
+    return false;
+  }
+
   observe(d: DeviceState, now = Date.now()) {
-    if (d.operatingMinutes !== undefined && d.operatingMinutes !== this.reading?.m) {
+    if (d.operatingMinutes !== undefined && d.operatingMinutes !== this.reading?.m && this.believe(d.operatingMinutes, now)) {
       this.reading = { m: d.operatingMinutes, t: now };
       this.record(d.operatingMinutes, now);
     }
