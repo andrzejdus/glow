@@ -166,8 +166,8 @@ describe('cool-down after Glow leaves the screen', () => {
     app.sessions.suspend();
     await app.replay(coolLog(id, 68, 60, slow), id);
     const after = await cooldown(app);
-    expect(after.at(-1)!.t).toBeLessThanOrEqual(49 + 120);
-    expect(after.at(-1)!.t).toBeGreaterThan(49 + 110);
+    // Exactly 2 minutes, not the last 5 s step inside them (the chart said "+1:58").
+    expect(after.at(-1)!.t).toBe(49 + 120);
   });
 
   it('fills the cool-down of a session already stored when Glow was killed in between', async () => {

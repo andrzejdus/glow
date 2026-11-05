@@ -180,7 +180,7 @@
     const stop = endSec ?? last;
     const out = [{ t: 0, text: '0:00', anchor: 'start' }];
     if (x(stop) - x(0) > 40) out.push({ t: stop, text: mmss(stop), anchor: x(t1) - x(stop) > 20 ? 'middle' : 'end' });
-    if (endSec !== null && x(t1) - x(endSec) > 50) out.push({ t: t1, text: `+${mmss(t1 - endSec)}`, anchor: 'end' });
+    if (endSec !== null && x(t1) - x(endSec) > 50) out.push({ t: t1, text: `+${mmss(Math.round(t1 - endSec))}`, anchor: 'end' }); // readings are whole seconds, the end is not
     return out;
   });
 </script>

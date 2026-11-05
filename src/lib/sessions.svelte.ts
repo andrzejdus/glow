@@ -523,11 +523,16 @@ class Sessions {
   private cool(d: DeviceState, now: number) {
     const c = this.cooling;
     if (!c) return;
-    if (now > this.coolUntil || d.currentTemp === undefined) return this.endCooling();
-    if (now - this.lastCool < SAMPLE_MS) return;
+    if (d.currentTemp === undefined) return this.endCooling();
+    // Samples come every SAMPLE_MS from wherever the sampler happens to tick, so the last one inside
+    // the window can land a few seconds short of it (the chart said "+1:58"). The first reading past
+    // the window closes it at exactly COOL_MS instead.
+    const over = now >= this.coolUntil;
+    if (!over && now - this.lastCool < SAMPLE_MS) return;
     this.lastCool = now;
     const temp = Math.round(d.currentTemp * 2) / 2;
-    const t = Math.round((now - c.id) / 1000);
+    const t = Math.round((Math.min(now, this.coolUntil) - c.id) / 1000);
+    if (over && t <= (c.detail.ts[c.detail.ts.length - 1] ?? -Infinity)) return this.endCooling();
     const battery = now - this.lastCoolBattery >= BATTERY_COOL_MS ? addBattery(c.detail.battery, t, d) : c.detail.battery;
     if (battery !== c.detail.battery) this.lastCoolBattery = now;
     this.cooling = {
@@ -537,7 +542,7 @@ class Sessions {
     // The device's own count, to the end of the cool-down like the readings.
     const s = this.list.find((x) => x.id === c.id);
     if (s && d.batteryCapacity !== undefined && d.batteryCapacity !== s.capEnd) this.replace({ ...s, capEnd: d.batteryCapacity });
-    if (temp <= COOL_TO) return this.endCooling();
+    if (over || temp <= COOL_TO) return this.endCooling();
     // Saved as it goes, so an app that is closed meanwhile keeps what was recorded.
     if (this.cooling.detail.ts.length % 6 === 0) this.saveCooling();
   }
