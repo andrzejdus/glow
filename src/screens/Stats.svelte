@@ -187,11 +187,11 @@
     <section class="card session rise d2" bind:this={top}>
       <div class="s-head">
         <div>
-          <div class="label">{running ? 'Current session' : shown.id === sessions.list[0]?.id ? 'Last session' : 'Session'}</div>
+          <div class="label">{running ? 'Session · now' : shown.id === sessions.list[0]?.id ? 'Last session' : 'Session'}</div>
           <div class="s-when">{dayName(shown.id)}, {when(shown.id)}</div>
         </div>
         {#if picked !== null && sessions.active}
-          <button type="button" class="pill press" onclick={() => { tap(); picked = null; }}>Current</button>
+          <button type="button" class="pill press" onclick={() => { tap(); picked = null; }}>Latest</button>
         {:else if status}
           <div class="chip" class:ready={status === 'Ready'}><span></span>{status}</div>
         {/if}
