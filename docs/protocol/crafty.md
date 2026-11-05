@@ -317,3 +317,36 @@ itself averaged over a short time. On a made-up current switching every 0.5–4 
 and a simulation over 200 sessions); to be checked against `0153` on the device. `0113` went 31.5 → 38.6 °C in the same
 session. Open: whether older firmware has these characteristics; why `0153` read only 1403 mAh at
 98 % (vo0t's CRAFTY+ showed a 3300 mAh design capacity).
+
+## Reads answered out of turn
+
+An ATT read response does not say which characteristic it answers: Android pairs it with the read
+it sent last. On our CRAFTY+ (V03.24, Android 12, Glow 0.1.79, 2026-11-05) the background recorder
+(`Recorder.java`) closed its GATT client at the hand-over to the app with one of its reads still in
+flight, while the app's own connection to the device stayed up on the same link. Android dropped
+the recorder's read but not the device's answer to it, and the app's first read got that answer
+(logcat, `resolve:` is the plugin's read result):
+
+```
+03:46:35.528 BluetoothGatt: close() / unregisterApp() - mClientIf=8     (recorder)
+03:46:35.611 app reads 0021 (target)   → 3000   (0x0030: the recorder's 0063 read)
+03:46:35.842 app reads 0063            → 6C07   (190.0 °C: the 0021 answer)
+03:46:39.063 app reads 00e3 (current)  → 6D03   (877: the 0023 answer)
+03:46:39.454 app reads 0023 (hours)    → 74E0   (57460: the 00e3 answer, −8076 mA)
+03:46:40.654 app reads 01e3 (minutes)  → 7201   (370: the 0113 answer, 37.0 °C)
+```
+
+Every read after it got the answer to the one before, for 18 s, until the app paused for 1.5 s and
+the last answer had no read left to go to. Hours of operation came out as 57460 h + 370 min
+(57466 h 10 min), the target as 5 °C, the battery as 100 %, battery temperature as 4.1 °C and the
+current as +877 mA. The device was not at fault; it answered every read in order.
+
+So no client may close with a read in flight while another shares the link: the recorder now waits
+for the answer (at most its 5 s operation timeout) before it closes (`finish()`), and the app's own
+disconnect waits for its read in flight the same way (`native-adapter.ts`).
+
+The battery % that rose in the same session was the device itself, not a swapped read: between
+03:49:42 and 03:50:41, still heating, `0041` read 73 → 79 → 80 % while `0153` (remaining) went
+1036 → 1134 mAh against a full capacity (`0143`) of 1417 mAh, and the voltage under load recovered
+from 3.45 V to ~3.95 V between heater pulses. The gauge re-estimates the charge as the load drops,
+and with a full capacity it still believes is 1417 mAh (design 3300) each estimate moves the % a lot.

@@ -157,6 +157,11 @@ final class Recorder {
     private int misses;
     private final ArrayDeque<Op> ops = new ArrayDeque<>();
     private Op op;
+    /**
+     * Set by stop(): nothing more goes out, and the client closes with this reason once the operation
+     * in flight is answered (or timed out). See finish().
+     */
+    private String closing;
     /** VENTY/VEAZY: the firmware answer, which has to say the application runs before anything else goes out. */
     private byte[] firmware;
     private boolean awaitingFirmware;
@@ -246,7 +251,23 @@ final class Recorder {
             if (recording && !handedOver) end(System.currentTimeMillis(), reason);
             handedOver = true;
         }
-        handler.post(() -> close(reason));
+        handler.post(() -> finish(reason));
+    }
+
+    /**
+     * Closes once the operation in flight is answered. The app's own connection shares the link, and
+     * a client closed with a read in flight makes Android forget that read but not the device's answer
+     * to it: the app's next read got that answer, and every read after it the answer to the one
+     * before, until the link went quiet. On a CRAFTY+ (Android 12) the hours of operation read as the
+     * battery current that way (57460 h); see docs/protocol/crafty.md.
+     */
+    private void finish(String reason) {
+        if (stopped) return;
+        ops.clear();
+        handler.removeCallbacks(tick);
+        // Waiting for a VENTY/VEAZY firmware frame is not a read: nothing is in flight then.
+        if (op == null || awaitingFirmware || gatt == null || !connected) close(reason);
+        else closing = reason;
     }
 
     /** The app takes the device over. */
@@ -335,6 +356,10 @@ final class Recorder {
     }
 
     private void onDisconnected() {
+        if (closing != null) {
+            close(closing);
+            return;
+        }
         boolean was = connected;
         connected = false;
         ready = false;
@@ -746,19 +771,25 @@ final class Recorder {
     }
 
     private void queue(Op o) {
+        if (closing != null) return;
         ops.add(o);
         if (op == null) next();
     }
 
     private final Runnable opTimeout = () -> {
+        if (closing != null) close(closing);
         // One can get lost; two in a row, the device no longer answers.
-        if (++misses >= 2) unanswered();
+        else if (++misses >= 2) unanswered();
         else next();
     };
 
     private void next() {
         handler.removeCallbacks(opTimeout);
         op = null;
+        if (closing != null) {
+            close(closing);
+            return;
+        }
         while (!ops.isEmpty() && !stopped && gatt != null) {
             Op o = ops.poll();
             boolean waits;
