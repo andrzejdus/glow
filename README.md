@@ -60,8 +60,9 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
   so and opens the battery settings.
 - 🔋 **Battery.** Leads Settings: a large percentage, shown while charging too, whether it is on
   battery, charging or charged, with the charge animating up to full. A CRAFTY+ also shows the battery
-  temperature and warns when the battery is too hot to heat; a VENTY or VEAZY shows its lifetime
-  time on the charger.
+  temperature, the capacity it reports (left of full, design capacity, charge cycles: handy to watch
+  the gauge relearn a new cell) and warns when the battery is too hot to heat; a VENTY or VEAZY shows
+  its lifetime time on the charger.
 - 🌋 **VOLCANO workflows.** Flow 1–3 and Balloon run from the phone, step by step, with time
   running and time left.
 - ⚙️ **Settings.** Every device setting the official web app offers, plus Find My and the
@@ -90,6 +91,7 @@ built from the protocol and covered by unit tests.
 | Booster / Superbooster offsets | ✓ | ✓ | ✓⁴ | ✓⁴ | ✓⁴ | — |
 | Battery level | ✓ | ✓ | ✅ | ✓ | ✓ | — |
 | Battery voltage, current, power | — | — | ✅ | ✓⁷ | ✓⁷ | — |
+| Battery capacity, charge cycles | — | — | ✓⁷ | ✓⁷ | ✓⁷ | — |
 | Battery on the session chart, energy | ✓⁸ | ✓⁸ | ✓⁷ | ✓⁷ | ✓⁷ | — |
 | Charging / charged | ✓ | ✓ | ✅ | ✓⁵ | — | — |
 | Lifetime charging time | ✓ | ✓ | — | — | — | — |
