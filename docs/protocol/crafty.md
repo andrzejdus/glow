@@ -254,10 +254,14 @@ be checked there. No "too cold" flag is known.
 While the heater is on, the app calls `pollBattery()` every ~2 s: it reads voltage `00b3` and
 current `00e3`, and every ~5 s battery temperature `0113` too, for the session log; the 3 s charger
 poll then reads only `0063`. With the heater off the charger poll reads voltage and current as
-before (on screen only). The session log keeps one battery sample every 5 s as before, now the
-time-weighted mean of the readings since the sample before (voltage, current, and the mean of
-voltage × current as the power), plus the lowest current and power read, for the true peak. Up to
-0.1.76 it kept a single reading every 5 s.
+before (on screen only). The session log keeps each reading as it was, with the battery % and
+temperature as they stand then, on the battery's own timeline next to the 5 s temperature samples
+(every 30 s in the cool-down); power is voltage × current of each reading, and energy adds them up
+by the trapezoid rule. Up to 0.1.76 it kept a single reading every 5 s; 0.1.77 to 0.1.79 kept the
+time-weighted mean of the 2 s readings every 5 s (and the mean of voltage × current as the power,
+`w`), plus the lowest current and power read (`min`), which Glow still reads in those sessions.
+An 8-minute session to 190 °C keeps about 240 battery rows: ~5.2 KB of its ~6.8 KB file, against
+~2.9 KB of ~4.4 KB with the 5 s means (`JSON.stringify` of a simulated session).
 
 The cadence is what the link allows. Each read takes ~0.4 s (above), so voltage and current take
 ~0.8 s of every 2 s: with the charger poll (one read every 3 s), the battery temperature (every 5 s)
