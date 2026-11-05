@@ -1,9 +1,11 @@
 <script lang="ts">
   import { tap } from '../lib/connection.svelte';
+  import Icon from './Icon.svelte';
+  import Toggle from './Toggle.svelte';
   import { BATTERY_GAP_SEC, batteryValues, niceScale, SERIES, seriesOf, type SeriesKey } from '../lib/battery';
   import { decimal, mmss, toUnit } from '../lib/format';
   import {
-    legendName, nearestIndex, readoutLine, stepFrom, swipeIntent, swipeStep, timeLabel, valueAt, valuesAt, type ReadoutSession,
+    latest, formatValue, legendName, nearestIndex, neighbours, readoutLine, stepFrom, swipeIntent, swipeStep, timeLabel, valueAt, valuesAt, type ReadoutSession,
   } from '../lib/readout';
   import type { SessionDetail, SessionSummary } from '../lib/sessions.svelte';
 
@@ -18,7 +20,9 @@
 
   let w = $state(320);
   const H = 180;
-  const pad = { l: 34, r: 12, t: 26, b: 22 };
+  // With battery readings, room on the right for the scale of the value drawn over the temperature,
+  // kept when it shows the temperature too, so switching does not squeeze the lines sideways.
+  const pad = $derived({ l: 34, r: seriesOf(detail).length > 1 ? 36 : 12, t: 26, b: 22 });
 
   const ts = $derived(detail?.ts ?? []);
   const last = $derived(ts[ts.length - 1] ?? 0);
@@ -121,18 +125,25 @@
     y: y(detail.g[ts.findIndex((t) => t >= summary.readySec!)] ?? lo),
   });
   // One value at a time over the temperature, faded behind it, on a scale of its own on the right
-  // whose steps sit on the temperature's grid lines. Only what the session has readings of; a
-  // sideways swipe on the chart or the dots under it move from one to the next.
+  // whose steps sit on the temperature's grid lines. Only what the session has readings of; the
+  // arrows beside the readout under it, or a sideways swipe on the chart, move from one to the next.
   const available = $derived(seriesOf(detail));
   let pick = $state<SeriesKey>('temp');
   const sel = $derived(available.includes(pick) ? pick : 'temp');
   /** Which way the last switch went, so the new line comes in from that side. */
   let dir = $state(1);
-  function show(k: SeriesKey) {
+  function step(d: -1 | 1) {
+    const k = stepFrom(available, sel, d);
     if (k === sel) return;
     tap();
-    dir = available.indexOf(k) > available.indexOf(sel) ? 1 : -1;
+    dir = d;
     pick = k;
+  }
+  const around = $derived(neighbours(available, sel));
+  /** Temperature and battery only (VENTY, VEAZY): a switch for the battery instead of arrows. */
+  const pair = $derived(available.length === 2 && available[1] === 'battery');
+  function showBattery(on: boolean) {
+    if (on !== (sel === 'battery')) step(on ? 1 : -1);
   }
   const session = $derived<ReadoutSession>({
     detail, unit, live: summary.live, readySec: summary.readySec, endSec, peak: summary.peak, target: summary.target,
@@ -173,7 +184,8 @@
       const text = decimal(Math.abs(v) < 1e-9 ? 0 : v, dec);
       return { y: y(t), text: k === n ? `${text} ${u}` : text };
     });
-    return { d, area, labels, oy, name: SERIES[key].name };
+    const end = pts[pts.length - 1];
+    return { d, area, labels, oy, name: SERIES[key].name, end: { x: x(end.t), y: y(ticks[0] + ((end.v - from) / step) * tStep) } };
   });
 
   // Press and hold, then drag: a cursor on the nearest sample, every value at that moment in a
@@ -186,6 +198,8 @@
   let gesture: { id: number; x0: number; y0: number; at: number; mode: 'wait' | 'swipe' | 'scrub'; timer: ReturnType<typeof setTimeout> } | null = null;
   let fade: ReturnType<typeof setTimeout> | undefined;
   const switchable = $derived(ts.length > 1 && available.length > 1);
+  // Press and hold reads any chart, the temperature alone (VOLCANO) too.
+  const touchable = $derived(ts.length > 1);
 
   function scrubAt(clientX: number) {
     if (!svgEl) return;
@@ -195,7 +209,7 @@
     if (i >= 0) scrubT = ts[i];
   }
   function down(e: PointerEvent) {
-    if (!switchable || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (!touchable || (e.pointerType === 'mouse' && e.button !== 0)) return;
     if (gesture) clearTimeout(gesture.timer);
     const el = e.currentTarget as Element;
     const id = e.pointerId;
@@ -217,7 +231,8 @@
       const intent = swipeIntent(dx, e.clientY - gesture.y0);
       if (intent === 'wait') return;
       clearTimeout(gesture.timer);
-      if (intent === 'scroll') {
+      // With one value there is nothing to swipe to: a sideways move is left alone, as a scroll is.
+      if (intent === 'scroll' || !switchable) {
         gesture = null;
         return;
       }
@@ -231,8 +246,8 @@
     if (!gesture || e.pointerId !== gesture.id) return;
     clearTimeout(gesture.timer);
     if (gesture.mode === 'swipe' && e.type === 'pointerup') {
-      const step = swipeStep(e.clientX - gesture.x0, e.timeStamp - gesture.at, w);
-      if (step) show(stepFrom(available, sel, step));
+      const d = swipeStep(e.clientX - gesture.x0, e.timeStamp - gesture.at, w);
+      if (d) step(d);
     }
     if (gesture.mode === 'scrub') fade = setTimeout(() => (scrubT = null), 2000);
     gesture = null;
@@ -269,31 +284,44 @@
   const readout = $derived(
     readoutLine(session, sel, scrubT !== null ? { kind: 'at', t: scrubT } : running ? { kind: 'now' } : { kind: 'summary' }),
   );
-  function keys(e: KeyboardEvent) {
-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-    if (!step) return;
-    e.preventDefault();
-    const k = stepFrom(available, sel, step);
-    show(k);
-    (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-key="${k}"]`)?.focus();
-  }
+
+  // While the session runs, every value it has right now, the one on the chart picked out. Without a
+  // live temperature (VENTY, VEAZY) the temperature is what the device is set to.
+  const nowRow = $derived.by(() => {
+    if (!running || !detail || !ts.length) return [];
+    return available.map((key) => {
+      const v = key === 'temp' && !summary.live ? detail.g[ts.length - 1] : latest(session, key);
+      const tag = key === 'batteryTemp' ? 'batt' : key === 'temp' && !summary.live ? 'set' : '';
+      return { key, text: formatValue(key, v, unit), tag };
+    });
+  });
 
   // The start, the end (or now) and how long the cool-down ran.
   const xLabels = $derived.by(() => {
     const stop = endSec ?? last;
     const out = [{ t: 0, text: '0:00', anchor: 'start' }];
-    if (x(stop) - x(0) > 40) out.push({ t: stop, text: mmss(stop), anchor: x(t1) - x(stop) > 20 ? 'middle' : 'end' });
+    if (x(stop) - x(0) > 40) {
+      out.push({ t: stop, text: endSec === null ? `Now ${mmss(stop)}` : mmss(stop), anchor: x(t1) - x(stop) > 20 ? 'middle' : 'end' });
+    }
     if (endSec !== null && x(t1) - x(endSec) > 50) out.push({ t: t1, text: `+${mmss(Math.round(t1 - endSec))}`, anchor: 'end' }); // readings are whole seconds, the end is not
     return out;
   });
 </script>
 
 <div class="chart" bind:clientWidth={w}>
+  {#if nowRow.length}
+    <div class="now num">
+      <span class="now-label">Now</span>
+      {#each nowRow as r (r.key)}
+        <span class:on={r.key === sel && switchable}>{r.text}{#if r.tag}<em>&nbsp;{r.tag}</em>{/if}</span>
+      {/each}
+    </div>
+  {/if}
   {#if ts.length > 1}
     <div class="plot">
-    <!-- Pointer handling is for touch and the mouse; the dots below are what keyboards and assistive tech use. -->
-    <svg width={w} height={H} viewBox="0 0 {w} {H}" role="img" class:overlaid={!!overlay} class:switchable bind:this={svgEl}
-      onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} oncontextmenu={(e) => switchable && e.preventDefault()}
+    <!-- Pointer handling is for touch and the mouse; the arrows below are what keyboards and assistive tech use. -->
+    <svg width={w} height={H} viewBox="0 0 {w} {H}" role="img" class:overlaid={!!overlay} class:touchable bind:this={svgEl}
+      onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} oncontextmenu={(e) => touchable && e.preventDefault()}
       aria-label={overlay ? `${overlay.name} over the session, with the temperature faded behind it`
         : `Temperature over the session${summary.live ? ', current and target' : ', target'}`}>
       <defs>
@@ -340,7 +368,7 @@
               {#if overlay.area}<path class="ov-area" d={overlay.area} />{/if}
               <path class="ov" d={overlay.d} />
               {#each overlay.labels as l (l.y)}
-                <text class="ov-axis" x={w - pad.r - 2} y={l.y - 3} text-anchor="end">{l.text}</text>
+                <text class="ov-axis" x={w - pad.r + 4} y={l.y + 3.5}>{l.text}</text>
               {/each}
             {:else if ready}
               <line class="ready-line" x1={ready.x} x2={ready.x} y1={pad.t} y2={H - pad.b} />
@@ -352,6 +380,8 @@
         {#if end && !overlay}
           {#if running}<circle class="pulse" cx={end.x} cy={end.y} r="5" />{/if}
           <circle class="end" class:off={!!afterPath} cx={end.x} cy={end.y} r="4.5" />
+        {:else if overlay && running}
+          <circle class="ov-end" cx={overlay.end.x} cy={overlay.end.y} r="5" />
         {/if}
       </g>
       {#if cursor}
@@ -360,6 +390,7 @@
       {/if}
     </svg>
     {#if cursor}
+      <span class="pill-time num" style:left="{cursor.x}px" aria-hidden="true">{cursor.time}</span>
       <div class="bubble num" class:right={cursor.right} aria-hidden="true">
         <span class="b-time">At {cursor.time}</span>
         <span class="b-main">{cursor.main}</span>
@@ -371,18 +402,6 @@
       </div>
     {/if}
     </div>
-    {#if switchable}
-      <div class="dots" role="tablist" aria-label="Value on the chart" tabindex="-1" onkeydown={keys}>
-        {#each available as k (k)}
-          <button type="button" role="tab" data-key={k} aria-selected={sel === k} aria-label={SERIES[k].name}
-            tabindex={sel === k ? 0 : -1} onclick={() => show(k)}><i></i></button>
-        {/each}
-      </div>
-      <div class="readout num">
-        <strong>{SERIES[sel].name}</strong>
-        <span>{readout}</span>
-      </div>
-    {/if}
     <div class="legend">
       {#if overlay}
         <span><i class="sw ov"></i>{legendName(sel, unit)}</span>
@@ -391,9 +410,37 @@
         {#if summary.live}<span><i class="sw current"></i>Temperature</span>{:else if summary.readySec !== null}<span><i class="sw current"></i>At temperature</span>{/if}
         <span><i class="sw goal"></i>Target</span>
       {/if}
-      {#if bands.length}<span><i class="sw band"></i>Boost</span>{/if}
-      <span><i class="sw off"></i>Heater off</span>
+      <!-- With the switcher the chart's own labels (BOOST, Off) say these, and the legend stays one line. -->
+      {#if !switchable}
+        {#if bands.length}<span><i class="sw band"></i>Boost</span>{/if}
+        <span><i class="sw off"></i>Heater off</span>
+      {/if}
     </div>
+    {#if switchable && pair}
+      <div class="switch-row">
+        <span>Battery on the chart</span>
+        <Toggle label="Battery on the chart" on={sel === 'battery'} onchange={showBattery} />
+      </div>
+    {:else if switchable && around}
+      <!-- The value on the chart and its number, between arrows to the ones on either side. -->
+      <div class="stepper">
+        <button type="button" class="arrow press" aria-label="Previous value: {SERIES[around.prev].name}" onclick={() => step(-1)}>
+          <Icon name="back" size={20} stroke={2.6} />
+        </button>
+        <button type="button" class="readout num press" aria-label="{[SERIES[sel].name, readout].filter(Boolean).join(', ')}. Tap for the next value" onclick={() => step(1)}>
+          <strong>{SERIES[sel].name}</strong>
+          <!-- It wraps between its parts only, never between a number and its unit. -->
+          <span>{#each readout.split(' · ') as part, i (i)}{#if i}{' · '}{/if}<span class="part">{part}</span>{/each}</span>
+        </button>
+        <button type="button" class="arrow press" aria-label="Next value: {SERIES[around.next].name}" onclick={() => step(1)}>
+          <Icon name="chevron" size={20} stroke={2.6} />
+        </button>
+      </div>
+      <!-- Where the shown value sits among the others; the arrows are what to touch. -->
+      <div class="dots" aria-hidden="true">
+        {#each available as k (k)}<i class:on={k === sel}></i>{/each}
+      </div>
+    {/if}
   {:else}
     <div class="empty" style:height="{H}px">{running ? 'Collecting the first readings…' : 'No readings for this session.'}</div>
   {/if}
@@ -525,7 +572,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px 14px;
-    margin-top: 6px;
+    margin-top: 12px;
     font-size: 11px;
     font-weight: 600;
     color: var(--muted);
@@ -586,10 +633,11 @@
     font-weight: 800;
     fill: var(--navy);
     font-variant-numeric: tabular-nums;
-    paint-order: stroke;
+  }
+  .ov-end {
+    fill: var(--navy-fill);
     stroke: var(--card);
-    stroke-width: 3px;
-    stroke-linejoin: round;
+    stroke-width: 2;
   }
   .sw.ov {
     background: var(--navy);
@@ -601,7 +649,7 @@
     position: relative;
   }
   /* Sideways moves are the chart's own (swipe, scrub); up and down still scroll the page. */
-  svg.switchable {
+  svg.touchable {
     touch-action: pan-y;
     -webkit-touch-callout: none;
   }
@@ -639,7 +687,7 @@
     position: absolute;
     top: 14px;
     left: 38px;
-    width: 128px;
+    width: 140px;
     padding: 8px 10px;
     border-radius: 14px;
     background: var(--card);
@@ -678,45 +726,119 @@
     font-weight: 600;
     color: var(--muted);
   }
-  /* One dot per value, the shown one long and filled; each a 44 px target. */
+  /* Every value now, while the session runs. */
+  .now {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 9px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+    background: var(--card-2);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .now span {
+    white-space: nowrap;
+  }
+  .now .on {
+    color: var(--navy);
+  }
+  .now em {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .now .now-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    /* Ready's green, deep enough to read on the grey in either theme. */
+    color: color-mix(in srgb, var(--led-ready) 60%, var(--ink));
+  }
+  /* The held moment, over the cursor's line. */
+  .pill-time {
+    position: absolute;
+    top: -3px;
+    width: 40px;
+    height: 17px;
+    margin-left: -20px;
+    border-radius: 9px;
+    background: var(--navy-fill);
+    color: #fff;
+    font-size: 10px;
+    line-height: 17px;
+    font-weight: 800;
+    text-align: center;
+    pointer-events: none;
+  }
   .dots {
     display: flex;
     justify-content: center;
-    margin: 0 0 -4px;
-  }
-  .dots button {
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
+    gap: 6px;
+    margin: 8px 0 4px;
   }
   .dots i {
     display: block;
     width: 7px;
     height: 7px;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--navy) 40%, transparent);
+    background: color-mix(in srgb, var(--navy) 28%, transparent);
     transition: width 0.2s, background-color 0.2s;
   }
-  .dots button[aria-selected='true'] i {
+  .dots i.on {
     width: 20px;
     background: var(--navy);
   }
-  .readout {
+  .switch-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    min-height: 48px;
-    padding: 8px 14px;
-    margin-bottom: 4px;
+    min-height: 52px;
+    padding: 4px 9px 4px 14px;
+    margin: 12px 0 4px;
     border-radius: 14px;
     background: var(--card-2);
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--navy);
+  }
+  /* The readout between its arrows; every part a 44 px target or more. */
+  .stepper {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .stepper button {
+    min-height: 52px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--card-2);
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .arrow {
+    width: 44px;
+    flex-shrink: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--navy);
+  }
+  .readout {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 14px;
   }
   .readout strong {
     font-size: 15px;
@@ -724,7 +846,10 @@
     color: var(--navy);
     white-space: nowrap;
   }
-  .readout span {
+  .readout .part {
+    white-space: nowrap;
+  }
+  .readout > span {
     font-size: 13px;
     font-weight: 700;
     color: var(--muted-2);

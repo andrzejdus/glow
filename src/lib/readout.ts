@@ -4,7 +4,7 @@ import type { SessionDetail } from './sessions.svelte';
 
 // The line under the session chart that names the value it shows and gives its number: now while
 // the session runs, at the touched moment while a finger holds the chart, the whole session's
-// otherwise. And the swipe that moves the chart from one value to the next.
+// otherwise. And the arrows and the swipe that move the chart from one value to the next.
 
 /** What the readout needs to know about the session besides its samples. */
 export interface ReadoutSession {
@@ -187,8 +187,19 @@ export function swipeStep(dx: number, ms: number, width: number): -1 | 0 | 1 {
   return dx < 0 ? 1 : -1;
 }
 
-/** The value a step away from `sel`; the ends stay where they are, as a pager does. */
+/**
+ * The value a step away from `sel`, going round: past the last comes the first again, so the
+ * stepper's arrows always lead somewhere and a swipe never hits an end it cannot show.
+ */
 export function stepFrom(keys: SeriesKey[], sel: SeriesKey, step: number): SeriesKey {
+  const n = keys.length;
+  if (!n) return sel;
   const i = Math.max(0, keys.indexOf(sel));
-  return keys[Math.min(keys.length - 1, Math.max(0, i + step))];
+  return keys[(((i + step) % n) + n) % n];
+}
+
+/** Where the stepper's arrows lead from `sel`; null with fewer than two values, so no arrows. */
+export function neighbours(keys: SeriesKey[], sel: SeriesKey): { prev: SeriesKey; next: SeriesKey } | null {
+  if (keys.length < 2) return null;
+  return { prev: stepFrom(keys, sel, -1), next: stepFrom(keys, sel, 1) };
 }

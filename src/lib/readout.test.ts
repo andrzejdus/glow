@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { seriesOf } from './battery';
 import {
-  formatValue, legendName, nearestIndex, readoutLine, stepFrom, summaryLine, swipeIntent, swipeStep, timeLabel, valueAt, valuesAt,
+  formatValue, legendName, nearestIndex, neighbours, readoutLine, stepFrom, summaryLine, swipeIntent, swipeStep, timeLabel, valueAt, valuesAt,
   type ReadoutSession,
 } from './readout';
 import type { BatterySamples, SessionDetail } from './sessions.svelte';
@@ -154,11 +154,30 @@ describe('swiping the chart', () => {
     expect(swipeStep(-45, 600, 200)).toBe(1);
   });
 
-  it('stops at the ends', () => {
+  it('goes round at the ends', () => {
     const keys = seriesOf(detail);
     expect(stepFrom(keys, 'temp', 1)).toBe('battery');
-    expect(stepFrom(keys, 'temp', -1)).toBe('temp');
-    expect(stepFrom(keys, 'batteryTemp', 1)).toBe('batteryTemp');
+    expect(stepFrom(keys, 'temp', -1)).toBe('batteryTemp');
+    expect(stepFrom(keys, 'batteryTemp', 1)).toBe('temp');
     expect(stepFrom(['temp', 'battery'], 'battery', -1)).toBe('temp');
+    expect(stepFrom(['temp', 'battery'], 'battery', 1)).toBe('temp');
+  });
+});
+
+describe('the stepper', () => {
+  it('leads to the values on either side, round at the ends', () => {
+    const keys = seriesOf(detail);
+    expect(neighbours(keys, 'current')).toEqual({ prev: 'voltage', next: 'power' });
+    expect(neighbours(keys, 'temp')).toEqual({ prev: 'batteryTemp', next: 'battery' });
+    expect(neighbours(keys, 'batteryTemp')).toEqual({ prev: 'power', next: 'temp' });
+  });
+
+  it('has both arrows on the other value with two (VENTY)', () => {
+    expect(neighbours(['temp', 'battery'], 'temp')).toEqual({ prev: 'battery', next: 'battery' });
+  });
+
+  it('has no arrows without battery readings (VOLCANO)', () => {
+    expect(neighbours(['temp'], 'temp')).toBeNull();
+    expect(neighbours([], 'temp')).toBeNull();
   });
 });
