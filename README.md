@@ -46,8 +46,10 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
 - 📊 **Stats.** A tab with each session as a chart (temperature against the target, Ready, boosts
   and the cool-down) and its facts, hours of operation by day, week or month, and a timeline of
   every session Glow saw. Tapping Hours of operation on the dashboard or in Settings opens it.
-  Chips above the chart draw the battery over the temperature: its level, and on a CRAFTY its
-  voltage, current, power and temperature too. A CRAFTY session also shows where the battery
+  Swipe the chart sideways, or tap the dots under it, to draw the battery over the temperature:
+  its level, and on a CRAFTY its voltage, current, power and temperature too. The line under it
+  gives the value now, for the whole session, or wherever you press and hold the chart, which
+  also shows every value at that moment. A CRAFTY session also shows where the battery
   went: the energy drawn (voltage × current), split into heat-up, holding, boost and after off,
   next to the device's own count of the capacity used.
 - 🌙 **Records in the background** (Android 12+, off until you switch it on in Settings). Android
