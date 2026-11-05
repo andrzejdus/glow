@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { locale } from './locale.svelte';
-import { demoHistory, plausible, usage } from './usage.svelte';
+import { demoHistory, plausible, repair, usage } from './usage.svelte';
 
 describe('usage months', () => {
   it('splits the lifetime counter into calendar months, current month last', async () => {
@@ -171,5 +171,37 @@ describe('usage plausibility', () => {
     }
     expect(usage.reading?.m).toBe(7);
     vi.useRealTimers();
+  });
+});
+
+describe('usage history repair', () => {
+  const H = 3_600_000;
+  const t0 = new Date(2026, 10, 1).getTime();
+  const at = (h: number, m: number) => ({ t: t0 + h * H, m });
+
+  it('drops a spike and a dip that the counter comes back from', () => {
+    const spike = [at(0, 100), at(1, 3_447_970), at(2, 110), at(3, 2_920), at(4, 120)];
+    expect(repair(spike)).toEqual([at(0, 100), at(2, 110), at(4, 120)]);
+    const dip = [at(0, 100), at(1, 41), at(2, 110)];
+    expect(repair(dip)).toEqual([at(0, 100), at(2, 110)]);
+    const two = [at(0, 100), at(1, 3_447_970), at(1.01, 3_447_970), at(2, 110)];
+    expect(repair(two)).toEqual([at(0, 100), at(2, 110)]);
+  });
+
+  it('drops a wrong first reading and a wrong last one', () => {
+    expect(repair([at(0, 3_447_970), at(1, 100), at(2, 110)])).toEqual([at(1, 100), at(2, 110)]);
+    expect(repair([at(0, 100), at(1, 110), at(1.5, 3_447_970)])).toEqual([at(0, 100), at(1, 110)]);
+  });
+
+  it('keeps a history that is right, and a counter that moved for good', () => {
+    const fine = [at(0, 100), at(1, 130), at(2, 130), at(3, 190)];
+    expect(repair(fine)).toBe(fine);
+    const reset = [at(0, 100), at(1, 110), at(2, 5), at(3, 6), at(4, 7), at(5, 8), at(6, 9)];
+    expect(repair(reset)).toEqual(reset);
+  });
+
+  it('is applied to the stored history when bound', async () => {
+    await usage.bind('repair-on-load', [at(0, 100), at(1, 3_447_970), at(2, 110)]);
+    expect(usage.snaps).toEqual([at(0, 100), at(2, 110)]);
   });
 });

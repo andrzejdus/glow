@@ -44,6 +44,36 @@ export function plausible(a: Snap, b: Snap): boolean {
   return b.m >= a.m - BACK && b.m <= a.m + Math.max(0, b.t - a.t) / 60_000 + AHEAD;
 }
 
+/**
+ * The stored history without the readings the counter cannot have shown: a spike up or a dip that
+ * the next readings (up to RUN of them) come back from, a first reading that the ones after it
+ * disagree with while they agree, and a last few that nothing confirms. A longer run that agrees with itself is the
+ * counter's own and stays.
+ */
+export function repair(snaps: Snap[]): Snap[] {
+  // A first reading is wrong when it disagrees with each of the next ones while they agree.
+  const oddFirst = (i: number) => {
+    const next = snaps.slice(i + 1, i + 1 + RUN);
+    return next.length >= 2 && next.every((s, k) => !plausible(snaps[i], s) && (k === 0 || plausible(next[k - 1], s)));
+  };
+  let from = 0;
+  while (oddFirst(from)) from++;
+  const out: Snap[] = [];
+  for (let i = from; i < snaps.length; i++) {
+    const prev = out[out.length - 1];
+    if (!prev || plausible(prev, snaps[i])) {
+      out.push(snaps[i]);
+      continue;
+    }
+    let j = i + 1;
+    while (j < snaps.length && j - i <= RUN && !plausible(prev, snaps[j])) j++;
+    if (j < snaps.length && j - i <= RUN) i = j - 1;
+    else if (j === snaps.length && j - i <= RUN) break;
+    else out.push(snaps[i]);
+  }
+  return out.length === snaps.length ? snaps : out;
+}
+
 class Usage {
   now = $state(Date.now());
   snaps = $state.raw<Snap[]>([]);
@@ -79,7 +109,7 @@ class Usage {
     this.shown = 0;
     this.reading = null;
     this.doubt = [];
-    this.snaps = seed ?? (await load<Snap[]>(`usage:${key}`, []));
+    this.snaps = repair(seed ?? (await load<Snap[]>(`usage:${key}`, [])));
   }
 
   /**
