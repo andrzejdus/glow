@@ -4,6 +4,7 @@
   import SessionChart from '../components/SessionChart.svelte';
   import { energyOf } from '../lib/battery';
   import { conn, tap } from '../lib/connection.svelte';
+  import { modelNames } from '../lib/devices/registry';
   import { clockTime, decimal, mmss, splitHours, toUnit, usageTime } from '../lib/format';
   import { heatUpSec, readyAtOnce, sessions, type SessionDetail, type SessionEvent, type SessionSummary } from '../lib/sessions.svelte';
   import { locale } from '../lib/locale.svelte';
@@ -57,6 +58,8 @@
     });
   }
 
+  // The sessions are the bound device's: its name beside each one's date.
+  const model = $derived(conn.device?.model ?? (conn.last ? modelNames[conn.last.kind] : null));
   const status = $derived(
     !shown ? '' : running ? (conn.device && conn.phase === 'connected' ? (shown.readySec !== null ? 'Ready' : 'Heating') : 'Waiting for the device…') : '',
   );
@@ -188,10 +191,10 @@
       <div class="s-head">
         <div>
           <div class="label">{running ? 'Session · now' : shown.id === sessions.list[0]?.id ? 'Last session' : 'Session'}</div>
-          <div class="s-when">{dayName(shown.id)}, {when(shown.id)}</div>
+          <div class="s-when">{dayName(shown.id)}, {when(shown.id)}{#if model}{' · '}{model}{/if}</div>
         </div>
         {#if picked !== null && sessions.active}
-          <button type="button" class="pill press" onclick={() => { tap(); picked = null; }}>Latest</button>
+          <button type="button" class="pill latest press" onclick={() => { tap(); picked = null; }}>Latest</button>
         {:else if status}
           <div class="chip" class:ready={status === 'Ready'}><span></span>{status}</div>
         {/if}
@@ -278,34 +281,49 @@
   }
   .session {
     scroll-margin-top: calc(var(--sat) + 12px);
-    padding: 16px 16px 14px;
+    padding: 18px 16px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
   .s-head {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
   }
+  .s-head {
+    gap: 12px;
+  }
   .s-when {
     margin-top: 2px;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     color: var(--muted-2);
   }
+  .latest {
+    height: 44px;
+    padding: 0 16px;
+    font-size: 14px;
+    font-weight: 800;
+  }
   .big {
-    font-size: 40px;
+    font-size: 56px;
     font-weight: 300;
     letter-spacing: -0.03em;
-    line-height: 1;
+    line-height: 56px;
     color: var(--navy);
   }
   .chip {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    white-space: nowrap;
+    background: var(--orange-tint);
+    font-size: 13px;
     font-weight: 800;
     color: var(--orange-ink);
   }
@@ -317,7 +335,8 @@
     animation: blink 1.4s ease-in-out infinite;
   }
   .chip.ready {
-    color: var(--led-ready);
+    background: color-mix(in srgb, var(--led-ready) 12%, transparent);
+    color: color-mix(in srgb, var(--led-ready) 60%, var(--ink));
   }
   .chip.ready span {
     background: var(--led-ready);
