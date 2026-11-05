@@ -28,6 +28,8 @@ interface Saved {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const REFRESH_MS = 30_000;
+const BATTERY_POLL_MS = 5000;
 const hidden = () => globalThis.document?.visibilityState === 'hidden';
 
 export function tap() {
@@ -581,9 +583,14 @@ class Connection {
       this.persist();
     }
     clearInterval(this.refreshTimer);
+    // Every 30 s a refresh while on screen; between them, with the heater on, the battery values
+    // the session log keeps every 5 s.
+    let ticks = 0;
     this.refreshTimer = setInterval(() => {
-      if (globalThis.document?.visibilityState !== 'hidden') driver.refresh?.().catch(() => undefined);
-    }, 30000);
+      if (++ticks % (REFRESH_MS / BATTERY_POLL_MS) === 0) {
+        if (globalThis.document?.visibilityState !== 'hidden') driver.refresh?.().catch(() => undefined);
+      } else if (this.device?.heaterOn) driver.pollBattery?.().catch(() => undefined);
+    }, BATTERY_POLL_MS);
     this.phase = 'connected';
     tap();
   }

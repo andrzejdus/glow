@@ -366,6 +366,60 @@ describe('crafty driver', () => {
     await driver.stop();
   });
 
+  it('reads the remaining capacity on connect and with refresh, and stops asking when it is absent', async () => {
+    // 1931 mAh (8b 07), as duramson/vo0t's published CRAFTY+ diagnostics show it: an open-source
+    // report, not yet a capture of our own.
+    const t = craftyPlus({ [U.batteryCapacity]: [0x8b, 0x07] });
+    const { driver, state } = await started(t);
+    expect(state.batteryCapacity).toBe(1931);
+    t.values.set(U.batteryCapacity, le16(1890));
+    await driver.refresh!();
+    expect(state.batteryCapacity).toBe(1890);
+    t.values.set(U.batteryCapacity, le16(0xffff)); // no value: the last one stays
+    await driver.refresh!();
+    expect(state.batteryCapacity).toBe(1890);
+    await driver.stop();
+
+    const old = craftyPlus(); // reading 0153 fails
+    const none = await started(old);
+    expect(none.state.batteryCapacity).toBeUndefined();
+    await none.driver.refresh!();
+    expect(old.ops.some((o) => o.chr === U.batteryCapacity)).toBe(false);
+    await none.driver.stop();
+  });
+
+  it('polls voltage, current and battery temperature for the session log', async () => {
+    // Readings seen on a CRAFTY+ (V03.24) heating: 3090 mV (12 0c), -7100 mA (44 e4).
+    const t = craftyPlus({ [U.batteryVoltage]: le16(3817), [U.batteryCurrent]: le16(0), [U.batteryTemp]: le16(279) });
+    const { driver, state } = await started(t);
+    t.values.set(U.batteryVoltage, [0x12, 0x0c]);
+    t.values.set(U.batteryCurrent, [0x44, 0xe4]);
+    t.values.set(U.batteryTemp, le16(301));
+    await driver.pollBattery!();
+    expect(state).toMatchObject({ batteryVoltage: 3090, batteryCurrent: -7100, batteryTemp: 30.1 });
+    expect(t.ops.map((o) => o.chr)).toEqual([U.batteryVoltage, U.batteryCurrent, U.batteryTemp]);
+    await driver.stop();
+  });
+
+  it('leaves voltage and current to the battery poll while the heater is on', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const t = craftyPlus({ [U.batteryStatus]: le16(0x0050), [U.batteryVoltage]: le16(3817), [U.batteryCurrent]: le16(0) });
+      const { driver } = await started(t); // the heater is on
+      vi.advanceTimersByTime(3000);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(t.ops.map((o) => o.chr)).toEqual([U.batteryStatus]);
+      t.push(U.status, le16(0)); // heater off
+      t.ops = [];
+      vi.advanceTimersByTime(3000);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(t.ops.map((o) => o.chr)).toEqual([U.batteryStatus, U.batteryVoltage, U.batteryCurrent]);
+      await driver.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('reports a too hot battery from battery status bits 8 and 14, like the official app', async () => {
     // Not captured: no CRAFTY+ has been seen setting these bits. 0x0050 and 0x80d4 are real readings.
     const t = craftyPlus({ [U.batteryStatus]: le16(0x0050) });

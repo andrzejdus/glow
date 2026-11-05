@@ -224,8 +224,8 @@ minimum and maximum, read like the other temperatures: uint16 LE, °C × 10.
 
 The only value seen so far is from vo0t's published diagnostics of a CRAFTY+: 27.9 °C (`17 01`).
 
-Glow reads `0113` on connect and with `refresh()` (every ~30 s; it changes slowly, so not with the 3 s
-charger poll) and reports it as `batteryTemp` with one decimal. It decodes it as signed, so a battery
+Glow reads `0113` on connect, with `refresh()` (every ~30 s) and, while the heater is on, with the
+battery poll (below), and reports it as `batteryTemp` with one decimal. It decodes it as signed, so a battery
 below 0 °C would come out right, and ignores `0xffff` and anything outside −40…100 °C. If the first
 read fails (firmware without the characteristic), Glow does not ask again until the next connection.
 Device diagnostics shows all three in °C with the raw value in hex next to it.
@@ -244,3 +244,30 @@ and `0x3000` (bits 12–13) "overheating, let it cool down". The two readings do
 these bits has been seen set on our CRAFTY+ (V03.24). Glow follows the official app; Device
 diagnostics shows `0063` bit by bit, so the bit that actually comes on when the battery gets hot can
 be checked there. No "too cold" flag is known.
+
+## Battery poll and capacity
+
+While the heater is on, the app calls `pollBattery()` every ~5 s: it reads voltage `00b3`, current
+`00e3` and battery temperature `0113` for the session log, and the 3 s charger poll then reads only
+`0063`. With the heater off the charger poll reads voltage and current as before (on screen only).
+
+Five more characteristics in service `0003` that the official app does not read. J-Cat/crafty-control
+and duramson/vo0t name them so and read them as uint16 LE; vo0t's published CRAFTY+ diagnostics show
+1931 / 3300 / 3300 mAh and 42 charge cycles.
+
+| Char | Reported meaning |
+|---|---|
+| `0143` | full capacity, mAh |
+| `0153` | remaining capacity, mAh |
+| `0183` | design capacity, mAh |
+| `0163` | discharge cycles |
+| `0173` | charge cycles |
+
+Glow reads `0153` on connect and with `refresh()` and reports it as `batteryCapacity` (0, `0xffff`
+and anything above 20 Ah ignored; a first read that fails stops further reads until the next
+connection). The session log keeps it at the start and at the end of each session, to compare the
+device's own count with the current Glow adds up.
+
+Open: whether the current scale is mA as read (seen −2000…−7100 at ~3.1 V while heating, so up to
+~22 W): the drop in `0153` over a session, against the integrated `00e3`, should tell. Not yet seen
+on our own CRAFTY+ (V03.24); whether older firmware has these characteristics.

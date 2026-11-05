@@ -139,6 +139,50 @@ describe('session log', () => {
     const detail = await sessions.detail(sessions.list[0].id);
     expect(detail!.events).toEqual([{ t: 39, k: 'lost' }, { t: 99, k: 'back' }]);
   });
+
+  it('keeps the battery every 5 s with the heater on and every 30 s in the cool-down, with the capacity', async () => {
+    vi.useFakeTimers();
+    await sessions.bind('log-7');
+    const crafty = (sec: number) => ({
+      battery: 80 - Math.floor(sec / 20), batteryVoltage: 3600 - sec * 2, batteryCurrent: sec < 60 ? -6000 : 0,
+      batteryTemp: 28 + sec / 40, batteryCapacity: 2000 - Math.floor(sec / 2),
+    });
+    at(0, { heaterOn: false, currentTemp: 30, ...crafty(0) });
+    for (let sec = 1; sec <= 60; sec++) at(sec, { heaterOn: true, currentTemp: Math.min(190, 30 + sec * 4), ...crafty(sec) });
+    for (let sec = 61; sec <= 190; sec++) at(sec, { heaterOn: false, currentTemp: 150, ...crafty(sec) });
+    expect(sessions.cooling).toBeNull();
+    const s = sessions.list[0];
+    expect(s.capStart).toBe(2000);
+    // To the end of the cool-down: COOL_MS (2 minutes) after heater off at 61 s.
+    expect(s.capEnd).toBe(2000 - Math.floor(180 / 2));
+    const b = (await sessions.detail(s.id))!.battery!;
+    const on = b.ts.filter((t) => t <= 60);
+    expect(on.slice(0, 3)).toEqual([0, 5, 10]);
+    expect(on.length).toBeGreaterThanOrEqual(12);
+    // After the heater-off reading, one every 30 s.
+    expect(b.ts.filter((t) => t > 60)).toEqual([90, 120, 150, 180]);
+    for (const list of [b.p, b.v, b.i, b.t]) expect(list).toHaveLength(b.ts.length);
+    expect(b.v![1]).toBe(3600 - 12);
+    expect(b.i![1]).toBe(-6000);
+    expect(b.t![0]).toBe(280);
+    expect(b.p[0]).toBe(80);
+  });
+
+  it('keeps only the percentage on a VENTY, and nothing on a VOLCANO', async () => {
+    vi.useFakeTimers();
+    await sessions.bind('log-8');
+    at(0, { kind: 'venty', heaterOn: false, battery: 60 });
+    for (let sec = 1; sec <= 20; sec++) at(sec, { kind: 'venty', heaterOn: true, battery: 60 });
+    at(21, { kind: 'venty', heaterOn: false, battery: 59 });
+    const b = (await sessions.detail(sessions.list[0].id))!.battery!;
+    expect(b.p.every((p) => p === 60 || p === 59)).toBe(true);
+    expect(b.v ?? b.i ?? b.t).toBeUndefined();
+
+    await sessions.bind('log-9');
+    at(0, { kind: 'volcano', heaterOn: false, currentTemp: 30 });
+    for (let sec = 1; sec <= 20; sec++) at(sec, { kind: 'volcano', heaterOn: true, currentTemp: 100 });
+    expect(sessions.activeDetail?.battery).toBeUndefined();
+  });
 });
 
 describe('ready time', () => {

@@ -33,6 +33,12 @@ export interface SessionSummary {
   airSec?: number;
   batteryStart?: number;
   batteryEnd?: number;
+  /**
+   * The remaining capacity the device counts (CRAFTY 0153), mAh, at the start and at the last
+   * reading, the cool-down included: to compare with the current Glow adds up itself.
+   */
+  capStart?: number;
+  capEnd?: number;
   /** The device reports a live temperature (CRAFTY, VOLCANO), not only the target. */
   live: boolean;
   /** A few points of the temperature (or the goal, without a live one) for the timeline, with
@@ -54,9 +60,49 @@ export interface SessionDetail {
   /** Goal: target plus the boost in use; null while the heater is off. */
   g: (number | null)[];
   events: SessionEvent[];
+  /** Battery readings, on a clock of their own; absent on a VOLCANO and in sessions recorded before Glow kept them. */
+  battery?: BatterySamples;
+}
+
+/**
+ * Battery readings: every 5 s with the heater on (with the temperature samples), every 30 s in the
+ * cool-down. Whole numbers, to keep the record small; a field the device does not report is left out.
+ */
+export interface BatterySamples {
+  /** Seconds from the start. */
+  ts: number[];
+  /** Percent. */
+  p: (number | null)[];
+  /** Voltage, mV (CRAFTY). */
+  v?: (number | null)[];
+  /** Current, mA: positive charges, negative drains (CRAFTY). */
+  i?: (number | null)[];
+  /** Battery temperature, °C × 10 (CRAFTY). */
+  t?: (number | null)[];
+}
+
+/** The battery readings with one more at `t`; unchanged for a device without a battery. */
+export function addBattery(b: BatterySamples | undefined, t: number, d: DeviceState): BatterySamples | undefined {
+  if (d.battery === undefined && !b) return b;
+  if (b && b.ts[b.ts.length - 1] === t) return b;
+  const n = b?.ts.length ?? 0;
+  const round = (v: number | undefined) => (v === undefined ? null : Math.round(v));
+  // A field that starts reporting late gets nulls for the readings before it.
+  const add = (list: (number | null)[] | undefined, v: number | null) =>
+    list ? [...list, v] : v === null ? undefined : [...Array<null>(n).fill(null), v];
+  const out: BatterySamples = { ts: [...(b?.ts ?? []), t], p: [...(b?.p ?? []), round(d.battery)] };
+  const v = add(b?.v, round(d.batteryVoltage));
+  const i = add(b?.i, round(d.batteryCurrent));
+  const temp = add(b?.t, d.batteryTemp === undefined ? null : Math.round(d.batteryTemp * 10));
+  if (v) out.v = v;
+  if (i) out.i = i;
+  if (temp) out.t = temp;
+  return out;
 }
 
 const SAMPLE_MS = 5000;
+/** In the cool-down the battery hardly changes: one reading every BATTERY_COOL_MS. */
+const BATTERY_COOL_MS = 30_000;
 /** The temperature this long before the heater comes on starts the chart, one reading every PRE_STEP_MS. */
 const PRE_MS = 10_000;
 const PRE_STEP_MS = 2000;
@@ -134,6 +180,7 @@ class Sessions {
   private recent: { t: number; c: number }[] = [];
   private coolUntil = 0;
   private lastCool = 0;
+  private lastCoolBattery = 0;
   /** A background recording is being replayed: the live sampler keeps still. */
   private replaying = false;
   private resuming: Promise<void> | null = null;
@@ -301,6 +348,7 @@ class Sessions {
     this.cooling = { id: s.id, detail };
     this.coolUntil = end + COOL_MS;
     this.lastCool = Math.max(end, s.id + Math.max(0, ...detail.ts) * 1000);
+    this.lastCoolBattery = Math.max(end, s.id + Math.max(0, ...(detail.battery?.ts ?? [])) * 1000);
     this.replace({ ...s, background: true });
     return true;
   }
@@ -339,6 +387,7 @@ class Sessions {
       peak: d.currentTemp ?? null,
       modes: {},
       batteryStart: d.battery,
+      capStart: d.batteryCapacity,
       live: d.currentTemp !== undefined,
       spark: [],
       app: __APP_VERSION__,
@@ -407,6 +456,7 @@ class Sessions {
       target,
       peak,
       batteryEnd: d.battery ?? s.batteryEnd,
+      capEnd: d.batteryCapacity ?? s.capEnd,
       live: s.live || d.currentTemp !== undefined,
       ...(this.replaying ? { background: true } : {}),
     };
@@ -425,6 +475,7 @@ class Sessions {
       ts: [...detail.ts, this.sec(now)],
       c: [...detail.c, d.currentTemp === undefined ? null : Math.round(d.currentTemp * 2) / 2],
       g: [...detail.g, goal],
+      battery: addBattery(detail.battery, this.sec(now), d),
     };
     this.scheduleSave();
   }
@@ -452,6 +503,7 @@ class Sessions {
       this.cooling = { id: s.id, detail: this.activeDetail! };
       this.coolUntil = now + COOL_MS;
       this.lastCool = now;
+      this.lastCoolBattery = now;
     } else {
       clearInterval(this.sampler);
     }
@@ -475,10 +527,16 @@ class Sessions {
     if (now - this.lastCool < SAMPLE_MS) return;
     this.lastCool = now;
     const temp = Math.round(d.currentTemp * 2) / 2;
+    const t = Math.round((now - c.id) / 1000);
+    const battery = now - this.lastCoolBattery >= BATTERY_COOL_MS ? addBattery(c.detail.battery, t, d) : c.detail.battery;
+    if (battery !== c.detail.battery) this.lastCoolBattery = now;
     this.cooling = {
       id: c.id,
-      detail: { ...c.detail, ts: [...c.detail.ts, Math.round((now - c.id) / 1000)], c: [...c.detail.c, temp], g: [...c.detail.g, null] },
+      detail: { ...c.detail, ts: [...c.detail.ts, t], c: [...c.detail.c, temp], g: [...c.detail.g, null], battery },
     };
+    // The device's own count, to the end of the cool-down like the readings.
+    const s = this.list.find((x) => x.id === c.id);
+    if (s && d.batteryCapacity !== undefined && d.batteryCapacity !== s.capEnd) this.replace({ ...s, capEnd: d.batteryCapacity });
     if (temp <= COOL_TO) return this.endCooling();
     // Saved as it goes, so an app that is closed meanwhile keeps what was recorded.
     if (this.cooling.detail.ts.length % 6 === 0) this.saveCooling();

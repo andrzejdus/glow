@@ -46,6 +46,13 @@ const CHR = {
   batteryTemp: uuid(0x113),
   batteryTempMin: uuid(0x123),
   batteryTempMax: uuid(0x133),
+  // Battery capacity, mAh: full, remaining and design; then discharge and charge cycles. Named so by
+  // J-Cat/crafty-control and duramson/vo0t, which read them as uint16 LE.
+  batteryCapacityFull: uuid(0x143),
+  batteryCapacity: uuid(0x153),
+  dischargeCycles: uuid(0x163),
+  chargeCycles: uuid(0x173),
+  batteryCapacityDesign: uuid(0x183),
   securityCode: uuid(0x1b3),
   status2: uuid(0x1c3),
   useMinutes: uuid(0x1e3),
@@ -188,6 +195,13 @@ export function decodeBatteryTemp(view: DataView): number | undefined {
   return c >= -40 && c <= 100 ? c : undefined;
 }
 
+/** Battery capacity (0143, 0153, 0183), mAh. Undefined for 0, 0xffff and anything above 20 Ah. */
+export function decodeCapacity(view: DataView): number | undefined {
+  if (view.byteLength < 2) return undefined;
+  const mah = view.getUint16(0, true);
+  return mah > 0 && mah <= 20000 ? mah : undefined;
+}
+
 export interface CraftyFirmware {
   major: number;
   minor: number;
@@ -252,6 +266,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private batteryStatusPushes = 0;
   /** Whether 0113 can be read: firmware without it is asked once per connection, not every refresh. */
   private hasBatteryTemp: boolean | undefined;
+  /** The same for 0153, the remaining capacity. */
+  private hasCapacity: boolean | undefined;
 
   constructor(private readonly ble: BleTransport) {}
 
@@ -388,6 +404,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
     await this.readBatteryStats();
     await this.readBatteryTemp();
+    await this.readCapacity();
 
     if (!this.legacy) await this.subscribe(SVC_SYSTEM, CHR.status, this.onStatus);
     this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
@@ -397,8 +414,12 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
       // Try notifications too; the 3 s poll stays until diagnostics show the device sends them.
       await this.subscribe(SVC_SYSTEM, CHR.batteryStatus, this.onBatteryStatus).catch(() => undefined);
       await this.readCharger();
-      // The current changes quickly, so it is read with the charger while the app is visible.
-      this.chargerTimer = setInterval(() => pageHidden() || this.readCharger().then(() => this.readBatteryStats()), CHARGER_POLL_MS);
+      // The current changes quickly, so it is read with the charger while the app is visible; while
+      // the heater is on, pollBattery() reads it anyway.
+      this.chargerTimer = setInterval(
+        () => pageHidden() || this.readCharger().then(() => (this.heating() ? undefined : this.readBatteryStats())),
+        CHARGER_POLL_MS,
+      );
       globalThis.document?.addEventListener('visibilitychange', this.onVisible);
     }
   }
@@ -431,6 +452,28 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.hasBatteryTemp ??= v !== null;
     const c = v ? decodeBatteryTemp(v) : undefined;
     if (c !== undefined) this.emit({ batteryTemp: c });
+  }
+
+  /**
+   * 0153 remaining capacity, mAh, to compare a session's own count of the current with the device's.
+   * Absent on some firmware, perhaps: as with 0113, a first read that fails stops further reads.
+   */
+  private async readCapacity() {
+    if (this.hasCapacity === false) return;
+    const v = await this.read(SVC_SYSTEM, CHR.batteryCapacity).catch(() => null);
+    this.hasCapacity ??= v !== null;
+    const mah = v ? decodeCapacity(v) : undefined;
+    if (mah !== undefined) this.emit({ batteryCapacity: mah });
+  }
+
+  private heating(): boolean {
+    return (this.status & STATUS_HEATER_ACTIVE) !== 0;
+  }
+
+  /** Voltage, current and battery temperature, every ~5 s while the heater is on, for the session log. */
+  async pollBattery(): Promise<void> {
+    await this.readBatteryStats();
+    await this.readBatteryTemp();
   }
 
   private async readCharger() {
@@ -586,6 +629,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
     await this.readBatteryStats();
     await this.readBatteryTemp();
+    await this.readCapacity();
     // Legacy firmware does not notify the status register.
     if (this.legacy) this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
   }

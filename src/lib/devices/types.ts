@@ -52,8 +52,10 @@ export interface DeviceState {
   charging?: boolean;
   /** Battery voltage, mV, when the device reports it. */
   batteryVoltage?: number;
-  /** Battery current, mA, as the device reports it (which sign means charging is not known). */
+  /** Battery current, mA, as the device reports it: positive charges, negative drains (CRAFTY). */
   batteryCurrent?: number;
+  /** Remaining battery capacity, mAh, as the device counts it (CRAFTY 0153). */
+  batteryCapacity?: number;
   /** Battery temperature, °C (CRAFTY: to 0.1 °C), when the device reports it. */
   batteryTemp?: number;
   /**
@@ -117,6 +119,11 @@ export interface DeviceDriver {
   findMyDevice?(): Promise<void>;
   /** Re-read values the device does not notify (hours of operation, battery…). Called every ~30 s. */
   refresh?(): Promise<void>;
+  /**
+   * Re-read the battery values that change quickly while heating (CRAFTY: voltage, current, battery
+   * temperature), for the session log. Called every ~5 s while the heater is on.
+   */
+  pollBattery?(): Promise<void>;
   /** Raw registers, read fresh, for working out what undocumented bits mean (CRAFTY charging). */
   diagnostics?(): Promise<DiagnosticValue[]>;
 }
