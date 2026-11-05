@@ -30,8 +30,8 @@ Glow saves this in its own private app storage on the phone:
   ended, the target and the device's temperature every few seconds (from ten seconds before the
   heater came on until it has cooled down, for at most two minutes after), when it was ready, the heat
   level used, air on and off (VOLCANO), the battery level at the start and the end, the battery
-  readings during it (its level, and on a CRAFTY its voltage, current and temperature; every 5
-  seconds while heating, every 30 while cooling down), the battery capacity a CRAFTY reports at the
+  readings during it (its level, and on a CRAFTY its voltage, current and temperature; every 2
+  seconds while heating on a CRAFTY, every 5 on the others, every 30 while cooling down), the battery capacity a CRAFTY reports at the
   start and the end, and the Glow version that recorded it. Kept until you remove it: Settings ›
   Session history shows how much it takes, and "Clean up…" removes the sessions older than a time
   you choose; clearing Glow's storage removes all of it. Glow uses it for the Stats screen.
