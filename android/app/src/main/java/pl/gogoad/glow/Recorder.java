@@ -52,6 +52,8 @@ import java.util.UUID;
  *   t R service char hex     a value read
  *   t N service char hex     a notification
  *   t F                      a round of re-reads is complete (the app calls the driver's refresh())
+ *   t P                      CRAFTY, heater on: a round of battery reads is complete (the app calls
+ *                            the driver's pollBattery())
  *   t E reason               the recording ends: idle (cooled down), lost (link gone), app (the app
  *                            took over), off (switched off), killed (Glow was killed meanwhile:
  *                            written after the restart, at the time of the last line before it)
@@ -80,6 +82,8 @@ final class Recorder {
     private static final long TICK_MS = 1000;
     private static final long REFRESH_MS = 30_000;
     private static final long IDLE_REFRESH_MS = 300_000;
+    /** CRAFTY with the heater on: voltage, current and battery temperature for the session log, as the app polls them. */
+    private static final long BATTERY_POLL_MS = 5000;
     /** VENTY/VEAZY answer only when asked: the drivers poll the status every second. */
     private static final long POLL_MS = 1000;
     private static final long IDLE_POLL_MS = 5000;
@@ -152,6 +156,7 @@ final class Recorder {
     private boolean awaitingFirmware;
     private long lastPoll;
     private long lastRefresh;
+    private long lastBatteryPoll;
     private int polls;
 
     // Guarded by Background.LOCK: the app takes the log over from another thread.
@@ -388,7 +393,8 @@ final class Recorder {
             { C_SYSTEM, crafty(0x23) }, { C_SYSTEM, crafty(0x1e3) }, { C_INFO, crafty(0x72) },
             { C_CONTROL, crafty(0x51) }, { C_CONTROL, crafty(0x61) }, { C_CONTROL, crafty(0x71) },
             { C_CONTROL, crafty(0x41) }, { C_SYSTEM, crafty(0xb3) }, { C_SYSTEM, crafty(0xe3) },
-            { C_SYSTEM, crafty(0x93) }, { C_SYSTEM, crafty(0x63) },
+            { C_SYSTEM, crafty(0x113) }, { C_SYSTEM, crafty(0x153) }, { C_SYSTEM, crafty(0x93) },
+            { C_SYSTEM, crafty(0x63) },
         }) read(c[0], c[1]);
     }
 
@@ -397,8 +403,15 @@ final class Recorder {
         for (String[] c : new String[][] {
             { C_CONTROL, crafty(0x21) }, { C_CONTROL, crafty(0x31) }, { C_SYSTEM, crafty(0x23) },
             { C_SYSTEM, crafty(0x1e3) }, { C_CONTROL, crafty(0x51) }, { C_CONTROL, crafty(0x41) },
-            { C_SYSTEM, crafty(0xb3) }, { C_SYSTEM, crafty(0xe3) }, { C_SYSTEM, crafty(0x93) },
-            { C_SYSTEM, crafty(0x63) },
+            { C_SYSTEM, crafty(0xb3) }, { C_SYSTEM, crafty(0xe3) }, { C_SYSTEM, crafty(0x113) },
+            { C_SYSTEM, crafty(0x153) }, { C_SYSTEM, crafty(0x93) }, { C_SYSTEM, crafty(0x63) },
+        }) read(c[0], c[1]);
+    }
+
+    /** The driver's pollBattery(). A characteristic the firmware lacks is skipped, and so not logged. */
+    private void craftyBatteryPoll() {
+        for (String[] c : new String[][] {
+            { C_SYSTEM, crafty(0xb3) }, { C_SYSTEM, crafty(0xe3) }, { C_SYSTEM, crafty(0x113) },
         }) read(c[0], c[1]);
     }
 
@@ -546,10 +559,12 @@ final class Recorder {
             if (stopped || !connected) return;
             long now = System.currentTimeMillis();
             boolean busy;
+            boolean heating;
             synchronized (Background.LOCK) {
                 trim(now);
                 if (recording && !heater && now - offAt > COOL_MS) end(now, "idle");
                 busy = recording || heater;
+                heating = heater;
             }
             if (op == null && ops.isEmpty()) {
                 if (qvap && now - lastPoll >= (busy ? POLL_MS : IDLE_POLL_MS)) {
@@ -558,6 +573,8 @@ final class Recorder {
                     write(Q_SERVICE, Q_CONTROL, qvapRequest(polls % Q_USAGE_EVERY == 0 ? Q_USAGE : Q_STATUS));
                 } else if (now - lastRefresh >= (busy ? REFRESH_MS : IDLE_REFRESH_MS)) {
                     lastRefresh = now;
+                    // It reads the battery too.
+                    lastBatteryPoll = now;
                     if (qvap) {
                         write(Q_SERVICE, Q_CONTROL, qvapRequest(Q_USAGE));
                         write(Q_SERVICE, Q_CONTROL, qvapUi());
@@ -565,6 +582,13 @@ final class Recorder {
                     else craftyRefresh();
                     queue(() -> {
                         record(new Entry(System.currentTimeMillis(), 'F', null, null, null));
+                        return false;
+                    });
+                } else if (heating && !qvap && !kind.equals("volcano") && now - lastBatteryPoll >= BATTERY_POLL_MS) {
+                    lastBatteryPoll = now;
+                    craftyBatteryPoll();
+                    queue(() -> {
+                        record(new Entry(System.currentTimeMillis(), 'P', null, null, null));
                         return false;
                     });
                 }

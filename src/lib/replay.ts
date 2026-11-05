@@ -23,7 +23,7 @@ export interface Recording {
   /** When the recording starts: the values are as they stood then. */
   start: number;
   values: Line[];
-  /** What came after, oldest first: reads (R), notifications (N), refresh rounds (F). */
+  /** What came after, oldest first: reads (R), notifications (N), refresh rounds (F), battery polls (P). */
   entries: Line[];
   /** When it ended; the last entry's time when the log was cut off. */
   end: number;
@@ -73,7 +73,7 @@ export function parseLog(text: string): Recording[] {
       r.end = t;
       r.reason = parts[2] ?? 'lost';
       r = null;
-    } else if (type === 'F') {
+    } else if (type === 'F' || type === 'P') {
       if (started) r.entries.push({ t, type, service: '', chr: '', value: new DataView(new ArrayBuffer(0)) });
     } else if ((type === 'V' || type === 'R' || type === 'N') && parts.length >= 5 && /^([0-9a-f]{2})*$|^-$/.test(parts[4])) {
       const line = { t, type, service: parts[2], chr: parts[3], value: hexView(parts[4]) };
@@ -182,6 +182,7 @@ async function replayOne(r: Recording) {
       now = e.t;
       if (e.type === 'N') transport.notify(e);
       else if (e.type === 'R') transport.set(e);
+      else if (e.type === 'P') await driver.pollBattery?.().catch(() => undefined);
       else await driver.refresh?.().catch(() => undefined);
       // Answers to requests arrive a microtask later.
       await Promise.resolve();

@@ -91,6 +91,57 @@ describe('background recording replay', () => {
     expect(sessions.list).toHaveLength(1);
   });
 
+  it('replays the battery polls of a recording into the session, with the capacity', async () => {
+    const id = 'AA:BB:CC:DD:EE:08';
+    await usage.bind(id);
+    await sessions.bind(id);
+    // As the recorder logs them now: battery temperature and remaining capacity among the values,
+    // then voltage, current and battery temperature every 5 s with the heater on, each round a P line.
+    const lines = craftyHead(id, T0, 0, 300);
+    const s0 = lines.indexOf(`${T0} S`);
+    lines.splice(s0, 0, `${T0} V ${C.SVC_SYSTEM} ${C.batteryTemp} ${u16(279)}`, `${T0} V ${C.SVC_SYSTEM} ${C.batteryCapacity} ${u16(1931)}`);
+    const log = craftyLog(id).split('\n').filter((l) => !l.includes(' V ') && !l.includes(' B ') && l !== `${T0} S`);
+    const body = [...log];
+    for (let sec = 15; sec <= 95; sec += 5) {
+      const t = T0 + sec * 1000 + 300;
+      body.push(
+        `${t} R ${C.SVC_SYSTEM} ${C.batteryVoltage} ${u16(3600 - sec * 5)}`,
+        `${t + 100} R ${C.SVC_SYSTEM} ${C.batteryCurrent} ${u16(-5000 - sec * 10)}`,
+        `${t + 200} R ${C.SVC_SYSTEM} ${C.batteryTemp} ${u16(279 + sec)}`,
+        `${t + 300} P`,
+      );
+    }
+    body.push(`${T0 + 45_050} R ${C.SVC_SYSTEM} ${C.batteryCapacity} ${u16(1900)}`);
+    body.push(`${T0 + 140_000} R ${C.SVC_SYSTEM} ${C.batteryCapacity} ${u16(1870)}`, `${T0 + 140_100} F`);
+    body.sort((a, b) => Number(a.split(' ')[0]) - Number(b.split(' ')[0]));
+    expect(await replay([...lines, ...body].join('\n'), id)).toBe(1);
+    const [s] = sessions.list;
+    expect(s.capStart).toBe(1931);
+    expect(s.capEnd).toBe(1870);
+    const b = (await sessions.detail(s.id))!.battery!;
+    expect(b.ts.filter((t) => t <= 86).length).toBeGreaterThanOrEqual(15);
+    // From the polls: the current drains, the battery warms.
+    expect(Math.min(...(b.i!.filter((v) => v !== null) as number[]))).toBeLessThanOrEqual(-5800);
+    expect(Math.max(...(b.t!.filter((v) => v !== null) as number[]))).toBeGreaterThan(330);
+    // The first reading is from the values the recording starts with; the next from a poll.
+    expect(b.v!.slice(0, 2)).toEqual([3900, 3600 - 15 * 5]);
+    // The cool-down part, every 30 s: down to 50° in about 50 s here.
+    expect(b.ts.filter((t) => t > 86)).toEqual([116]);
+  });
+
+  it('replays an older recording without battery polls: the battery % and what the refresh read', async () => {
+    const id = 'AA:BB:CC:DD:EE:0A';
+    await usage.bind(id);
+    await sessions.bind(id);
+    expect(await replay(craftyLog(id), id)).toBe(1);
+    const [s] = sessions.list;
+    expect(s.capStart).toBeUndefined();
+    const b = (await sessions.detail(s.id))!.battery!;
+    expect(b.p[0]).toBe(80);
+    expect(b.v?.[0]).toBe(3900);
+    expect(b.t).toBeUndefined();
+  });
+
   it('ignores recordings of another device', async () => {
     await sessions.bind('AA:BB:CC:DD:EE:02');
     expect(await replay(craftyLog('AA:BB:CC:DD:EE:09'), 'AA:BB:CC:DD:EE:02')).toBe(0);

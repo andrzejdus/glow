@@ -250,6 +250,9 @@ be checked there. No "too cold" flag is known.
 While the heater is on, the app calls `pollBattery()` every ~5 s: it reads voltage `00b3`, current
 `00e3` and battery temperature `0113` for the session log, and the 3 s charger poll then reads only
 `0063`. With the heater off the charger poll reads voltage and current as before (on screen only).
+The background recorder (`Recorder.java`) does the same reads every 5 s with the heater on and logs
+a `P` line after each round, on which the replay calls `pollBattery()`; it reads `0113` and `0153`
+on connect and with its refresh too.
 
 Five more characteristics in service `0003` that the official app does not read. J-Cat/crafty-control
 and duramson/vo0t name them so and read them as uint16 LE; vo0t's published CRAFTY+ diagnostics show
