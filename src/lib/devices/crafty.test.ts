@@ -164,6 +164,36 @@ describe('crafty driver', () => {
     });
   });
 
+  it('reads the hours of operation from 0023 and 01e3', async () => {
+    // As read on our CRAFTY+ (V03.24): 0x036d = 877 h, 0x2b = 43 min.
+    const { state } = await started(craftyPlus({ [U.useHours]: [0x6d, 0x03], [U.useMinutes]: [0x2b, 0x00] }));
+    expect(state.operatingMinutes).toBe(52663);
+  });
+
+  it('ignores values a register cannot hold, as reads answered out of turn gave them', async () => {
+    const t = craftyPlus();
+    const { driver, state } = await started(t);
+    const before = { ...state, settings: { ...state.settings } };
+    // Captured on a CRAFTY+ (docs/protocol/crafty.md, "Reads answered out of turn"): the target read
+    // got 0063's 30 00, the boost 00b3's cf 0d, the hours 00e3's 74 e0, the minutes 0113's 72 01 and
+    // the battery 00b3's c0 0d.
+    t.values.set(U.targetTemp, [0x30, 0x00]);
+    t.values.set(U.boostOffset, [0xcf, 0x0d]);
+    t.values.set(U.useHours, [0x74, 0xe0]);
+    t.values.set(U.useMinutes, [0x72, 0x01]);
+    t.values.set(U.battery, [0xc0, 0x0d]);
+    t.values.set(U.ledBrightness, [0x6d, 0x03]);
+    await driver.refresh!();
+    t.push(U.battery, [0xc0, 0x0d]);
+    expect(state).toMatchObject({
+      targetTemp: before.targetTemp,
+      boostOffset: before.boostOffset,
+      operatingMinutes: before.operatingMinutes,
+      battery: before.battery,
+      settings: { ledBrightness: before.settings!.ledBrightness },
+    });
+  });
+
   it('treats a target above 210 as °F', async () => {
     const { state } = await started(craftyPlus({ [U.targetTemp]: le16(3740) }));
     expect(state.targetTemp).toBe(190);

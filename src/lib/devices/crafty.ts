@@ -353,7 +353,31 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   }
 
   private onCurrentTemp = (v: DataView) => this.emit({ currentTemp: decodeCurrentTemp(v) });
-  private onBattery = (v: DataView) => this.emit({ battery: clamp(readU16(v), 0, 100) });
+  private onBattery = (v: DataView) => {
+    const p = readU16(v);
+    if (p <= 100) this.emit({ battery: p });
+  };
+
+  // Values a register cannot hold are ignored, the last good one kept: a read answered out of turn
+  // carries another register's value (docs/protocol/crafty.md, "Reads answered out of turn").
+
+  /** True when the target read is one the device can be set to. */
+  private takeTarget(v: DataView): boolean {
+    const t = decodeTargetTemp(v);
+    if (t < MIN_TEMP || t > MAX_TEMP) return false;
+    this.target = t;
+    return true;
+  }
+
+  private takeBoost(v: DataView) {
+    const b = Math.round(readU16(v) / 10);
+    if (b <= MAX_BOOST) this.boost = b;
+  }
+
+  private takeLedBrightness(v: DataView) {
+    const level = readU16(v);
+    if (level <= 100) this.ledBrightness = level;
+  }
   private onAutoShutoffRemaining = (v: DataView) =>
     this.emit({ autoShutoffRemainingSec: readU16(v) });
 
@@ -394,15 +418,14 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.emit = onChange;
     this.emit({ kind: 'crafty', model: 'CRAFTY', minTemp: MIN_TEMP, maxTemp: MAX_TEMP });
 
-    this.target = decodeTargetTemp(await this.read(SVC_CONTROL, CHR.targetTemp));
-    this.emit({ targetTemp: this.target });
+    if (this.takeTarget(await this.read(SVC_CONTROL, CHR.targetTemp))) this.emit({ targetTemp: this.target });
 
     this.emit({ serial: readText(await this.read(SVC_INFO, CHR.serial)).substring(0, 8) });
 
     await this.subscribe(SVC_CONTROL, CHR.currentTemp, this.onCurrentTemp);
     this.onCurrentTemp(await this.read(SVC_CONTROL, CHR.currentTemp));
 
-    this.boost = Math.round(readU16(await this.read(SVC_CONTROL, CHR.boostOffset)) / 10);
+    this.takeBoost(await this.read(SVC_CONTROL, CHR.boostOffset));
 
     const fwText = readText(await this.read(SVC_INFO, CHR.firmware));
     this.firmware = parseFirmware(fwText);
@@ -425,7 +448,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
       this.emit({ firmwareBle: `V${parts.join('.')}` });
     }
 
-    this.ledBrightness = readU16(await this.read(SVC_CONTROL, CHR.ledBrightness));
+    this.takeLedBrightness(await this.read(SVC_CONTROL, CHR.ledBrightness));
 
     if (!this.legacy) {
       // Like the official app, which calls it "autoOffCountdown", Glow reads the auto-off setting
@@ -563,7 +586,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   private async readOperatingTime() {
     const hours = readU16(await this.poll(SVC_SYSTEM, CHR.useHours));
     const minutes = this.legacy ? 0 : readU16(await this.poll(SVC_SYSTEM, CHR.useMinutes));
-    this.emit({ operatingMinutes: hours * 60 + minutes });
+    // The minutes register counts the minutes past the hours (0–59).
+    if (minutes < 60) this.emit({ operatingMinutes: hours * 60 + minutes });
   }
 
   async stop(): Promise<void> {
@@ -694,11 +718,11 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   }
 
   async refresh(): Promise<void> {
-    this.target = decodeTargetTemp(await this.poll(SVC_CONTROL, CHR.targetTemp));
-    this.boost = Math.round(readU16(await this.poll(SVC_CONTROL, CHR.boostOffset)) / 10);
+    this.takeTarget(await this.poll(SVC_CONTROL, CHR.targetTemp));
+    this.takeBoost(await this.poll(SVC_CONTROL, CHR.boostOffset));
     this.emit({ targetTemp: this.target, ...this.boostPatch() });
     await this.readOperatingTime();
-    this.ledBrightness = readU16(await this.poll(SVC_CONTROL, CHR.ledBrightness));
+    this.takeLedBrightness(await this.poll(SVC_CONTROL, CHR.ledBrightness));
     // Not the auto-off setting: see start().
     this.emit({ settings: this.currentSettings() });
     this.onBattery(await this.poll(SVC_CONTROL, CHR.battery));

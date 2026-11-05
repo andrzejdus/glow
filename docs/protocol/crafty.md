@@ -34,7 +34,7 @@ All UUIDs are `0000xxxx-4c45-4b43-4942-265a524f5453`; the table gives `xxxx`.
 | 0002 | 0052 | Serial number | read | UTF-8, first 8 chars used |
 | 0002 | 0072 | BLE firmware | read | 3 bytes → `V{b0}.{b1}.{b2}` |
 | 0003 | 0023 | Hours of operation | read | uint16 LE, hours |
-| 0003 | 01e3 | Minutes of operation | read | uint16 LE, minutes (added to hours) |
+| 0003 | 01e3 | Minutes of operation | read | uint16 LE, minutes past the hours (0–59) |
 | 0003 | 0093 | Project status register | read, notify | uint16 LE bit field (below) |
 | 0003 | 01c3 | Project status register 2 | read, write, notify | uint16 LE bit field (below) |
 | 0003 | 01b3 | Security code | write | uint16 LE unlock code |
@@ -343,7 +343,11 @@ current as +877 mA. The device was not at fault; it answered every read in order
 
 So no client may close with a read in flight while another shares the link: the recorder now waits
 for the answer (at most its 5 s operation timeout) before it closes (`finish()`), and the app's own
-disconnect waits for its read in flight the same way (`native-adapter.ts`).
+disconnect waits for its read in flight the same way (`native-adapter.ts`). As a second line, the
+driver ignores values a register cannot hold (target outside 40–210 °C, boost above 99, LED
+brightness or battery above 100, minutes of operation of 60 or more) and the hours of operation
+ignore a reading the counter cannot have reached (`usage.svelte.ts`: lower than the last one, or
+higher by more than the time since).
 
 The battery % that rose in the same session was the device itself, not a swapped read: between
 03:49:42 and 03:50:41, still heating, `0041` read 73 → 79 → 80 % while `0153` (remaining) went
