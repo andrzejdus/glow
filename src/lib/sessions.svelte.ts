@@ -1,10 +1,11 @@
 import { BatteryMeans, type BatteryMean } from './battery';
 import type { DeviceState, HeatMode } from './devices/types';
-import { load, save } from './prefs';
+import { sessionStore } from './sessionStore';
 
 // The session log: one session from heater on to heater off, seen while Glow is connected, or
-// replayed from what the background recorder logged while it was closed (replay.ts). Kept for good. Each device has an index of summaries (small, loaded on connect) and one
-// record per session with its temperature samples and events (loaded when it is opened).
+// replayed from what the background recorder logged while it was closed (replay.ts). Kept for good.
+// Each device has an index of summaries (small, loaded on connect) and one record per session with
+// its temperature samples and events (loaded when it is opened); sessionStore.ts keeps them.
 
 /** Something that happened in a session, at `t` seconds from its start. */
 export type SessionEvent =
@@ -185,6 +186,8 @@ class Sessions {
 
   private key = '';
   private persist = true;
+  /** Demo mode: made-up sessions, in memory only. */
+  private seeded = false;
   private last: DeviceState | null = null;
   private lastTick = 0;
   private lastSample = 0;
@@ -223,13 +226,24 @@ class Sessions {
     this.flush();
     this.key = key;
     this.persist = !seed;
+    this.seeded = !!seed;
     this.active = null;
     this.activeDetail = null;
     this.last = null;
     this.recent = [];
     this.details = seed?.details ?? new Map();
-    this.list = seed?.list ?? (await load<SessionSummary[]>(`sessions:${key}`, []));
+    this.list = seed?.list ?? (await this.loadList(key));
     void this.redrawSparks(key);
+  }
+
+  private async loadList(key: string): Promise<SessionSummary[]> {
+    try {
+      return await sessionStore.loadIndex(key);
+    } catch {
+      // Unreadable: nothing is saved for this device this time, rather than an empty list over it.
+      this.persist = false;
+      return [];
+    }
   }
 
   /** Sessions saved before the timeline showed the time around them get their points again, once. */
@@ -251,7 +265,7 @@ class Sessions {
     if (this.cooling?.id === id) return this.cooling.detail;
     const known = this.details.get(id);
     if (known) return known;
-    const found = await load<SessionDetail | null>(`session:${this.key}:${id}`, null);
+    const found = this.seeded ? null : await sessionStore.loadDetail(this.key, id);
     if (found) this.details.set(id, found);
     return found;
   }
@@ -583,7 +597,7 @@ class Sessions {
     if (!c || !s || s.end === null) return;
     this.replace({ ...s, ...sparkOf(c.detail, s.live, (s.end - s.id) / 1000) });
     this.details.set(c.id, c.detail);
-    if (this.persist && this.key) save(`session:${this.key}:${c.id}`, c.detail);
+    if (this.persist && this.key) void sessionStore.saveDetail(this.key, c.id, c.detail);
     this.save();
   }
 
@@ -614,13 +628,13 @@ class Sessions {
       const s = { ...this.active, ...sparkOf(this.activeDetail, this.active.live) };
       this.replace(s);
       this.details.set(s.id, this.activeDetail);
-      if (this.persist && this.key) save(`session:${this.key}:${s.id}`, this.activeDetail);
+      if (this.persist && this.key) void sessionStore.saveDetail(this.key, s.id, this.activeDetail);
     }
     this.save();
   }
 
   private save() {
-    if (this.persist && this.key) save(`sessions:${this.key}`, this.list);
+    if (this.persist && this.key) void sessionStore.saveIndex(this.key, this.list);
   }
 }
 
