@@ -130,6 +130,44 @@ describe('background recording replay', () => {
     expect(b.ts.filter((t) => t > 86)).toEqual([116]);
   });
 
+  it('replays the 2 s battery polls into 5 s means, with the peak read', async () => {
+    const id = 'AA:BB:CC:DD:EE:0B';
+    await usage.bind(id);
+    await sessions.bind(id);
+    // As the recorder logs them now: voltage and current every 2 s, the battery temperature every 5 s.
+    // The current switches between -8 A and 0 at each poll from 30 s on.
+    const lines = craftyHead(id, T0, 0, 300);
+    const log = craftyLog(id).split('\n').filter((l) => !l.includes(' V ') && !l.includes(' B ') && l !== `${T0} S`);
+    const body = [...log];
+    let n = 0;
+    const amps = (sec: number) => (sec < 30 || n % 2 === 0 ? -8000 : 0);
+    for (let sec = 16, temp = 0; sec <= 98; sec += 2, n++) {
+      const t = T0 + sec * 1000;
+      const a = amps(sec);
+      body.push(`${t} R ${C.SVC_SYSTEM} ${C.batteryVoltage} ${u16(a ? 3100 : 3550)}`, `${t + 400} R ${C.SVC_SYSTEM} ${C.batteryCurrent} ${u16(a)}`);
+      if (sec >= temp) {
+        body.push(`${t + 800} R ${C.SVC_SYSTEM} ${C.batteryTemp} ${u16(300 + sec)}`);
+        temp = sec + 5;
+      }
+      body.push(`${t + 900} P`);
+    }
+    body.sort((a, b) => Number(a.split(' ')[0]) - Number(b.split(' ')[0]));
+    expect(await replay([...lines, ...body].join('\n'), id)).toBe(1);
+    const [s] = sessions.list;
+    const b = (await sessions.detail(s.id))!.battery!;
+    // Every 5 s with the heater on, each a mean with its power.
+    const on = b.ts.map((t, k) => ({ t, k })).filter(({ t }) => t > 0 && t <= 86);
+    expect(on.every(({ k }) => b.w![k] !== null)).toBe(true);
+    // From 30 s on (16 s into the session) half the time at -8 A: the means sit between 0 and -8 A.
+    // (The last, 85–86 s, is the second up to heater off.)
+    const holding = on.filter(({ t }) => t >= 25 && t < 86).map(({ k }) => b.i![k]!);
+    expect(Math.max(...holding)).toBeLessThan(-1500);
+    expect(Math.min(...holding)).toBeGreaterThan(-6500);
+    expect(b.min).toEqual({ i: -8000, w: -24_800 });
+    // The cool-down keeps single readings.
+    expect(b.w![b.ts.length - 1]).toBeNull();
+  });
+
   it('replays an older recording without battery polls: the battery % and what the refresh read', async () => {
     const id = 'AA:BB:CC:DD:EE:0A';
     await usage.bind(id);

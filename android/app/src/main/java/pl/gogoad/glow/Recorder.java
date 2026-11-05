@@ -53,7 +53,8 @@ import java.util.UUID;
  *   t N service char hex     a notification
  *   t F                      a round of re-reads is complete (the app calls the driver's refresh())
  *   t P                      CRAFTY, heater on: a round of battery reads is complete (the app calls
- *                            the driver's pollBattery())
+ *                            the driver's pollBattery()): voltage and current every 2 s, the battery
+ *                            temperature too every 5 s; the app keeps their 5 s means
  *   t E reason               the recording ends: idle (cooled down), lost (link gone), app (the app
  *                            took over), off (switched off), killed (Glow was killed meanwhile:
  *                            written after the restart, at the time of the last line before it)
@@ -82,8 +83,13 @@ final class Recorder {
     private static final long TICK_MS = 1000;
     private static final long REFRESH_MS = 30_000;
     private static final long IDLE_REFRESH_MS = 300_000;
-    /** CRAFTY with the heater on: voltage, current and battery temperature for the session log, as the app polls them. */
-    private static final long BATTERY_POLL_MS = 5000;
+    /**
+     * CRAFTY with the heater on, as the app polls them: voltage and current every BATTERY_POLL_MS (two
+     * reads, ~0.4 s each), the battery temperature every BATTERY_TEMP_MS. The replay turns them into
+     * the session log's 5 s means.
+     */
+    private static final long BATTERY_POLL_MS = 2000;
+    private static final long BATTERY_TEMP_MS = 5000;
     /** VENTY/VEAZY answer only when asked: the drivers poll the status every second. */
     private static final long POLL_MS = 1000;
     private static final long IDLE_POLL_MS = 5000;
@@ -157,6 +163,7 @@ final class Recorder {
     private long lastPoll;
     private long lastRefresh;
     private long lastBatteryPoll;
+    private long lastBatteryTemp;
     private int polls;
 
     // Guarded by Background.LOCK: the app takes the log over from another thread.
@@ -408,11 +415,11 @@ final class Recorder {
         }) read(c[0], c[1]);
     }
 
-    /** The driver's pollBattery(). A characteristic the firmware lacks is skipped, and so not logged. */
-    private void craftyBatteryPoll() {
-        for (String[] c : new String[][] {
-            { C_SYSTEM, crafty(0xb3) }, { C_SYSTEM, crafty(0xe3) }, { C_SYSTEM, crafty(0x113) },
-        }) read(c[0], c[1]);
+    /** The driver's pollBattery(temp). A characteristic the firmware lacks is skipped, and so not logged. */
+    private void craftyBatteryPoll(boolean temp) {
+        read(C_SYSTEM, crafty(0xb3));
+        read(C_SYSTEM, crafty(0xe3));
+        if (temp) read(C_SYSTEM, crafty(0x113));
     }
 
     private void volcanoConnect() {
@@ -575,6 +582,7 @@ final class Recorder {
                     lastRefresh = now;
                     // It reads the battery too.
                     lastBatteryPoll = now;
+                    lastBatteryTemp = now;
                     if (qvap) {
                         write(Q_SERVICE, Q_CONTROL, qvapRequest(Q_USAGE));
                         write(Q_SERVICE, Q_CONTROL, qvapUi());
@@ -584,9 +592,13 @@ final class Recorder {
                         record(new Entry(System.currentTimeMillis(), 'F', null, null, null));
                         return false;
                     });
-                } else if (heating && !qvap && !kind.equals("volcano") && now - lastBatteryPoll >= BATTERY_POLL_MS) {
+                } else if (heating && !qvap && !kind.equals("volcano")
+                    && (now - lastBatteryPoll >= BATTERY_POLL_MS || now - lastBatteryTemp >= BATTERY_TEMP_MS)) {
+                    // Only with nothing else waiting (see above), so rounds never pile up.
+                    boolean temp = now - lastBatteryTemp >= BATTERY_TEMP_MS;
                     lastBatteryPoll = now;
-                    craftyBatteryPoll();
+                    if (temp) lastBatteryTemp = now;
+                    craftyBatteryPoll(temp);
                     queue(() -> {
                         record(new Entry(System.currentTimeMillis(), 'P', null, null, null));
                         return false;

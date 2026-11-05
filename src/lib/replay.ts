@@ -182,6 +182,7 @@ async function replayOne(r: Recording) {
       now = e.t;
       if (e.type === 'N') transport.notify(e);
       else if (e.type === 'R') transport.set(e);
+      // Every 2 s with the heater on (every 5 s before Glow kept means): the session log averages them.
       else if (e.type === 'P') await driver.pollBattery?.().catch(() => undefined);
       else await driver.refresh?.().catch(() => undefined);
       // Answers to requests arrive a microtask later.
