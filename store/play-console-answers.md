@@ -120,7 +120,7 @@ when it is sent off the device, and Glow sends nothing:
 | Hours-of-operation snapshots (device counter + time, up to 400 days) | App storage on the phone only | `save('usage:<device>', …)` in `src/lib/usage.svelte.ts` |
 | Background recording: the setting, the device's address, name, model, whether it was last in range, and when the heater went off if Glow was left during a cool-down (off by default) | App storage on the phone only | `Background.java` (SharedPreferences `background`), `BackgroundPlugin.java` |
 | Background log (while background recording is on: what the device reported over Bluetooth from 15 s before heater on to 2 min after heater off, with Glow closed, including the rest of a cool-down Glow was left during; deleted once replayed into the session log, or when the setting is switched off) | App storage on the phone only (`files/background/`) | `Recorder.java`, `src/lib/replay.ts` |
-| Session log (heater on/off times, target and temperature samples from 10 s before heater on to the cool-down after it, Ready, heat level, air, battery at start and end, battery readings during it (level; CRAFTY also voltage, current, battery temperature and capacity at start and end), the Glow version; kept until storage is cleared) | App storage on the phone only | `save('sessions:<device>', …)` and `save('session:<device>:<start>', …)` in `src/lib/sessions.svelte.ts` |
+| Session log (heater on/off times, target and temperature samples from 10 s before heater on to the cool-down after it, Ready, heat level, air, battery at start and end, battery readings during it (level; CRAFTY also voltage, current, battery temperature and capacity at start and end), the Glow version; kept until the user removes older sessions with Settings › Session history › Clean up, or clears storage) | App storage on the phone only (`files/sessions/`; older versions kept it in Preferences and move it there on first start) | `src/lib/sessions.svelte.ts` through `src/lib/sessionStore.ts` and `SessionFilesPlugin.java`; the clean-up in `src/lib/cleanup.ts` |
 | Reheats (seconds from losing Ready after a draw to Ready again, and degrees below the target with seconds to Ready from the lowest point, for the last 12) | App storage on the phone only | `save('reheats:<device>', …)` in `src/lib/ready.svelte.ts` |
 | "Debugging from a computer" setting (off by default) | App storage on the phone only; while on, a computer the user has authorised for adb can inspect the WebView and read the log | `DebuggingPlugin.java`, `src/lib/debugging.ts` |
 | Device settings and live readings | Read from and written to the device over Bluetooth; not stored | `src/lib/devices/` |
@@ -134,7 +134,8 @@ config dependencies. The "Can't connect?" link opens a web page in the user's br
 that is the user visiting a website, not the app sending data.
 
 One thing to know: the manifest has `android:allowBackup="true"`, so Android's own Auto Backup
-may copy Glow's storage into the user's Google account backup if the user has device backup on.
+may copy Glow's storage (Preferences and the files under `files/`, the session log included) into
+the user's Google account backup if the user has device backup on.
 That is Android's backup, not data the developer receives, and Play's guidance does not count it
 as collection by the app. `PRIVACY.md` says so in plain words. If you want no doubt at all, set
 `allowBackup="false"` (a code change, not made here), at the cost of the history not moving to a

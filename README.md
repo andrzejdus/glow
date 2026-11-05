@@ -45,7 +45,7 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
   with usage per month.
 - 📊 **Stats.** A tab with each session as a chart (temperature against the target, Ready, boosts
   and the cool-down) and its facts, hours of operation by day, week or month, and a timeline of
-  every session Glow saw. Tapping Hours of operation on the dashboard or in Settings opens it.
+  every session Glow saw, kept for good. Tapping Hours of operation on the dashboard or in Settings opens it.
   Swipe the chart sideways, or tap the dots under it, to draw the battery over the temperature:
   its level, and on a CRAFTY its voltage, current, power and temperature too. The line under it
   gives the value now, for the whole session, or wherever you press and hold the chart, which
@@ -69,7 +69,9 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
   Booster / Superbooster offsets. Sliders mark the factory value where STORZ & BICKEL documents
   one. Temperatures show in the device's unit, else the phone's, unless °C or °F is chosen for
   the app (this leaves the device's own display as it is); weeks in Stats start on the phone's
-  first day unless Monday or Sunday is chosen. Firmware update, factory reset and analysis are left out on purpose.
+  first day unless Monday or Sunday is chosen. Session history shows how much the session log
+  takes, and Clean up removes the sessions older than a week, a month, up to a year, if you want
+  the space back. Firmware update, factory reset and analysis are left out on purpose.
 - 🧪 **Device diagnostics.** Live raw registers with changed bits highlighted and a copyable
   change log, for working out what undocumented bits mean.
 - 🎮 **Demo mode.** "Try without a device" on the Connect screen simulates a VENTY or a VOLCANO.
@@ -181,6 +183,7 @@ installs and GitHub APKs share one signature and update each other.
 | `src/lib/ble/` | Bluetooth: the native plugin on Android, Web Bluetooth in a browser |
 | `src/lib/connection.svelte.ts` | Auto-connect, scanning, reconnecting, commands |
 | `src/lib/usage.svelte.ts` | Hours-of-operation history, session time, time to ready |
+| `src/lib/sessions.svelte.ts`, `sessionStore.ts` | The session log; on Android a file per session in app storage |
 | `src/lib/workflow.svelte.ts` | The VOLCANO workflow runner |
 | `src/screens/`, `src/components/` | The UI (Svelte 5) |
 | `assets/src/` | Icon and splash sources (`node scripts/render-assets.mjs && npx capacitor-assets generate --android`) |

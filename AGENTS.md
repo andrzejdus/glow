@@ -19,6 +19,7 @@ through `@capacitor-community/bluetooth-le` on Android and Web Bluetooth in a br
 | `src/lib/devices/demo.ts` | Simulated devices for demo mode (`/?demo=venty`, `crafty`, `volcano`) |
 | `src/lib/ble/` | `BleTransport` (the only Bluetooth API drivers see), native and Web Bluetooth adapters |
 | `src/lib/usage.svelte.ts`, `workflow.svelte.ts` | Hours-of-operation history; the VOLCANO workflow runner |
+| `src/lib/sessions.svelte.ts`, `sessionStore.ts`, `cleanup.ts` | The session log; where it is kept (files on Android, via `SessionFilesPlugin.java`), and Settings' Clean up |
 | `src/screens/`, `src/components/` | UI. `Diagnostics.svelte` shows a driver's `diagnostics()` registers |
 | `docs/protocol/*.md` | Protocol notes per family: UUIDs, payloads, connect sequence, hardware findings, open questions |
 | `android/` | Capacitor's Android project. `capacitor.build.gradle` and `capacitor.settings.gradle` are generated: do not edit |

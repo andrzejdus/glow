@@ -32,7 +32,9 @@ Glow saves this in its own private app storage on the phone:
   level used, air on and off (VOLCANO), the battery level at the start and the end, the battery
   readings during it (its level, and on a CRAFTY its voltage, current and temperature; every 5
   seconds while heating, every 30 while cooling down), the battery capacity a CRAFTY reports at the
-  start and the end, and the Glow version that recorded it. Kept until you clear Glow's storage. Glow uses it for the Stats screen.
+  start and the end, and the Glow version that recorded it. Kept until you remove it: Settings ›
+  Session history shows how much it takes, and "Clean up…" removes the sessions older than a time
+  you choose; clearing Glow's storage removes all of it. Glow uses it for the Stats screen.
 - **Background log**, only while "Record in the background" is on: what the device reported over
   Bluetooth (temperatures, heater and battery state, battery voltage, current, temperature and
   capacity, its settings registers, its operating counter), from 15 seconds before the heater came on until two minutes after it went off, while
