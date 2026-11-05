@@ -257,7 +257,12 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   readonly modeSwitchable = false as const;
 
   private emit: (patch: Partial<DeviceState>) => void = () => {};
-  private queue: Promise<unknown> = Promise.resolve();
+  /**
+   * GATT operations waiting their turn: commands (and connecting) first, then the polls. A read takes
+   * ~0.4 s on a CRAFTY+, so a command never waits for more than the one already in flight.
+   */
+  private waiting: { now: (() => void)[]; poll: (() => void)[] } = { now: [], poll: [] };
+  private busy = false;
   private subscribed: [string, string][] = [];
   private firmware: CraftyFirmware | null = null;
   private status = 0;
@@ -302,15 +307,40 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     return this.legacy ? ALL_SETTINGS.filter((d) => !NEW_FIRMWARE_ONLY.has(d.key)) : ALL_SETTINGS;
   }
 
-  /** Runs GATT operations strictly one after another. */
-  private op<T>(fn: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(fn);
-    this.queue = run.catch(() => undefined);
-    return run;
+  /**
+   * Runs GATT operations strictly one after another. A `poll` (a re-read nobody is waiting for) goes
+   * only when no command is waiting.
+   */
+  private op<T>(fn: () => Promise<T>, poll = false): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      (poll ? this.waiting.poll : this.waiting.now).push(() => {
+        Promise.resolve()
+          .then(fn)
+          .then(resolve, reject)
+          .finally(() => {
+            this.busy = false;
+            this.next();
+          });
+      });
+      this.next();
+    });
+  }
+
+  private next() {
+    if (this.busy) return;
+    const run = this.waiting.now.shift() ?? this.waiting.poll.shift();
+    if (!run) return;
+    this.busy = true;
+    run();
   }
 
   private read(service: string, chr: string) {
     return this.op(() => this.ble.read(service, chr));
+  }
+
+  /** A read for a poll: it waits while a command is waiting. */
+  private poll(service: string, chr: string) {
+    return this.op(() => this.ble.read(service, chr), true);
   }
 
   private write(service: string, chr: string, value: DataView) {
@@ -438,25 +468,28 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
 
   /**
    * 00b3 voltage and 00e3 current, as J-Cat/crafty-control and duramson/vo0t read them; each is
-   * reported only when plausible (one Li-ion cell, at most 10 A).
+   * reported only when plausible (one Li-ion cell, at most 10 A). Both in one report, so the session
+   * log never multiplies one round's voltage with the last round's current.
    */
   private async readBatteryStats() {
-    const v = await this.read(SVC_SYSTEM, CHR.batteryVoltage).catch(() => null);
+    const patch: Partial<DeviceState> = {};
+    const v = await this.poll(SVC_SYSTEM, CHR.batteryVoltage).catch(() => null);
     const mv = v ? readU16(v) : 0;
-    if (mv >= 2500 && mv <= 4500) this.emit({ batteryVoltage: mv });
-    const c = await this.read(SVC_SYSTEM, CHR.batteryCurrent).catch(() => null);
+    if (mv >= 2500 && mv <= 4500) patch.batteryVoltage = mv;
+    const c = await this.poll(SVC_SYSTEM, CHR.batteryCurrent).catch(() => null);
     const ma = c ? readI16(c) : undefined;
-    if (ma !== undefined && Math.abs(ma) <= 10000) this.emit({ batteryCurrent: ma });
+    if (ma !== undefined && Math.abs(ma) <= 10000) patch.batteryCurrent = ma;
+    if (Object.keys(patch).length) this.emit(patch);
   }
 
   /**
-   * 0113 battery temperature. It changes slowly, so it is read on connect and with refresh(), not
-   * with the 3 s charger poll. A first read that fails (older firmware may not have it) stops further
+   * 0113 battery temperature. It changes slowly, so it is read on connect, with refresh() and with
+   * every other battery poll or so (~5 s) while heating, not with the 3 s charger poll. A first read that fails (older firmware may not have it) stops further
    * reads until the next connection; a later failed read just keeps the last value.
    */
   private async readBatteryTemp() {
     if (this.hasBatteryTemp === false) return;
-    const v = await this.read(SVC_SYSTEM, CHR.batteryTemp).catch(() => null);
+    const v = await this.poll(SVC_SYSTEM, CHR.batteryTemp).catch(() => null);
     this.hasBatteryTemp ??= v !== null;
     const c = v ? decodeBatteryTemp(v) : undefined;
     if (c !== undefined) this.emit({ batteryTemp: c });
@@ -468,7 +501,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
    */
   private async readCapacity() {
     if (this.hasCapacity === false) return;
-    const v = await this.read(SVC_SYSTEM, CHR.batteryCapacity).catch(() => null);
+    const v = await this.poll(SVC_SYSTEM, CHR.batteryCapacity).catch(() => null);
     this.hasCapacity ??= v !== null;
     const mah = v ? decodeCapacity(v) : undefined;
     if (mah !== undefined) this.emit({ batteryCapacity: mah });
@@ -501,14 +534,17 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     return (this.status & STATUS_HEATER_ACTIVE) !== 0;
   }
 
-  /** Voltage, current and battery temperature, every ~5 s while the heater is on, for the session log. */
-  async pollBattery(): Promise<void> {
+  /**
+   * Voltage and current, every ~2 s while the heater is on, for the session log; with `temp` the
+   * battery temperature too (every ~5 s).
+   */
+  async pollBattery(temp = true): Promise<void> {
     await this.readBatteryStats();
-    await this.readBatteryTemp();
+    if (temp) await this.readBatteryTemp();
   }
 
   private async readCharger() {
-    const v = await this.read(SVC_SYSTEM, CHR.batteryStatus).catch(() => null);
+    const v = await this.poll(SVC_SYSTEM, CHR.batteryStatus).catch(() => null);
     if (v) this.onBatteryStatusValue(readU16(v));
   }
 
@@ -525,8 +561,8 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   }
 
   private async readOperatingTime() {
-    const hours = readU16(await this.read(SVC_SYSTEM, CHR.useHours));
-    const minutes = this.legacy ? 0 : readU16(await this.read(SVC_SYSTEM, CHR.useMinutes));
+    const hours = readU16(await this.poll(SVC_SYSTEM, CHR.useHours));
+    const minutes = this.legacy ? 0 : readU16(await this.poll(SVC_SYSTEM, CHR.useMinutes));
     this.emit({ operatingMinutes: hours * 60 + minutes });
   }
 
@@ -650,7 +686,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     ];
     const out: DiagnosticValue[] = [];
     for (const [label, service, chr, unit, quiet, signed, scale] of registers) {
-      const value = await this.read(service, chr).then(signed ? readI16 : readU16, () => null);
+      const value = await this.poll(service, chr).then(signed ? readI16 : readU16, () => null);
       out.push({ label, source: `0x${chr.slice(4, 8)}`, value, unit, quiet, scale });
     }
     out.push({ label: 'Battery status pushes', source: 'notify 0x0063', value: this.batteryStatusPushes, unit: '×' });
@@ -658,20 +694,20 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
   }
 
   async refresh(): Promise<void> {
-    this.target = decodeTargetTemp(await this.read(SVC_CONTROL, CHR.targetTemp));
-    this.boost = Math.round(readU16(await this.read(SVC_CONTROL, CHR.boostOffset)) / 10);
+    this.target = decodeTargetTemp(await this.poll(SVC_CONTROL, CHR.targetTemp));
+    this.boost = Math.round(readU16(await this.poll(SVC_CONTROL, CHR.boostOffset)) / 10);
     this.emit({ targetTemp: this.target, ...this.boostPatch() });
     await this.readOperatingTime();
-    this.ledBrightness = readU16(await this.read(SVC_CONTROL, CHR.ledBrightness));
+    this.ledBrightness = readU16(await this.poll(SVC_CONTROL, CHR.ledBrightness));
     // Not the auto-off setting: see start().
     this.emit({ settings: this.currentSettings() });
-    this.onBattery(await this.read(SVC_CONTROL, CHR.battery));
+    this.onBattery(await this.poll(SVC_CONTROL, CHR.battery));
     await this.readBatteryStats();
     await this.readBatteryTemp();
     await this.readCapacity();
     await this.readBatteryHealth();
     // Legacy firmware does not notify the status register.
-    if (this.legacy) this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
+    if (this.legacy) this.onStatus(await this.poll(SVC_SYSTEM, CHR.status));
   }
 }
 

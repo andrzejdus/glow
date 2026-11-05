@@ -126,10 +126,11 @@ export interface DeviceDriver {
   /** Re-read values the device does not notify (hours of operation, battery…). Called every ~30 s. */
   refresh?(): Promise<void>;
   /**
-   * Re-read the battery values that change quickly while heating (CRAFTY: voltage, current, battery
-   * temperature), for the session log. Called every ~5 s while the heater is on.
+   * Re-read the battery values that change quickly while heating (CRAFTY: voltage and current; with
+   * `temp`, the default, the battery temperature too), for the session log. Called every ~2 s while
+   * the heater is on, with `temp` every ~5 s. Behind any command waiting to go out.
    */
-  pollBattery?(): Promise<void>;
+  pollBattery?(temp?: boolean): Promise<void>;
   /** Raw registers, read fresh, for working out what undocumented bits mean (CRAFTY charging). */
   diagnostics?(): Promise<DiagnosticValue[]>;
 }

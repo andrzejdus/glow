@@ -458,6 +458,40 @@ describe('crafty driver', () => {
     await driver.stop();
   });
 
+  it('polls voltage and current alone between battery temperatures, reported together', async () => {
+    const t = craftyPlus({ [U.batteryVoltage]: le16(3817), [U.batteryCurrent]: le16(0), [U.batteryTemp]: le16(279) });
+    const driver = crafty.create('crafty', t);
+    const reports: Partial<DeviceState>[] = [];
+    await driver.start((p) => reports.push(p));
+    t.ops = [];
+    reports.length = 0;
+    t.values.set(U.batteryVoltage, le16(3105));
+    t.values.set(U.batteryCurrent, le16(-8069));
+    await driver.pollBattery!(false);
+    expect(t.ops.map((o) => o.chr)).toEqual([U.batteryVoltage, U.batteryCurrent]);
+    // One report for both, so nothing pairs this voltage with the last current.
+    expect(reports).toEqual([{ batteryVoltage: 3105, batteryCurrent: -8069 }]);
+    await driver.stop();
+  });
+
+  it('sends a command before the polls waiting for their turn', async () => {
+    const t = craftyPlus({ [U.batteryVoltage]: le16(3817), [U.batteryCurrent]: le16(0), [U.batteryTemp]: le16(279) });
+    const { driver } = await started(t);
+    // A refresh is a dozen reads (~5 s on a CRAFTY+); a battery poll and the charger poll queue too.
+    const polls = [driver.refresh!(), driver.pollBattery!(), driver.refresh!()];
+    await new Promise((r) => setTimeout(r, 0));
+    const before = t.ops.length;
+    await driver.setTargetTemp(190);
+    // Out after the one read that was in flight, and the boost offset right after it.
+    const writes = t.ops.findIndex((o) => o.type === 'write');
+    expect(writes).toBeLessThanOrEqual(before + 1);
+    expect(t.ops[writes + 1]).toMatchObject({ type: 'write', chr: U.boostOffset });
+    await Promise.all(polls);
+    // Never two at once.
+    expect(t.maxInFlight).toBe(1);
+    await driver.stop();
+  });
+
   it('leaves voltage and current to the battery poll while the heater is on', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     try {
