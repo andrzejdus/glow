@@ -1,11 +1,13 @@
 import { BleClient, ScanMode, type ScanResult } from '@capacitor-community/bluetooth-le';
 import { identify } from '../devices/registry';
 import type { BleAdapter, FoundDevice } from './adapter';
-import { serial } from './util';
+import { serial, withTimeout } from './util';
 import type { BleTransport } from './transport';
 
 export function nativeAdapter(): BleAdapter {
   let initialized = false;
+  /** Each connection's operation queue, so a disconnect can wait for the one in flight. */
+  const queues = new Map<string, ReturnType<typeof serial>>();
   let stopWaiting: (() => void) | null = null;
 
   return {
@@ -55,17 +57,24 @@ export function nativeAdapter(): BleAdapter {
 
     async connect(device: FoundDevice, onDisconnect, timeoutMs) {
       await BleClient.connect(device.id, () => onDisconnect(), { timeout: timeoutMs });
-      return transportFor(device.id);
+      const queue = serial();
+      queues.set(device.id, queue);
+      return transportFor(device.id, queue);
     },
 
     async disconnect(id) {
+      // The background recorder may share the link: a client closed with a read in flight leaves the
+      // device's answer to the next read on the link, which then reads the wrong value (see
+      // Recorder.finish()). So the read in flight is answered first, or times out.
+      const queue = queues.get(id);
+      queues.delete(id);
+      if (queue) await withTimeout(queue(async () => undefined), 6000, 'GATT queue').catch(() => undefined);
       await BleClient.disconnect(id).catch(() => undefined);
     },
   };
 }
 
-function transportFor(id: string): BleTransport {
-  const queue = serial();
+function transportFor(id: string, queue: ReturnType<typeof serial>): BleTransport {
   return {
     read: (s, c) => queue(() => BleClient.read(id, s, c, { timeout: 5000 })),
     write: (s, c, v) => queue(() => BleClient.write(id, s, c, v, { timeout: 5000 })),
