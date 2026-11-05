@@ -47,6 +47,9 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     battery: 78,
     // CRAFTY: the battery warms slowly while heating and cools back towards the room.
     batteryTemp: 27.9,
+    // CRAFTY: mA drawn, and what the device counts as left, mAh.
+    amps: 350,
+    capacity: 2457,
   };
   // Offsets from the base temperature; the Superbooster sits on top of the Booster.
   const offsets = { boost: 10, superboost: 25 };
@@ -60,8 +63,18 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     s.current += (g - s.current) * k + (s.heater && s.current < g ? 0.08 : 0);
     if (s.heater) s.minutes += 0.5 / 60;
     s.batteryTemp += ((s.heater ? 38 : 24) - s.batteryTemp) * 0.002;
+    // Like a CRAFTY+: ~7 A while heating up, 2–4 A holding the temperature, next to nothing when off.
+    s.amps = !s.heater ? 0 : s.current < g - 2 ? 6800 : 2600 + Math.round(900 * Math.max(0, Math.sin(Date.now() / 9000)));
+    s.capacity -= (s.amps / 1000) * (0.5 / 3.6);
     emit({
-      ...(kind === 'crafty' ? { batteryTemp: Math.round(s.batteryTemp * 10) / 10 } : {}),
+      ...(kind === 'crafty'
+        ? {
+            batteryTemp: Math.round(s.batteryTemp * 10) / 10,
+            batteryVoltage: Math.round(3850 - 0.11 * s.amps),
+            batteryCurrent: -s.amps,
+            batteryCapacity: Math.round(s.capacity),
+          }
+        : {}),
       ...(live ? { currentTemp: Math.round(s.current * 10) / 10 } : {}),
       operatingMinutes: s.minutes,
       tempReached: s.heater && Math.abs(goal() - s.current) < 1,
@@ -98,7 +111,8 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
         pumpOn: isVolcano ? false : undefined,
         battery: isVolcano ? undefined : s.battery,
         batteryVoltage: kind === 'crafty' ? 3639 : undefined,
-        batteryCurrent: kind === 'crafty' ? -350 : undefined,
+        batteryCurrent: kind === 'crafty' ? -s.amps : undefined,
+        batteryCapacity: kind === 'crafty' ? s.capacity : undefined,
         batteryTemp: kind === 'crafty' ? s.batteryTemp : undefined,
         batteryHot: kind === 'crafty' ? false : undefined,
         charging: false,

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from '../components/Icon.svelte';
   import SessionChart from '../components/SessionChart.svelte';
+  import { energyOf } from '../lib/battery';
   import { conn, tap } from '../lib/connection.svelte';
   import { clockTime, decimal, mmss, splitHours, toUnit, usageTime } from '../lib/format';
   import { heatUpSec, readyAtOnce, sessions, type SessionDetail, type SessionEvent, type SessionSummary } from '../lib/sessions.svelte';
@@ -31,6 +32,8 @@
   const detail = $derived(
     running ? sessions.activeDetail : cooling ? sessions.cooling!.detail : stored?.id === shown?.id ? stored!.detail : null,
   );
+
+  const energy = $derived(energyOf(detail?.battery));
 
   const lengthOf = (s: SessionSummary, now: number) => Math.max(0, ((s.end ?? (s.id === sessions.active?.id ? now : s.seen)) - s.id) / 1000);
   const boostSec = (s: SessionSummary) => (s.modes.boost ?? 0) + (s.modes.superboost ?? 0);
@@ -202,6 +205,7 @@
         {#if shown.live}<div><span>Peak</span><strong>{deg(shown.peak)}</strong></div>{/if}
         <div><span>Boost</span><strong>{boostSec(shown) >= 1 ? mmss(boostSec(shown)) : '–'}</strong></div>
         {#if used(shown) !== null}<div><span>Battery</span><strong>{used(shown) ? `−${used(shown)} %` : '–'}</strong></div>{/if}
+        {#if energy}<div><span>Energy</span><strong>{decimal(energy.wh, 2)} Wh</strong></div>{/if}
         {#if shown.airSec}<div><span>Air</span><strong>{mmss(shown.airSec)}</strong></div>{/if}
       </div>
 

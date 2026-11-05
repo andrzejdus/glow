@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { mmss, toUnit } from '../lib/format';
+  import { tap } from '../lib/connection.svelte';
+  import { BATTERY_GAP_SEC, batteryValues, energyOf, niceScale, SERIES, seriesOf, type SeriesKey } from '../lib/battery';
+  import { decimal, mmss, toUnit } from '../lib/format';
   import type { SessionDetail, SessionSummary } from '../lib/sessions.svelte';
 
   interface Props {
@@ -115,6 +117,64 @@
     x: x(summary.readySec),
     y: y(detail.g[ts.findIndex((t) => t >= summary.readySec!)] ?? lo),
   });
+  // One battery value over the temperature, faded behind it, on a scale of its own on the right
+  // whose steps sit on the temperature's grid lines. Only what the session has readings of.
+  const available = $derived(seriesOf(detail));
+  let pick = $state<SeriesKey>('temp');
+  const sel = $derived(available.includes(pick) ? pick : 'temp');
+  const energy = $derived(energyOf(detail?.battery));
+  const units: Record<Exclude<SeriesKey, 'temp'>, string> = { battery: '%', voltage: 'V', current: 'A', power: 'W', batteryTemp: '°' };
+  const overlay = $derived.by(() => {
+    if (sel === 'temp' || !detail?.battery || ticks.length < 2) return null;
+    const key = sel;
+    const b = detail.battery;
+    const conv = (v: number) => (key === 'batteryTemp' && unit === 'F' ? (v * 9) / 5 + 32 : v);
+    const pts = batteryValues(b, key)
+      .map((v, i) => ({ t: b.ts[i], v: v === null ? null : conv(v) }))
+      .filter((p): p is { t: number; v: number } => p.v !== null);
+    if (pts.length < 2) return null;
+    const vs = pts.map((p) => p.v);
+    const min = Math.min(...vs);
+    const max = Math.max(...vs);
+    const n = ticks.length - 1;
+    const { from, step } = niceScale(key === 'current' || key === 'power' ? Math.min(0, min) : min, max, n);
+    const tStep = ticks[1] - ticks[0];
+    const oy = (v: number) => y(ticks[0] + ((v - from) / step) * tStep);
+    let d = '';
+    let gaps = false;
+    pts.forEach((p, k) => {
+      const X = x(p.t).toFixed(1);
+      const Y = oy(p.v).toFixed(1);
+      const broken = k > 0 && p.t - pts[k - 1].t > BATTERY_GAP_SEC;
+      gaps ||= broken;
+      // The percentage moves in whole steps.
+      d += k === 0 || broken ? `M${X},${Y}` : key === 'battery' ? `H${X}V${Y}` : `L${X},${Y}`;
+    });
+    const base = y(ticks[0]).toFixed(1);
+    const area = gaps ? '' : `${d}L${x(pts[pts.length - 1].t).toFixed(1)},${base}L${x(pts[0].t).toFixed(1)},${base}Z`;
+    const dec = Number.isInteger(step) ? 0 : Math.abs(Math.round(step * 10) - step * 10) < 1e-9 ? 1 : 2;
+    const u = key === 'batteryTemp' ? `°${unit}` : units[key];
+    const labels = ticks.map((t, k) => {
+      const v = from + k * step;
+      const text = decimal(Math.abs(v) < 1e-9 ? 0 : v, dec);
+      return { y: y(t), text: k === n ? `${text} ${u}` : text };
+    });
+    const first = pts[0].v;
+    const last = pts[pts.length - 1].v;
+    const top = pts.reduce((a, p) => (p.v > a.v ? p : a));
+    const wh = energy ? ` · ${decimal(energy.wh, 2)} Wh` : '';
+    let summary = '';
+    if (key === 'battery') summary = `${first} → ${last} %${first > last ? ` · −${first - last} %` : ''}`;
+    else if (key === 'voltage') summary = `${decimal(first, 2)} → ${decimal(last, 2)} V · low ${decimal(min, 2)} V`;
+    else if (key === 'current') summary = `peak ${decimal(max, 1)} A${wh}`;
+    else if (key === 'power') summary = `peak ${decimal(max, 1)} W${wh}`;
+    else {
+      const at = endSec !== null && top.t > endSec ? `+${mmss(top.t - endSec)}` : mmss(top.t);
+      summary = `${Math.round(first)} → ${Math.round(max)} ${u} · max at ${at}`;
+    }
+    return { d, area, labels, summary, name: SERIES[key].name };
+  });
+
   // The start, the end (or now) and how long the cool-down ran.
   const xLabels = $derived.by(() => {
     const stop = endSec ?? last;
@@ -126,9 +186,17 @@
 </script>
 
 <div class="chart" bind:clientWidth={w}>
+  {#if ts.length > 1 && available.length > 1}
+    <div class="chips" role="group" aria-label="Value on the chart">
+      {#each available as k (k)}
+        <button type="button" class="press" aria-pressed={sel === k} onclick={() => { tap(); pick = k; }}>{SERIES[k].chip}</button>
+      {/each}
+    </div>
+  {/if}
   {#if ts.length > 1}
-    <svg width={w} height={H} viewBox="0 0 {w} {H}" role="img"
-      aria-label="Temperature over the session{summary.live ? ', current and target' : ', target'}">
+    <svg width={w} height={H} viewBox="0 0 {w} {H}" role="img" class:overlaid={!!overlay}
+      aria-label={overlay ? `${overlay.name} over the session, with the temperature faded behind it`
+        : `Temperature over the session${summary.live ? ', current and target' : ', target'}`}>
       <defs>
         <linearGradient id="heat-fill" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0" stop-color="var(--orange)" stop-opacity="0.32" />
@@ -158,27 +226,43 @@
           <text class="mark-label {m.kind}" x={at.x} y={pad.t - 16} text-anchor={at.anchor}>{m.label}</text>
         {/if}
       {/each}
-      {#if area}<path class="area" d={area} />{/if}
-      <path class="goal" d={goalPath} />
-      {#if beforePath}<path class="current off" d={beforePath} />{/if}
-      {#if afterPath}<path class="current off" d={afterPath} />{/if}
-      {#if currentPath}<path class="current" d={currentPath} />{/if}
-      {#if ready}
+      {#if area && !overlay}<path class="area" d={area} />{/if}
+      <g class="temps">
+        <path class="goal" d={goalPath} />
+        {#if beforePath}<path class="current off" d={beforePath} />{/if}
+        {#if afterPath}<path class="current off" d={afterPath} />{/if}
+        {#if currentPath}<path class="current" d={currentPath} />{/if}
+      </g>
+      {#if overlay}
+        {#if overlay.area}<path class="ov-area" d={overlay.area} />{/if}
+        <path class="ov" d={overlay.d} />
+        {#each overlay.labels as l (l.y)}
+          <text class="ov-axis" x={w - pad.r - 2} y={l.y - 3} text-anchor="end">{l.text}</text>
+        {/each}
+      {:else if ready}
         <line class="ready-line" x1={ready.x} x2={ready.x} y1={pad.t} y2={H - pad.b} />
         <circle class="ready-dot" cx={ready.x} cy={ready.y} r="5" />
         <text class="ready-label" x={Math.min(ready.x + 8, w - pad.r - 64)} y={H - pad.b - 8}>Ready {mmss(summary.readySec ?? 0)}</text>
       {/if}
-      {#if end}
+      {#if end && !overlay}
         {#if running}<circle class="pulse" cx={end.x} cy={end.y} r="5" />{/if}
         <circle class="end" class:off={!!afterPath} cx={end.x} cy={end.y} r="4.5" />
       {/if}
     </svg>
     <div class="legend">
-      {#if summary.live}<span><i class="sw current"></i>Temperature</span>{:else if summary.readySec !== null}<span><i class="sw current"></i>At temperature</span>{/if}
-      <span><i class="sw goal"></i>Target</span>
+      {#if overlay}
+        <span><i class="sw ov"></i>{overlay.name}</span>
+        <span><i class="sw current faded"></i>{summary.live ? 'Temperature' : 'At temperature'}</span>
+      {:else}
+        {#if summary.live}<span><i class="sw current"></i>Temperature</span>{:else if summary.readySec !== null}<span><i class="sw current"></i>At temperature</span>{/if}
+        <span><i class="sw goal"></i>Target</span>
+      {/if}
       {#if bands.length}<span><i class="sw band"></i>Boost</span>{/if}
       <span><i class="sw off"></i>Heater off</span>
     </div>
+    {#if overlay}
+      <div class="ov-sum num"><span>{overlay.name}</span><strong>{overlay.summary}</strong></div>
+    {/if}
   {:else}
     <div class="empty" style:height="{H}px">{running ? 'Collecting the first readings…' : 'No readings for this session.'}</div>
   {/if}
@@ -340,6 +424,96 @@
     height: 10px;
     background: var(--card-2);
     box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin: 0 -16px 10px;
+    padding: 2px 16px 4px;
+    scrollbar-width: none;
+  }
+  .chips::-webkit-scrollbar {
+    display: none;
+  }
+  .chips button {
+    flex-shrink: 0;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--navy) 16%, transparent);
+    background: var(--card);
+    color: var(--navy);
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .chips button[aria-pressed='true'] {
+    border-color: var(--navy-fill);
+    background: var(--navy-fill);
+    color: #ffffff;
+  }
+  /* A battery value on top: the temperature and its marks step back. */
+  .overlaid .temps {
+    opacity: 0.35;
+  }
+  .overlaid .band {
+    opacity: 0.6;
+  }
+  .overlaid .mark {
+    opacity: 0.6;
+  }
+  .overlaid .temps .goal {
+    opacity: 1;
+  }
+  .ov {
+    fill: none;
+    stroke: var(--navy);
+    stroke-width: 2.2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .ov-area {
+    fill: color-mix(in srgb, var(--navy) 7%, transparent);
+  }
+  .ov-axis {
+    font-size: 10px;
+    font-weight: 800;
+    fill: var(--navy);
+    font-variant-numeric: tabular-nums;
+    paint-order: stroke;
+    stroke: var(--card);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+  .sw.ov {
+    background: var(--navy);
+  }
+  .sw.faded {
+    opacity: 0.35;
+  }
+  .ov-sum {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: var(--card-2);
+  }
+  .ov-sum span {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted-2);
+    white-space: nowrap;
+  }
+  .ov-sum strong {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--navy);
+    text-align: right;
   }
   .empty {
     display: flex;

@@ -635,6 +635,8 @@ export function demoSessions(live: boolean, battery: boolean, now = Date.now()) 
         detail.g.push(null);
         if (c <= 50) break;
       }
+      // The same two draws as before the battery readings, so the other demo sessions stay as they were.
+      if (battery) detail.battery = demoBattery(detail, live, length, readySec, boostAt, 90 - Math.round(rnd() * 30), 1.4 + rnd());
       const boostSec = boostAt === null ? 0 : length - boostAt;
       const s: SessionSummary = {
         id: start,
@@ -649,8 +651,16 @@ export function demoSessions(live: boolean, battery: boolean, now = Date.now()) 
         ...sparkOf(detail, live, length),
       };
       if (battery) {
-        s.batteryStart = 90 - Math.round(rnd() * 30);
-        s.batteryEnd = s.batteryStart - Math.round((length / 60) * (1.4 + rnd()));
+        const b = detail.battery as BatterySamples & { mah?: number };
+        const p = b.p as number[];
+        s.batteryStart = p[0];
+        s.batteryEnd = p[p.length - 1];
+        if (live) {
+          // The device's own count, a little off Glow's.
+          s.capStart = Math.round(p[0] * 31.5);
+          s.capEnd = s.capStart - Math.round((b.mah ?? 0) * 1.04);
+        }
+        delete b.mah;
       }
       list.push(s);
       details.set(start, detail);
@@ -658,6 +668,45 @@ export function demoSessions(live: boolean, battery: boolean, now = Date.now()) 
   }
   list.sort((a, b) => b.id - a.id);
   return { list, details };
+}
+
+/**
+ * Made-up battery readings for a demo session, with no random numbers of its own (the sessions'
+ * stay as they were). A CRAFTY+: about 7 A drawn at ~3.1 V while heating up, 2–4 A holding, more in
+ * boost, almost nothing after; the battery warms by ~10 °C. A VENTY: the percentage only.
+ */
+function demoBattery(
+  detail: SessionDetail, electric: boolean, length: number, readySec: number | null, boostAt: number | null, pct0: number, perMin: number,
+): BatterySamples & { mah?: number } {
+  const b: BatterySamples & { mah?: number } = { ts: [], p: [], ...(electric ? { v: [], i: [], t: [] } : {}) };
+  let mah = 0;
+  let temp = 26 + (pct0 % 5);
+  let prev: { t: number; a: number } | null = null;
+  const times = [...detail.ts.filter((t) => t >= 0 && t <= length)];
+  if (electric) for (let t = Math.ceil(length / 30) * 30; t <= length + 120; t += 30) times.push(t);
+  for (const t of times) {
+    const on = t <= length;
+    const amps = !on ? 0.04
+      : readySec === null || t < readySec ? 6.6 + 0.4 * Math.sin(t / 7)
+      : boostAt !== null && t >= boostAt && t < boostAt + 40 ? 5.2
+      : 2.6 + 1.1 * Math.max(0, Math.sin(t / 11)) + (boostAt !== null && t >= boostAt ? 0.6 : 0);
+    if (prev) mah += ((prev.a + amps) / 2) * 1000 * ((t - prev.t) / 3600);
+    prev = { t, a: amps };
+    // 3.95 V at rest when full, less as it drains, and less again under load.
+    const rest = 3.95 - (88 - pct0) * 0.006 - mah / 3300;
+    // Warmer while it works hard, a little more just after, then cooling.
+    temp += on ? 0.022 * (t - (b.ts[b.ts.length - 1] ?? 0)) * (amps / 5) : 0.9 * Math.exp(-(t - length) / 40) - 0.2;
+    const pct = Math.max(0, pct0 - Math.floor(electric ? mah / 33 : (Math.min(t, length) / 60) * perMin));
+    b.ts.push(t);
+    b.p.push(pct);
+    if (electric) {
+      b.v!.push(Math.round((rest - 0.11 * amps) * 1000));
+      b.i!.push(-Math.round(amps * 1000));
+      b.t!.push(Math.round(temp * 10));
+    }
+  }
+  b.mah = mah;
+  return b;
 }
 
 export const sessions = new Sessions();
