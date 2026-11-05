@@ -59,7 +59,11 @@ export async function shoot(browser, base = 'http://127.0.0.1:5791/', out = OUT)
     await tab('Stats');
     await page.locator('.history .item').nth(1).click();
     await page.waitForTimeout(1500);
-    await page.getByRole('tab', { name: 'Current' }).click();
+    // The stepper's next arrow, round to Current.
+    for (let k = 0; k < 6 && (await page.locator('.stepper .readout strong').innerText()) !== 'Current'; k++) {
+      await page.getByRole('button', { name: /^Next value/ }).click();
+      await page.waitForTimeout(400);
+    }
     await page.waitForTimeout(600);
     // Picking scrolls to the session card; the shot starts at the top, Hours of operation first.
     await page.locator('h1', { hasText: 'Stats' }).evaluate((e) => e.scrollIntoView({ block: 'start' }));
