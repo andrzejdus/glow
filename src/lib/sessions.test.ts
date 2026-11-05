@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DeviceState } from './devices/types';
 import { energyOf } from './battery';
+import { sessionStore } from './sessionStore';
 import { heatUpSec, readyAtOnce, sessions, type BatterySamples, type SessionSummary } from './sessions.svelte';
 
 const state = (patch: Partial<DeviceState>): DeviceState => ({
@@ -52,6 +53,24 @@ describe('session log', () => {
     // The timeline's points include it, marked as before the heater-on part.
     expect(s.spark.length).toBe(detail!.ts.length);
     expect(s.sparkOn).toEqual([1, detail!.ts.length - 1]);
+  });
+
+  it('saves a running session every 15 s, not only at its events', async () => {
+    vi.useFakeTimers();
+    await sessions.bind('log-save');
+    const saved = vi.spyOn(sessionStore, 'saveDetail');
+    at(0, { heaterOn: false, currentTemp: 30 });
+    at(1, { heaterOn: true, currentTemp: 30 });
+    saved.mockClear();
+    // A minute of steady heating, a report every second and the app's timers running.
+    for (let sec = 2; sec <= 61; sec++) {
+      at(sec, { heaterOn: true, currentTemp: 30 + sec * 2 });
+      vi.advanceTimersByTime(1000);
+    }
+    expect(saved.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(saved.mock.calls.length).toBeLessThanOrEqual(5);
+    saved.mockRestore();
+    at(62, { heaterOn: false, currentTemp: 150 });
   });
 
   it('keeps the 10 s before the start and the cool-down after the end, to 50° or for 2 minutes', async () => {

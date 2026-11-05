@@ -124,6 +124,8 @@ export function addBattery(b: BatterySamples | undefined, t: number, d: DeviceSt
 }
 
 const SAMPLE_MS = 5000;
+/** A running session is saved at most this often (each save writes its file and the index). */
+const SAVE_MS = 15_000;
 /** In the cool-down the battery hardly changes: one reading every BATTERY_COOL_MS. */
 const BATTERY_COOL_MS = 30_000;
 /** The temperature this long before the heater comes on starts the chart, one reading every PRE_STEP_MS. */
@@ -619,13 +621,19 @@ class Sessions {
     this.list = this.list.map((x) => (x.id === s.id ? s : x));
   }
 
+  /**
+   * At most one save every SAVE_MS while the session runs. A timer reset by every sample never
+   * fired while samples kept coming (every 5 s), so a session on screen was only saved at its
+   * events: an app killed mid-heat lost everything since the last one.
+   */
   private scheduleSave() {
-    clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.flush(), 15000);
+    if (this.saveTimer !== undefined) return;
+    this.saveTimer = setTimeout(() => this.flush(), SAVE_MS);
   }
 
   private flush() {
     clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
     if (this.active && this.activeDetail) {
       const s = { ...this.active, ...sparkOf(this.activeDetail, this.active.live) };
       this.replace(s);
