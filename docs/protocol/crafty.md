@@ -272,6 +272,9 @@ and anything above 20 Ah ignored; a first read that fails stops further reads un
 connection). The session log keeps it at the start and at the end of each session, to compare the
 device's own count with the current Glow adds up.
 
-Open: whether the current scale is mA as read (seen −2000…−7100 at ~3.1 V while heating, so up to
-~22 W): the drop in `0153` over a session, against the integrated `00e3`, should tell. Not yet seen
-on our own CRAFTY+ (V03.24); whether older firmware has these characteristics.
+The current scale is mA as read, checked on our CRAFTY+ (V03.24, Glow 0.1.76, 2026-11-05): a
+230 s session to 190 °C on battery took `0153` from 1403 to 1134 mAh (−269), and `00e3` read every
+5 s adds up to 312 mAh (1.12 Wh). The 16 % gap is the 5 s steps against a heater current that jumps
+between 0 and about −8 A (seen −8069 mA at 3.53 V, ~28 W). `0113` went 31.5 → 38.6 °C in the same
+session. Open: whether older firmware has these characteristics; why `0153` read only 1403 mAh at
+98 % (vo0t's CRAFTY+ showed a 3300 mAh design capacity).
