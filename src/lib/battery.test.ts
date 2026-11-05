@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { batteryValues, energyOf, niceScale, seriesOf } from './battery';
+import { batteryValues, energyOf, energySplit, niceScale, phaseAt, seriesOf } from './battery';
 import type { BatterySamples, SessionDetail } from './sessions.svelte';
 
 const detail = (battery?: BatterySamples): SessionDetail => ({ ts: [0, 5], c: [100, 110], g: [180, 180], events: [], battery });
@@ -59,5 +59,43 @@ describe('energy', () => {
     expect(energyOf(undefined)).toBeNull();
     expect(energyOf({ ts: [0, 5], p: [60, 59] })).toBeNull();
     expect(energyOf({ ts: [0, 60], p: [60, 59], v: [3000, 3000], i: [-1000, -1000] })).toBeNull();
+  });
+});
+
+describe('energy split', () => {
+  // 10 W (2.5 V × 4 A) throughout: every second is worth the same.
+  const flat = (ts: number[]): BatterySamples => ({ ts, p: ts.map(() => 70), v: ts.map(() => 2500), i: ts.map(() => -4000) });
+  const events = [{ t: 0, k: 'ready' as const }, { t: 60, k: 'mode' as const, v: 'boost' as const }, { t: 80, k: 'mode' as const, v: 'normal' as const }];
+
+  it('tells the phases apart', () => {
+    expect(phaseAt(10, 30, 100, [])).toBe('heatup');
+    expect(phaseAt(40, 30, 100, [])).toBe('holding');
+    expect(phaseAt(70, 30, 100, events)).toBe('boost');
+    expect(phaseAt(90, 30, 100, events)).toBe('holding');
+    expect(phaseAt(100, 30, 100, events)).toBe('after');
+    // Ready never came: it was heating up all along, unless boosting.
+    expect(phaseAt(90, null, null, [])).toBe('heatup');
+    expect(phaseAt(10, null, null, [{ t: 0, k: 'mode', v: 'superboost' }])).toBe('superboost');
+  });
+
+  it('splits the energy by phase, sharing out a stretch that crosses a change by time', () => {
+    // Readings every 7 s, so the changes (ready 30, boost 60–80, off 100) fall inside stretches.
+    const ts = Array.from({ length: 21 }, (_, k) => k * 7); // 0…140
+    const e = energyOf(flat(ts))!;
+    const split = energySplit(e, 30, 100, events);
+    expect(split.map((p) => p.phase)).toEqual(['heatup', 'holding', 'boost', 'after']);
+    const wh = (sec: number) => (10 * sec) / 3600;
+    expect(split[0].wh).toBeCloseTo(wh(30), 6);
+    expect(split[1].wh).toBeCloseTo(wh(30 + 20), 6);
+    expect(split[2].wh).toBeCloseTo(wh(20), 6);
+    expect(split[3].wh).toBeCloseTo(wh(40), 6);
+    expect(split.reduce((a, p) => a + p.share, 0)).toBeCloseTo(1, 9);
+  });
+
+  it('leaves out a gap and the phases that took nothing', () => {
+    // Lost from 20 to 90 s: neither the gap nor a phase inside it counts.
+    const split = energySplit(energyOf(flat([0, 5, 10, 15, 20, 90, 95]))!, 30, 100, events);
+    expect(split.map((p) => p.phase)).toEqual(['heatup', 'holding']);
+    expect(split[0].wh).toBeCloseTo((10 * 20) / 3600, 6);
   });
 });

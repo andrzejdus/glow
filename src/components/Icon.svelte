@@ -1,7 +1,8 @@
 <script lang="ts">
   type Name =
     | 'back' | 'plus' | 'minus' | 'flame' | 'fan' | 'check' | 'bell' | 'play' | 'pause' | 'stop'
-    | 'control' | 'workflows' | 'stats' | 'settings' | 'clock' | 'bolt' | 'arrow' | 'refresh' | 'chevron' | 'plug';
+    | 'control' | 'workflows' | 'stats' | 'settings' | 'clock' | 'bolt' | 'arrow' | 'refresh' | 'chevron' | 'plug'
+    | 'thermometer';
   interface Props {
     name: Name;
     size?: number;
@@ -33,6 +34,7 @@
   {:else if name === 'arrow'}<path d="M5 12h14M13 6l6 6-6 6" />
   {:else if name === 'chevron'}<path d="M9 6l6 6-6 6" />
   {:else if name === 'plug'}<path d="M9 2v5M15 2v5" /><path d="M6 7h12v4a6 6 0 0 1-12 0z" /><path d="M12 17v5" />
+  {:else if name === 'thermometer'}<path d="M10 13.5V5a2 2 0 0 1 4 0v8.5a4 4 0 1 1-4 0z" /><path d="M12 9v7" />
   {:else if name === 'refresh'}<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" />
   {/if}
 </svg>

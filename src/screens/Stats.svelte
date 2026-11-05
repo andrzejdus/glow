@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EnergyCard from '../components/EnergyCard.svelte';
   import Icon from '../components/Icon.svelte';
   import SessionChart from '../components/SessionChart.svelte';
   import { energyOf } from '../lib/battery';
@@ -215,6 +216,7 @@
         {/each}
       </ol>
     </section>
+    {#if energy && detail}<EnergyCard summary={shown} {detail} {unit} />{/if}
   {:else}
     <section class="card nothing rise d2">
       <Icon name="flame" size={28} color="var(--orange)" />

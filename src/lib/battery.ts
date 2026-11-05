@@ -1,4 +1,5 @@
-import type { BatterySamples, SessionDetail } from './sessions.svelte';
+import type { HeatMode } from './devices/types';
+import type { BatterySamples, SessionDetail, SessionEvent } from './sessions.svelte';
 
 // The battery readings a session keeps (sessions.svelte.ts), as the session chart draws them and as
 // energy. Energy is voltage × current added up over the readings: Glow's own count, not the device's.
@@ -112,4 +113,47 @@ export function energyOf(b: BatterySamples | undefined): Energy | null {
     spans.push({ from: b.ts[k - 1], to: b.ts[k], wh: e });
   }
   return any ? { wh, mah, spans } : null;
+}
+
+export type Phase = 'heatup' | 'holding' | 'boost' | 'superboost' | 'after';
+
+export const PHASES: Record<Phase, string> = {
+  heatup: 'Heat-up',
+  holding: 'Holding',
+  boost: 'Boost',
+  superboost: 'Superboost',
+  after: 'After off',
+};
+
+/** What the session was doing at `t`: heating up, holding the target, boosting, or done. */
+export function phaseAt(t: number, readySec: number | null, endSec: number | null, events: SessionEvent[]): Phase {
+  if (endSec !== null && t >= endSec) return 'after';
+  let mode: HeatMode = 'normal';
+  for (const e of events) if (e.k === 'mode' && e.t <= t) mode = e.v;
+  if (mode !== 'normal') return mode;
+  return readySec !== null && t >= readySec ? 'holding' : 'heatup';
+}
+
+/**
+ * The energy split by what the session was doing, in this order, leaving out what took none. A
+ * stretch between two readings that crosses a change is shared out by time.
+ */
+export function energySplit(
+  e: Energy,
+  readySec: number | null,
+  endSec: number | null,
+  events: SessionEvent[],
+): { phase: Phase; wh: number; share: number }[] {
+  const cuts = [readySec, endSec, ...events.filter((x) => x.k === 'mode').map((x) => x.t)].filter((t): t is number => t !== null);
+  const by = new Map<Phase, number>();
+  for (const s of e.spans) {
+    const edges = [s.from, ...cuts.filter((t) => t > s.from && t < s.to).sort((a, b) => a - b), s.to];
+    for (let k = 1; k < edges.length; k++) {
+      const phase = phaseAt((edges[k - 1] + edges[k]) / 2, readySec, endSec, events);
+      by.set(phase, (by.get(phase) ?? 0) + (s.wh * (edges[k] - edges[k - 1])) / (s.to - s.from));
+    }
+  }
+  return (Object.keys(PHASES) as Phase[])
+    .filter((p) => (by.get(p) ?? 0) > 0)
+    .map((p) => ({ phase: p, wh: by.get(p)!, share: e.wh > 0 ? by.get(p)! / e.wh : 0 }));
 }
