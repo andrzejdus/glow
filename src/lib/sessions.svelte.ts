@@ -1,4 +1,3 @@
-import { BatteryMeans, type BatteryMean } from './battery';
 import type { DeviceState, HeatMode } from './devices/types';
 import { removable, report, type DeviceLog, type StorageReport } from './cleanup';
 import { INDEX, sessionStore, type StoredFile } from './sessionStore';
@@ -69,11 +68,13 @@ export interface SessionDetail {
 }
 
 /**
- * Battery readings: every 5 s with the heater on (with the temperature samples), every 30 s in the
- * cool-down. Whole numbers, to keep the record small; a field the device does not report is left out.
- * With the heater on, a CRAFTY's voltage and current are read every ~2 s, and each sample keeps their
- * time-weighted mean since the sample before (battery.ts BatteryMeans), with `w` set; elsewhere (the
- * cool-down, sessions recorded before Glow kept means) they are single readings and `w` is null or absent.
+ * Battery readings: with the heater on, each time a CRAFTY's voltage and current are read (every
+ * ~2 s), else every 5 s with the temperature samples (VENTY, VEAZY: the percentage only); every 30 s
+ * in the cool-down. Each row also has the battery % and temperature as they stand then (read less
+ * often: a repeated number takes less room than a null). Whole numbers, to keep the record small; a
+ * field the device does not report is left out. Sessions recorded by Glow 0.1.77 to 0.1.79 kept 5 s
+ * means of the 2 s readings with the heater on instead, with `w` and `min`; up to 0.1.76 a single
+ * reading every 5 s.
  */
 export interface BatterySamples {
   /** Seconds from the start. */
@@ -85,22 +86,22 @@ export interface BatterySamples {
   /** Current, mA: positive charges, negative drains (CRAFTY). */
   i?: (number | null)[];
   /**
-   * Power, mW: the mean of voltage × current since the sample before, signed like the current; null
-   * where `v` and `i` are single readings (CRAFTY).
+   * Power, mW, in sessions recorded by 0.1.77–0.1.79: the mean of voltage × current since the row
+   * before, signed like the current, where `v` and `i` are means; null where they are single readings.
+   * Not written any more: a row's power is its voltage × current.
    */
   w?: (number | null)[];
   /** Battery temperature, °C × 10 (CRAFTY). */
   t?: (number | null)[];
-  /** The lowest current (mA) and voltage × current (mW) read with the heater on: the heaviest draw, which the means smooth out (CRAFTY). */
+  /**
+   * In sessions recorded by 0.1.77–0.1.79: the lowest current (mA) and voltage × current (mW) read
+   * with the heater on, the heaviest draw, which the means smooth out. Not written any more.
+   */
   min?: { i: number; w: number };
 }
 
-/**
- * The battery readings with one more at `t`; unchanged for a device without a battery. With `mean`,
- * voltage and current are the means since the sample before (BatteryMeans) instead of the latest
- * readings in `d`.
- */
-export function addBattery(b: BatterySamples | undefined, t: number, d: DeviceState, mean?: BatteryMean | null): BatterySamples | undefined {
+/** The battery readings with one more at `t`, as they stand in `d`; unchanged for a device without a battery. */
+export function addBattery(b: BatterySamples | undefined, t: number, d: DeviceState): BatterySamples | undefined {
   if (d.battery === undefined && !b) return b;
   if (b && b.ts[b.ts.length - 1] === t) return b;
   const n = b?.ts.length ?? 0;
@@ -109,19 +110,20 @@ export function addBattery(b: BatterySamples | undefined, t: number, d: DeviceSt
   const add = (list: (number | null)[] | undefined, v: number | null) =>
     list ? [...list, v] : v === null ? undefined : [...Array<null>(n).fill(null), v];
   const out: BatterySamples = { ts: [...(b?.ts ?? []), t], p: [...(b?.p ?? []), round(d.battery)] };
-  const v = add(b?.v, round(mean?.v ?? d.batteryVoltage));
-  const i = add(b?.i, round(mean?.i ?? d.batteryCurrent));
-  const w = add(b?.w, mean ? Math.round(mean.w) : null);
+  const v = add(b?.v, round(d.batteryVoltage));
+  const i = add(b?.i, round(d.batteryCurrent));
   const temp = add(b?.t, d.batteryTemp === undefined ? null : Math.round(d.batteryTemp * 10));
   if (v) out.v = v;
   if (i) out.i = i;
-  if (w) out.w = w;
   if (temp) out.t = temp;
-  const lo = mean && { i: Math.round(mean.lo.i), w: Math.round(mean.lo.w) };
-  const min = lo ? (b?.min ? { i: Math.min(b.min.i, lo.i), w: Math.min(b.min.w, lo.w) } : lo) : b?.min;
-  if (min) out.min = min;
+  // A session from 0.1.77–0.1.79 carried on: its means stay, the new rows are single readings.
+  if (b?.w) out.w = [...b.w, null];
+  if (b?.min) out.min = b.min;
   return out;
 }
+
+/** A CRAFTY: voltage and current, read every ~2 s with the heater on and kept at each reading. */
+const hasReadings = (d: DeviceState) => d.batteryVoltage !== undefined || d.batteryCurrent !== undefined;
 
 const SAMPLE_MS = 5000;
 /** A running session is saved at most this often (each save writes its file and the index). */
@@ -208,8 +210,6 @@ class Sessions {
   private coolUntil = 0;
   private lastCool = 0;
   private lastCoolBattery = 0;
-  /** The battery readings since the last sample, while the heater is on. */
-  private means = new BatteryMeans();
   /** A background recording is being replayed: the live sampler keeps still. */
   private replaying = false;
   private resuming: Promise<void> | null = null;
@@ -274,7 +274,11 @@ class Sessions {
     return found;
   }
 
-  observe(d: DeviceState, now = Date.now()) {
+  /**
+   * A report from the device; with `read`, it brings a fresh voltage and current reading (the
+   * driver's pollBattery(), every ~2 s with the heater on), which the session keeps.
+   */
+  observe(d: DeviceState, now = Date.now(), read = false) {
     const first = this.last === null;
     this.last = d;
     if (first) this.closeStale(d, now);
@@ -283,9 +287,8 @@ class Sessions {
       this.begin(d, now, first);
     } else if (!d.heaterOn && this.active) this.finish(now);
     if (this.active) {
-      // Each report counts its battery readings until the next one.
-      this.means.add(now, d.batteryVoltage, d.batteryCurrent);
       this.track(d, now);
+      if (read) this.reading(d, now);
     } else {
       this.remember(d, now);
       this.cool(d, now);
@@ -315,7 +318,6 @@ class Sessions {
    */
   suspend() {
     clearInterval(this.sampler);
-    this.means.reset();
     if (this.cooling) this.saveCooling();
     this.recent = [];
     this.last = null;
@@ -326,7 +328,6 @@ class Sessions {
   lost(now = Date.now()) {
     this.endCooling();
     this.recent = [];
-    this.means.reset();
     if (!this.active || !this.activeDetail) return;
     this.event({ t: this.sec(now), k: 'lost' });
     this.last = null;
@@ -407,7 +408,6 @@ class Sessions {
     const app = open.app?.split(' → ').includes(__APP_VERSION__) ? open.app : `${open.app ?? '?'} → ${__APP_VERSION__}`;
     this.active = { ...open, app };
     this.activeDetail = detail;
-    this.means.reset();
     this.wasReady = open.readySec !== null;
     this.target = this.last?.targetTemp;
     this.mode = this.last?.mode ?? 'normal';
@@ -451,7 +451,6 @@ class Sessions {
     this.pendingTarget = null;
     this.lastTick = now;
     this.lastSample = 0;
-    this.means.reset();
     if (d.mode !== 'normal') this.event({ t: 0, k: 'mode', v: d.mode });
     this.list = [s, ...this.list];
     this.startSampler();
@@ -522,8 +521,19 @@ class Sessions {
       ts: [...detail.ts, this.sec(now)],
       c: [...detail.c, d.currentTemp === undefined ? null : Math.round(d.currentTemp * 2) / 2],
       g: [...detail.g, goal],
-      battery: addBattery(detail.battery, this.sec(now), d, this.means.take(now)),
+      // A device that reports voltage and current has its battery kept at each reading instead.
+      battery: hasReadings(d) ? detail.battery : addBattery(detail.battery, this.sec(now), d),
     };
+    this.scheduleSave();
+  }
+
+  /** A voltage and current reading with the heater on: kept as it is, with the battery % and temperature as they stand. */
+  private reading(d: DeviceState, now: number) {
+    const detail = this.activeDetail;
+    if (!detail || !hasReadings(d)) return;
+    const battery = addBattery(detail.battery, this.sec(now), d);
+    if (battery === detail.battery) return;
+    this.activeDetail = { ...detail, battery };
     this.scheduleSave();
   }
 
@@ -556,7 +566,6 @@ class Sessions {
     }
     this.active = null;
     this.activeDetail = null;
-    this.means.reset();
   }
 
   /** Keeps the last few seconds of temperature while the heater is off. */

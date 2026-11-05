@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DeviceState } from './devices/types';
-import { energyOf } from './battery';
+import { batteryPeak, energyOf } from './battery';
 import { sessionStore } from './sessionStore';
-import { heatUpSec, readyAtOnce, sessions, type BatterySamples, type SessionSummary } from './sessions.svelte';
+import { addBattery, heatUpSec, readyAtOnce, sessions, type BatterySamples, type SessionSummary } from './sessions.svelte';
 
 const state = (patch: Partial<DeviceState>): DeviceState => ({
   kind: 'crafty', model: 'CRAFTY+', minTemp: 40, maxTemp: 210, mode: 'normal', heaterOn: false,
   targetTemp: 180, boostOffset: 10, settings: {}, ...patch,
 });
 
-/** Feeds the device's state at a given second of the test. */
-const at = (sec: number, patch: Partial<DeviceState>) => {
+/** Feeds the device's state at a given second of the test; with `read`, a fresh voltage and current reading. */
+const at = (sec: number, patch: Partial<DeviceState>, read = false) => {
   vi.setSystemTime(new Date(2026, 9, 24, 12, 0, sec));
-  sessions.observe(state(patch));
+  sessions.observe(state(patch), Date.now(), read);
 };
 
 describe('session log', () => {
@@ -160,15 +160,16 @@ describe('session log', () => {
     expect(detail!.events).toEqual([{ t: 39, k: 'lost' }, { t: 99, k: 'back' }]);
   });
 
-  it('keeps the battery every 5 s with the heater on and every 30 s in the cool-down, with the capacity', async () => {
+  it('keeps each 2 s battery reading with the heater on and one every 30 s in the cool-down, with the capacity', async () => {
     vi.useFakeTimers();
     await sessions.bind('log-7');
     const crafty = (sec: number) => ({
       battery: 80 - Math.floor(sec / 20), batteryVoltage: 3600 - sec * 2, batteryCurrent: sec < 60 ? -6000 : 0,
-      batteryTemp: 28 + sec / 40, batteryCapacity: 2000 - Math.floor(sec / 2),
+      batteryTemp: 28 + Math.floor(sec / 5) / 8, batteryCapacity: 2000 - Math.floor(sec / 2),
     });
     at(0, { heaterOn: false, currentTemp: 30, ...crafty(0) });
-    for (let sec = 1; sec <= 60; sec++) at(sec, { heaterOn: true, currentTemp: Math.min(190, 30 + sec * 4), ...crafty(sec) });
+    // The temperature every second, voltage and current read every 2 s.
+    for (let sec = 1; sec <= 60; sec++) at(sec, { heaterOn: true, currentTemp: Math.min(190, 30 + sec * 4), ...crafty(sec) }, sec % 2 === 0);
     for (let sec = 61; sec <= 190; sec++) at(sec, { heaterOn: false, currentTemp: 150, ...crafty(sec) });
     expect(sessions.cooling).toBeNull();
     const s = sessions.list[0];
@@ -176,44 +177,57 @@ describe('session log', () => {
     // To the end of the cool-down: COOL_MS (2 minutes) after heater off at 61 s.
     expect(s.capEnd).toBe(2000 - Math.floor(180 / 2));
     const b = (await sessions.detail(s.id))!.battery!;
+    // Seconds from heater on at 1 s: the readings at 2, 4 … 60 s.
     const on = b.ts.filter((t) => t <= 60);
-    expect(on.slice(0, 3)).toEqual([0, 5, 10]);
-    expect(on.length).toBeGreaterThanOrEqual(12);
-    // After the heater-off reading, one every 30 s.
+    expect(on).toEqual(Array.from({ length: 30 }, (_, k) => 1 + k * 2));
+    // After heater off, one every 30 s.
     expect(b.ts.filter((t) => t > 60)).toEqual([90, 120, 150, 180]);
     for (const list of [b.p, b.v, b.i, b.t]) expect(list).toHaveLength(b.ts.length);
-    // With the heater on, the mean of the readings since the sample before: 3598…3590 mV, a second each.
-    expect(b.v![1]).toBe(3594);
-    expect(b.i![1]).toBe(-6000);
-    expect(b.t![0]).toBe(280);
+    // Each reading as it was, not a mean; the battery % and temperature as they stood then.
+    expect(b.v!.slice(0, 3)).toEqual([3596, 3592, 3588]);
+    expect(b.i![0]).toBe(-6000);
+    expect(b.t!.slice(0, 3)).toEqual([280, 280, 281]);
     expect(b.p[0]).toBe(80);
+    expect(b.w).toBeUndefined();
+    expect(b.min).toBeUndefined();
   });
 
-  it('ends the last mean at heater off, keeps single readings in the cool-down, and starts afresh on the next heat-up', async () => {
+  it('keeps nothing from reports without a reading, and starts afresh on the next heat-up', async () => {
     vi.useFakeTimers();
     await sessions.bind('log-10');
     const crafty = (heaterOn: boolean, i: number) => ({ heaterOn, currentTemp: 180, battery: 80, batteryVoltage: i ? 3100 : 3550, batteryCurrent: i });
     at(0, crafty(false, 0));
-    // On at 1 s; the first poll 1 s later reads -8 A; off at 13 s (the current already 0 at 12 s).
-    at(1, crafty(true, 0));
-    for (let sec = 2; sec <= 11; sec++) at(sec, crafty(true, -8000));
-    at(12, crafty(true, 0));
+    // On at 1 s with a reading; -8 A read every 2 s; 0 A at 12 s, off at 13 s. The temperature
+    // reports in between say nothing new about the battery.
+    at(1, crafty(true, 0), true);
+    for (let sec = 2; sec <= 11; sec++) at(sec, crafty(true, -8000), sec % 2 === 0);
+    at(12, crafty(true, 0), true);
     at(13, crafty(false, 0));
     for (let sec = 14; sec <= 50; sec++) at(sec, { ...crafty(false, 0), currentTemp: 180 - sec });
     const b = (await sessions.detail(sessions.list[0].id))!.battery!;
-    // Samples at 0, 5, 10 and heater off at 12 s, then the cool-down every 30 s.
-    expect(b.ts.slice(0, 5)).toEqual([0, 5, 10, 12, 42]);
-    expect(b.i!.slice(0, 4)).toEqual([0, Math.round((0 + -8000 * 4) / 5), -8000, -4000]);
-    expect(b.w!.slice(0, 5)).toEqual([null, Math.round((-3100 * 8000 * 4) / 1000 / 5), -24_800, -12_400, null]);
-    for (const list of [b.p, b.v, b.i, b.w, b.t]) expect(list ?? b.ts).toHaveLength(b.ts.length);
-    expect(b.min).toEqual({ i: -8000, w: -24_800 });
+    // The readings, then the cool-down 30 s after heater off; nothing at the 5 s samples or at off.
+    expect(b.ts).toEqual([0, 1, 3, 5, 7, 9, 11, 42]);
+    expect(b.i).toEqual([0, -8000, -8000, -8000, -8000, -8000, 0, 0]);
+    expect(batteryPeak(b, 'power')).toBeCloseTo(24.8, 6);
+    // 3.1 V × 8 A from 1 to 9 s, and on the way up and down in the two seconds around them.
+    expect(energyOf(b)!.wh * 3600).toBeCloseTo(24.8 / 2 + 24.8 * 8 + 24.8, 6);
 
     // Back on: nothing held over from the last heat-up.
-    at(60, crafty(true, -5000));
-    at(66, crafty(true, -5000));
-    const again = sessions.activeDetail!.battery!;
-    expect(again.i).toEqual([-5000, -5000]);
-    expect(again.min).toEqual({ i: -5000, w: -15_500 });
+    at(60, crafty(true, -5000), true);
+    at(62, crafty(true, -5000));
+    at(66, crafty(true, -5000), true);
+    expect(sessions.activeDetail!.battery!.ts).toEqual([0, 6]);
+  });
+
+  it('carries on a session from 0.1.77–0.1.79 with single readings after its 5 s means', () => {
+    const old: BatterySamples = { ts: [0, 5], p: [80, 80], v: [3500, 3300], i: [0, -4000], w: [null, -13_000], min: { i: -8069, w: -25_000 } };
+    const b = addBattery(old, 7, state({ heaterOn: true, battery: 79, batteryVoltage: 3100, batteryCurrent: -8000 }))!;
+    expect(b.ts).toEqual([0, 5, 7]);
+    expect(b.w).toEqual([null, -13_000, null]);
+    expect(b.min).toEqual(old.min);
+    // The mean covers 0–5 s, the trapezoid rule 5–7 s.
+    expect(energyOf(b)!.wh * 3600).toBeCloseTo(13 * 5 + ((13.2 + 24.8) / 2) * 2, 6);
+    expect(batteryPeak(b, 'current')).toBeCloseTo(8.069, 6);
   });
 
   it('adds up a pulsing heater current from 2 s readings far closer than from 5 s ones', async () => {
@@ -239,20 +253,21 @@ describe('session log', () => {
       at(0, { heaterOn: false, currentTemp: 30, battery: 80, batteryVoltage: read.v, batteryCurrent: read.i });
       for (let sec = 1; sec <= end; sec++) {
         if (sec % 2 === 0) read = { v: volts(sec), i: amps(sec) };
-        at(sec, { heaterOn: sec < end, currentTemp: 180, battery: 80, batteryVoltage: read.v, batteryCurrent: read.i });
+        at(sec, { heaterOn: sec < end, currentTemp: 180, battery: 80, batteryVoltage: read.v, batteryCurrent: read.i }, sec % 2 === 0);
       }
       const b = (await sessions.detail(sessions.list[0].id))!.battery!;
-      const heating = b.ts.filter((t) => t <= end - 1);
-      const old: BatterySamples = {
-        ts: heating, p: heating.map(() => 80), v: heating.map((t) => volts(t + 1)), i: heating.map((t) => amps(t + 1)),
-      };
-      const wh = (x: BatterySamples) => energyOf({ ...x, ts: x.ts.slice(0, heating.length) })!.wh * 3600;
+      // Seconds from heater on at 1 s; up to heater off, without the cool-down.
+      const heating = (x: BatterySamples) => ({ ...x, ts: x.ts.filter((t) => t <= end - 1) });
+      const five = Array.from({ length: Math.floor((end - 1) / 5) + 1 }, (_, k) => k * 5);
+      const old: BatterySamples = { ts: five, p: five.map(() => 80), v: five.map((t) => volts(t + 1)), i: five.map((t) => amps(t + 1)) };
+      const wh = (x: BatterySamples) => energyOf(heating(x))!.wh * 3600;
       errors.old.push(Math.abs(wh(old) - truth) / truth);
       errors.now.push(Math.abs(wh(b) - truth) / truth);
-      expect(b.min).toEqual({ i: -8000, w: -24_800 });
+      // Every reading is there: the peak is the heater's full draw.
+      expect(batteryPeak(b, 'current')).toBe(8);
     }
     const mean = (xs: number[]) => xs.reduce((a, x) => a + x, 0) / xs.length;
-    // About 9 % off on average from 5 s readings here (up to 30 % in one run), under 4 % from 2 s ones.
+    // About 9 % off on average from 5 s readings here (up to 30 % in one run), under 4 % from each 2 s one.
     expect(mean(errors.now)).toBeLessThan(0.05);
     expect(mean(errors.now)).toBeLessThan(mean(errors.old) / 2);
   });

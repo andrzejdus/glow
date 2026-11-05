@@ -155,11 +155,14 @@ async function replayOne(r: Recording) {
   };
   let now = r.start;
   let changed = false;
+  /** A voltage and current reading came since the last observe(), which the session log keeps. */
+  let read = false;
   let observed = 0;
   const apply = (patch: Partial<DeviceState>) => {
     const { settings, ...rest } = patch;
     Object.assign(state, rest);
     if (settings) state.settings = { ...state.settings, ...settings };
+    if ('batteryVoltage' in rest || 'batteryCurrent' in rest) read = true;
     changed = true;
   };
   const observe = async () => {
@@ -168,7 +171,8 @@ async function replayOne(r: Recording) {
     // A copy each time: the session log keeps the last one it saw.
     const d = { ...state, settings: { ...state.settings } };
     usage.observe(d, now);
-    sessions.observe(d, now);
+    sessions.observe(d, now, read);
+    read = false;
     await sessions.settled();
   };
   // No session of its own to carry on: the readings still go through, in case the heater comes back
@@ -182,7 +186,7 @@ async function replayOne(r: Recording) {
       now = e.t;
       if (e.type === 'N') transport.notify(e);
       else if (e.type === 'R') transport.set(e);
-      // Every 2 s with the heater on (every 5 s before Glow kept means): the session log averages them.
+      // Every 2 s with the heater on (every 5 s in recordings by 0.1.76 and older): the session log keeps each reading.
       else if (e.type === 'P') await driver.pollBattery?.().catch(() => undefined);
       else await driver.refresh?.().catch(() => undefined);
       // Answers to requests arrive a microtask later.

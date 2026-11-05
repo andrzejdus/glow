@@ -3,8 +3,9 @@ import type { BatterySamples, SessionDetail, SessionEvent } from './sessions.sve
 
 // The battery readings a session keeps (sessions.svelte.ts), as the session chart draws them and as
 // energy. Energy is voltage × current added up over the readings: Glow's own count, not the device's.
-// While heating, a CRAFTY's voltage and current are read every ~2 s and kept as 5 s means
-// (BatteryMeans): the heater current jumps between 0 and ~8 A, faster than 5 s readings can follow.
+// While heating, a CRAFTY's voltage and current are read every ~2 s and each reading is kept: the
+// heater current jumps between 0 and ~8 A, faster than 5 s readings can follow. Sessions recorded by
+// Glow 0.1.77 to 0.1.79 kept 5 s means of them instead (`w`, `min`), and still read as such.
 
 export type SeriesKey = 'temp' | 'battery' | 'voltage' | 'current' | 'power' | 'batteryTemp';
 
@@ -39,7 +40,7 @@ export function batteryValues(b: BatterySamples | undefined, key: Exclude<Series
       case 'current':
         return a === null ? null : 0 - a / 1000;
       case 'power': {
-        // The mean of voltage × current where the readings were averaged, else this reading's.
+        // The mean of voltage × current where the readings were averaged (0.1.77–0.1.79), else this reading's.
         const w = at(b.w, i);
         if (w !== null) return 0 - w / 1000;
         return v === null || a === null ? null : (0 - v * a) / 1e6;
@@ -53,8 +54,8 @@ export function batteryValues(b: BatterySamples | undefined, key: Exclude<Series
 }
 
 /**
- * The highest current (A) or power (W) drawn in a session: of the readings themselves, which the 5 s
- * means smooth out, where the session kept them (`min`), else of the values the chart draws.
+ * The highest current (A) or power (W) drawn in a session: of the values the chart draws, which are
+ * the readings themselves, and of those the 5 s means of 0.1.77–0.1.79 smoothed out (`min`).
  */
 export function batteryPeak(b: BatterySamples | undefined, key: 'current' | 'power'): number | null {
   const drawn = batteryValues(b, key).filter((v): v is number => v !== null);
@@ -104,11 +105,11 @@ export interface Energy {
 }
 
 /**
- * The energy drawn from the battery: voltage × current, added up between readings, counting only
- * what drains it. A reading that is the mean of those since the one before (`w`, while heating) covers
- * that stretch by itself; between others (the cool-down, sessions recorded before Glow kept means) the
- * trapezoid rule. Null without both voltage and current (VENTY, VEAZY, sessions recorded before Glow
- * kept them). Stretches longer than BATTERY_GAP_SEC count as nothing.
+ * The energy drawn from the battery: voltage × current, added up between readings by the trapezoid
+ * rule, counting only what drains it. In a session recorded by 0.1.77–0.1.79, a 5 s mean of the
+ * readings since the one before (`w`, while heating) covers that stretch by itself instead. Null
+ * without both voltage and current (VENTY, VEAZY, sessions recorded before Glow kept them).
+ * Stretches longer than BATTERY_GAP_SEC count as nothing.
  */
 export function energyOf(b: BatterySamples | undefined): Energy | null {
   if (!b?.v || !b.i) return null;
@@ -145,79 +146,6 @@ export function energyOf(b: BatterySamples | undefined): Energy | null {
     spans.push({ from: b.ts[k - 1], to: b.ts[k], wh: e });
   }
   return any ? { wh, mah, spans } : null;
-}
-
-/** A reading not followed by another for this long (nothing heard from the device) counts no further. */
-export const HOLD_MAX_MS = 15_000;
-
-/** Voltage (mV), current (mA) and power (mW, voltage × current) as means, with the lowest current and power read. */
-export interface BatteryMean {
-  v: number;
-  i: number;
-  w: number;
-  lo: { i: number; w: number };
-}
-
-/**
- * The battery readings between two samples of the session log, as one time-weighted mean: each
- * reading counts from when it came until the next one (or the sample). Power is the mean of voltage
- * × current, not the product of the means: the voltage sags while the current is high. Times in ms.
- */
-export class BatteryMeans {
-  private at: number | null = null;
-  private v = 0;
-  private i = 0;
-  private sum = { v: 0, i: 0, w: 0, ms: 0 };
-  private lo: { i: number; w: number } | null = null;
-
-  /** The readings as they stand at `now`; undefined when there are none (no battery reported). */
-  add(now: number, v: number | undefined, i: number | undefined) {
-    this.hold(now);
-    if (v === undefined || i === undefined) {
-      this.at = null;
-      return;
-    }
-    this.at = now;
-    this.v = v;
-    this.i = i;
-    const w = (v * i) / 1000;
-    this.lo = this.lo ? { i: Math.min(this.lo.i, i), w: Math.min(this.lo.w, w) } : { i, w };
-  }
-
-  /**
-   * The mean since the last take, up to `now`; null without readings or without time between (the
-   * first sample of a session). The last reading carries on.
-   */
-  take(now: number): BatteryMean | null {
-    this.hold(now);
-    const { v, i, w, ms } = this.sum;
-    if (!this.lo || ms === 0) return null;
-    const mean = { v: v / ms, i: i / ms, w: w / ms, lo: this.lo };
-    this.sum = { v: 0, i: 0, w: 0, ms: 0 };
-    this.lo = this.at === null ? null : { i: this.i, w: (this.v * this.i) / 1000 };
-    return mean;
-  }
-
-  /** A new session, or the device was away: nothing carries on. */
-  reset() {
-    this.at = null;
-    this.sum = { v: 0, i: 0, w: 0, ms: 0 };
-    this.lo = null;
-  }
-
-  private hold(now: number) {
-    if (this.at === null) return;
-    const dt = now - this.at;
-    if (dt > 0 && dt <= HOLD_MAX_MS) {
-      this.sum.v += this.v * dt;
-      this.sum.i += this.i * dt;
-      this.sum.w += ((this.v * this.i) / 1000) * dt;
-      this.sum.ms += dt;
-    }
-    // Too old to go on with: expired until the next reading.
-    if (dt > HOLD_MAX_MS) this.at = null;
-    else if (dt > 0) this.at = now;
-  }
 }
 
 export type Phase = 'heatup' | 'holding' | 'boost' | 'superboost' | 'after';

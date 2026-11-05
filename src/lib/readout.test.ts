@@ -108,7 +108,21 @@ describe('the readout', () => {
     expect(summaryLine(venty, 'battery')).toBe('64 → 63 % · −1 %');
   });
 
-  it('gives the true peak of the 2 s reads, not of the 5 s means drawn', () => {
+  it('reads 2 s readings between the 5 s temperature samples, and peaks at the highest one', () => {
+    // As kept now: a reading every 2 s while heating, the current switching between -8 A and 0.
+    const fine: BatterySamples = {
+      ts: [1, 3, 5, 7, 9, 11, 40], p: [78, 78, 78, 78, 77, 77, 76], v: [3100, 3550, 3100, 3550, 3100, 3550, 3700],
+      i: [-8000, 0, -8000, 0, -8000, 0, -40], t: [290, 290, 300, 300, 300, 310, 330],
+    };
+    const s = { ...crafty, detail: { ...detail, battery: fine } };
+    expect(readoutLine(s, 'current', { kind: 'at', t: 3 })).toBe('At 0:03 · 0.0 A');
+    expect(valueAt(s, 'current', 6)).toBe(8);
+    expect(readoutLine(s, 'current', { kind: 'at', t: 9 })).toBe('At 0:09 · 8.0 A');
+    expect(summaryLine(s, 'current')).toMatch(/^peak 8\.0 A · \d\.\d\d Wh$/);
+    expect(summaryLine(s, 'power')).toMatch(/^peak 24\.8 W · /);
+  });
+
+  it('gives the true peak of the 2 s reads in a session from 0.1.77–0.1.79, not of the 5 s means drawn', () => {
     const fine = { ...crafty, detail: { ...detail, battery: { ...battery, min: { i: -8100, w: -28000 } } } };
     expect(summaryLine(fine, 'current')).toMatch(/^peak 8\.1 A · /);
     expect(readoutLine(fine, 'power', { kind: 'now' })).toContain('peak 28');

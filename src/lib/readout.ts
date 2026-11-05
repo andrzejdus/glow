@@ -113,7 +113,7 @@ function headline(s: ReadoutSession, key: SeriesKey): string {
   if (key === 'battery') return `start ${f(vs[0])}`;
   if (key === 'voltage') return `low ${f(Math.min(...vs))}`;
   if (key === 'batteryTemp') return `max ${f(Math.max(...vs))}`;
-  // The drawn points are 5 s means; the true peak of the 2 s reads is kept apart.
+  // In a session from 0.1.77–0.1.79 the drawn points are 5 s means; the true peak of the 2 s reads is kept apart.
   return `peak ${f(batteryPeak(s.detail?.battery, key) ?? Math.max(...vs))}`;
 }
 

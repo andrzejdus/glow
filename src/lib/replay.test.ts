@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CRAFTY_UUIDS as C } from './devices/crafty';
 import { GAP_DEVICE_NAME, GAP_SERVICE, QVAP_CONTROL, QVAP_SERVICE } from './devices/qvap';
 import type { DeviceState } from './devices/types';
+import { batteryPeak } from './battery';
 import { parseLog, replay } from './replay';
 import { sessions } from './sessions.svelte';
 import { usage } from './usage.svelte';
@@ -95,8 +96,8 @@ describe('background recording replay', () => {
     const id = 'AA:BB:CC:DD:EE:08';
     await usage.bind(id);
     await sessions.bind(id);
-    // As the recorder logs them now: battery temperature and remaining capacity among the values,
-    // then voltage, current and battery temperature every 5 s with the heater on, each round a P line.
+    // As the recorder of 0.1.76 logged them: battery temperature and remaining capacity among the
+    // values, then voltage, current and battery temperature every 5 s with the heater on, each round a P line.
     const lines = craftyHead(id, T0, 0, 300);
     const s0 = lines.indexOf(`${T0} S`);
     lines.splice(s0, 0, `${T0} V ${C.SVC_SYSTEM} ${C.batteryTemp} ${u16(279)}`, `${T0} V ${C.SVC_SYSTEM} ${C.batteryCapacity} ${u16(1931)}`);
@@ -123,20 +124,21 @@ describe('background recording replay', () => {
     // From the polls: the current drains, the battery warms.
     expect(Math.min(...(b.i!.filter((v) => v !== null) as number[]))).toBeLessThanOrEqual(-5800);
     expect(Math.max(...(b.t!.filter((v) => v !== null) as number[]))).toBeGreaterThan(330);
-    // The first reading is from the values the recording starts with; the next the mean of that one
-    // (14…15.6 s) and the poll at 15.6 s (to 19 s).
-    expect(b.v!.slice(0, 2)).toEqual([3900, Math.round((1.6 * 3900 + 3.4 * (3600 - 15 * 5)) / 5)]);
+    // A row at each poll (15.6 s, 20.6 s… from heater on at 14 s), as it was read.
+    expect(b.ts.slice(0, 2)).toEqual([2, 7]);
+    expect(b.v!.slice(0, 2)).toEqual([3600 - 15 * 5, 3600 - 20 * 5]);
     // The cool-down part, every 30 s: down to 50° in about 50 s here.
     expect(b.ts.filter((t) => t > 86)).toEqual([116]);
   });
 
-  it('replays the 2 s battery polls into 5 s means, with the peak read', async () => {
+  it('replays each 2 s battery poll into the session, as it was read', async () => {
     const id = 'AA:BB:CC:DD:EE:0B';
     await usage.bind(id);
     await sessions.bind(id);
     // As the recorder logs them now: voltage and current every 2 s, the battery temperature every 5 s.
     // The current switches between -8 A and 0 at each poll from 30 s on.
     const lines = craftyHead(id, T0, 0, 300);
+    lines.splice(lines.indexOf(`${T0} S`), 0, `${T0} V ${C.SVC_SYSTEM} ${C.batteryTemp} ${u16(300)}`);
     const log = craftyLog(id).split('\n').filter((l) => !l.includes(' V ') && !l.includes(' B ') && l !== `${T0} S`);
     const body = [...log];
     let n = 0;
@@ -155,17 +157,21 @@ describe('background recording replay', () => {
     expect(await replay([...lines, ...body].join('\n'), id)).toBe(1);
     const [s] = sessions.list;
     const b = (await sessions.detail(s.id))!.battery!;
-    // Every 5 s with the heater on, each a mean with its power.
-    const on = b.ts.map((t, k) => ({ t, k })).filter(({ t }) => t > 0 && t <= 86);
-    expect(on.every(({ k }) => b.w![k] !== null)).toBe(true);
-    // From 30 s on (16 s into the session) half the time at -8 A: the means sit between 0 and -8 A.
-    // (The last, 85–86 s, is the second up to heater off.)
-    const holding = on.filter(({ t }) => t >= 25 && t < 86).map(({ k }) => b.i![k]!);
-    expect(Math.max(...holding)).toBeLessThan(-1500);
-    expect(Math.min(...holding)).toBeGreaterThan(-6500);
-    expect(b.min).toEqual({ i: -8000, w: -24_800 });
-    // The cool-down keeps single readings.
-    expect(b.w![b.ts.length - 1]).toBeNull();
+    // A row at each poll (16.9 s, 18.9 s… from heater on at 14 s); the refresh at 45.1 s reads in
+    // the same second as a poll, and adds nothing.
+    const on = b.ts.filter((t) => t <= 86);
+    expect(on).toEqual(Array.from({ length: 42 }, (_, k) => 3 + k * 2));
+    // Each reading as it was: from 30 s on (16 s into the session) -8 A and 0 by turns, nothing between.
+    const holding = on.map((t, k) => ({ t, i: b.i![k] })).filter(({ t }) => t >= 17);
+    expect(holding.map(({ i }) => i)).toEqual(holding.map((_, k) => (k % 2 === 0 ? 0 : -8000)));
+    expect(batteryPeak(b, 'current')).toBe(8);
+    expect(batteryPeak(b, 'power')).toBeCloseTo(24.8, 6);
+    expect(b.w).toBeUndefined();
+    expect(b.min).toBeUndefined();
+    // The battery temperature as it stood at each poll; it is read every 5 s.
+    expect(b.t!.slice(0, 4)).toEqual([316, 316, 316, 322]);
+    // The cool-down: one 30 s after heater off.
+    expect(b.ts.filter((t) => t > 86)).toEqual([116]);
   });
 
   it('replays an older recording without battery polls: the battery % and what the refresh read', async () => {

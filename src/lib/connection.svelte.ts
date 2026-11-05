@@ -30,8 +30,8 @@ interface Saved {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const REFRESH_MS = 30_000;
 /**
- * With the heater on: voltage and current every BATTERY_POLL_MS for the session log's 5 s means (two
- * reads, ~0.4 s each on a CRAFTY+), the battery temperature every BATTERY_TEMP_MS.
+ * With the heater on: voltage and current every BATTERY_POLL_MS, each reading kept in the session log
+ * (two reads, ~0.4 s each on a CRAFTY+), the battery temperature every BATTERY_TEMP_MS.
  */
 const BATTERY_POLL_MS = 2000;
 const BATTERY_TEMP_MS = 5000;
@@ -671,7 +671,8 @@ class Connection {
     // background recorder handed over, and the first real report would start a second one.
     if (!this.quiet && this.heaterKnown) {
       usage.observe(d);
-      sessions.observe(d);
+      // A voltage and current reading (the battery poll, or a refresh): the session log keeps it.
+      sessions.observe(d, now, 'batteryVoltage' in rest || 'batteryCurrent' in rest);
     }
     ready.observe(d);
   }

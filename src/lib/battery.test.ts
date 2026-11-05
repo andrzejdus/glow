@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BatteryMeans, batteryPeak, batteryValues, energyOf, energySplit, HOLD_MAX_MS, niceScale, phaseAt, seriesOf } from './battery';
+import { batteryPeak, batteryValues, energyOf, energySplit, niceScale, phaseAt, seriesOf } from './battery';
 import type { BatterySamples, SessionDetail } from './sessions.svelte';
 
 const detail = (battery?: BatterySamples): SessionDetail => ({ ts: [0, 5], c: [100, 110], g: [180, 180], events: [], battery });
@@ -105,50 +105,28 @@ describe('energy split', () => {
   });
 });
 
-describe('battery means', () => {
-  it('weights each reading by how long it stood, and multiplies voltage and current before averaging', () => {
-    const m = new BatteryMeans();
-    // 3.1 V × 8 A for 1 s, then 3.55 V × 0 A for 4 s: 4.96 W on average, not 3.46 V × 1.6 A = 5.5 W.
-    m.add(0, 3100, -8000);
-    m.add(1000, 3550, 0);
-    m.add(3000, 3550, 0); // the same reading again changes nothing
-    const a = m.take(5000)!;
-    expect(a.v).toBeCloseTo(3460, 6);
-    expect(a.i).toBeCloseTo(-1600, 6);
-    expect(a.w).toBeCloseTo((-3100 * 8000) / 1000 / 5, 6);
-    expect(a.lo).toEqual({ i: -8000, w: -24800 });
-    // The last reading carries on into the next stretch, and is its lowest so far.
-    m.add(7000, 3100, -8000);
-    const b = m.take(10_000)!;
-    expect(b.i).toBeCloseTo((0 * 2 + -8000 * 3) / 5, 6);
-    expect(b.lo.i).toBe(-8000);
-  });
-
-  it('has no mean without readings or without time, and keeps the lowest for the next one', () => {
-    const m = new BatteryMeans();
-    expect(m.take(0)).toBeNull();
-    m.add(0, undefined, undefined); // a VENTY: no voltage or current
-    expect(m.take(5000)).toBeNull();
-    m.add(5000, 3100, -8000);
-    expect(m.take(5000)).toBeNull(); // the first sample of a session
-    m.add(6000, 3600, -500);
-    expect(m.take(10_000)).toMatchObject({ v: 3100 * 0.2 + 3600 * 0.8, i: -8000 * 0.2 + -500 * 0.8, lo: { i: -8000 } });
-  });
-
-  it('does not stretch a reading over a gap or past a reset', () => {
-    const m = new BatteryMeans();
-    m.add(0, 3000, -6000);
-    m.add(2000, 3000, -2000);
-    // Nothing heard for longer than HOLD_MAX_MS: the -2000 counts for no part of it.
-    m.add(2000 + HOLD_MAX_MS + 1, 3000, 0);
-    const a = m.take(2000 + HOLD_MAX_MS + 1001)!;
-    expect(a.i).toBeCloseTo((-6000 * 2000 + 0 * 1000) / 3000, 6);
-    m.reset();
-    expect(m.take(60_000)).toBeNull();
+describe('energy from 2 s readings', () => {
+  it('adds up each reading by the trapezoid rule, and peaks at the highest one read', () => {
+    // As kept now: a reading every 2 s while heating, the current switching between -8 A and 0,
+    // then the cool-down's every 30 s.
+    const b: BatterySamples = {
+      ts: [2, 4, 6, 8, 10, 40], p: [80, 80, 80, 80, 79, 79],
+      v: [3100, 3550, 3100, 3100, 3550, 3600], i: [-8000, 0, -8000, -8000, 0, 0], t: [300, 300, 302, 302, 302, 305],
+    };
+    const e = energyOf(b)!;
+    const w = 24.8;
+    expect(e.spans.map((s) => s.wh * 3600)).toEqual([
+      expect.closeTo(w, 6), expect.closeTo(w, 6), expect.closeTo(2 * w, 6), expect.closeTo(w, 6), expect.closeTo(0, 6),
+    ]);
+    expect(e.mah).toBeCloseTo((4000 * 2 * 3 + 8000 * 2) / 3600, 6);
+    // No means and no `min`: the chart's points are the readings, and the peak is theirs.
+    expect(batteryValues(b, 'power')[0]).toBeCloseTo(w, 6);
+    expect(batteryPeak(b, 'current')).toBeCloseTo(8, 6);
+    expect(batteryPeak(b, 'power')).toBeCloseTo(w, 6);
   });
 });
 
-describe('energy from the means', () => {
+describe('energy from the 5 s means of 0.1.77–0.1.79', () => {
   it('takes a mean as the power of the stretch before it, and old single readings by the trapezoid rule', () => {
     // 0–5 s a mean of 10 W, 5–10 s a mean of 20 W, then the cool-down's single readings.
     const b: BatterySamples = {

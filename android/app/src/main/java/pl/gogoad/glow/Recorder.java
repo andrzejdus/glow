@@ -54,7 +54,7 @@ import java.util.UUID;
  *   t F                      a round of re-reads is complete (the app calls the driver's refresh())
  *   t P                      CRAFTY, heater on: a round of battery reads is complete (the app calls
  *                            the driver's pollBattery()): voltage and current every 2 s, the battery
- *                            temperature too every 5 s; the app keeps their 5 s means
+ *                            temperature too every 5 s; the app keeps each reading
  *   t E reason               the recording ends: idle (cooled down), lost (link gone), app (the app
  *                            took over), off (switched off), killed (Glow was killed meanwhile:
  *                            written after the restart, at the time of the last line before it)
@@ -85,8 +85,8 @@ final class Recorder {
     private static final long IDLE_REFRESH_MS = 300_000;
     /**
      * CRAFTY with the heater on, as the app polls them: voltage and current every BATTERY_POLL_MS (two
-     * reads, ~0.4 s each), the battery temperature every BATTERY_TEMP_MS. The replay turns them into
-     * the session log's 5 s means.
+     * reads, ~0.4 s each), the battery temperature every BATTERY_TEMP_MS. The replay keeps each
+     * reading in the session log.
      */
     private static final long BATTERY_POLL_MS = 2000;
     private static final long BATTERY_TEMP_MS = 5000;
