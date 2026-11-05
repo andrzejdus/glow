@@ -80,3 +80,10 @@ export function duration(seconds: number, locales?: string): string {
   if (seconds >= 60) return `${decimal(seconds / 60, 0, 1, locales)} min`;
   return `${Math.round(seconds)} s`;
 }
+
+/** A size on disk, in the decimal units Android's storage settings use. */
+export function size(bytes: number, locales?: string): string {
+  if (bytes < 1000) return `${Math.round(bytes)} B`;
+  if (bytes < 1e6) return `${decimal(bytes / 1e3, 0, 0, locales)} KB`;
+  return `${decimal(bytes / 1e6, 1, 1, locales)} MB`;
+}

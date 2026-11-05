@@ -1,11 +1,13 @@
 import { BatteryMeans, type BatteryMean } from './battery';
 import type { DeviceState, HeatMode } from './devices/types';
-import { sessionStore } from './sessionStore';
+import { removable, report, type DeviceLog, type StorageReport } from './cleanup';
+import { INDEX, sessionStore, type StoredFile } from './sessionStore';
 
 // The session log: one session from heater on to heater off, seen while Glow is connected, or
-// replayed from what the background recorder logged while it was closed (replay.ts). Kept for good.
-// Each device has an index of summaries (small, loaded on connect) and one record per session with
-// its temperature samples and events (loaded when it is opened); sessionStore.ts keeps them.
+// replayed from what the background recorder logged while it was closed (replay.ts). Kept for good,
+// unless removed with Clean up in Settings. Each device has an index of summaries (small, loaded on
+// connect) and one record per session with its temperature samples and events (loaded when it is
+// opened); sessionStore.ts keeps them.
 
 /** Something that happened in a session, at `t` seconds from its start. */
 export type SessionEvent =
@@ -635,6 +637,84 @@ class Sessions {
 
   private save() {
     if (this.persist && this.key) void sessionStore.saveIndex(this.key, this.list);
+  }
+
+  /** The running session and one still recording its cool-down: a clean-up leaves them alone. */
+  private pinned() {
+    return new Set([this.active?.id, this.cooling?.id].filter((id): id is number => id !== undefined));
+  }
+
+  /** What the log takes, all devices (Settings › Session history). */
+  async storage(): Promise<StorageReport> {
+    if (this.seeded) {
+      const files = [...this.details].map(([id, d]) => ({ dev: this.key, name: String(id), bytes: new Blob([JSON.stringify(d)]).size }));
+      return report([{ dev: this.key, list: this.list }], files, this.pinned());
+    }
+    this.flush();
+    const files = await sessionStore.files();
+    return report(await this.logs(files), files, this.pinned());
+  }
+
+  /** Each device's list: the bound one's from memory (it may be ahead of what is saved). */
+  private async logs(files: StoredFile[]): Promise<DeviceLog[]> {
+    const devs = new Set(files.map((f) => f.dev));
+    if (this.key) devs.add(this.key);
+    const out: DeviceLog[] = [];
+    for (const dev of devs) {
+      if (dev === this.key) out.push({ dev, list: this.list });
+      else out.push({ dev, list: await sessionStore.loadIndex(dev).catch(() => []) });
+    }
+    return out;
+  }
+
+  /**
+   * Removes the sessions that started before `cut`, on every device: their charts and their rows
+   * in the list. The running session and a cool-down still being recorded stay. Hours of
+   * operation (usage.svelte.ts) are kept apart and stay as they are.
+   */
+  async prune(cut: number): Promise<void> {
+    const pinned = this.pinned();
+    const gone = (s: SessionSummary) => removable({ ...s, pinned: pinned.has(s.id) }, cut);
+    if (this.seeded) {
+      for (const s of this.list.filter(gone)) this.details.delete(s.id);
+      this.list = this.list.filter((s) => !gone(s));
+      return;
+    }
+    this.flush();
+    const files = await sessionStore.files();
+    const devs = new Set(files.map((f) => f.dev));
+    if (this.key) devs.add(this.key);
+    for (const dev of devs) {
+      let list: SessionSummary[];
+      let ids: number[];
+      if (dev === this.key) {
+        // Its list could not be read: its files are not known to be orphans.
+        if (!this.persist) continue;
+        // Read and written in one go, so a sample coming in meanwhile is not lost.
+        list = this.list;
+        ids = list.filter(gone).map((s) => s.id);
+        if (ids.length) {
+          this.list = list.filter((s) => !gone(s));
+          for (const id of ids) this.details.delete(id);
+          this.save();
+        }
+      } else {
+        try {
+          list = await sessionStore.loadIndex(dev);
+        } catch {
+          continue;
+        }
+        ids = list.filter(gone).map((s) => s.id);
+        if (ids.length) await sessionStore.saveIndex(dev, list.filter((s) => !gone(s)));
+      }
+      // The list first, then the charts: cut short in between, a chart is left without its row
+      // (and goes with the next clean-up), never a row without its chart.
+      const known = new Set(list.map((s) => String(s.id)));
+      const orphans = files
+        .filter((f) => f.dev === dev && f.name !== INDEX && !known.has(f.name) && Number(f.name) < cut)
+        .map((f) => Number(f.name));
+      await sessionStore.removeDetails(dev, [...ids, ...orphans]);
+    }
   }
 }
 

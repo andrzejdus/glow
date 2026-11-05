@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Battery from '../components/Battery.svelte';
+  import CleanupSheet from '../components/CleanupSheet.svelte';
   import Glyph from '../components/Glyph.svelte';
   import Slider from '../components/Slider.svelte';
   import Icon from '../components/Icon.svelte';
@@ -9,8 +11,10 @@
   import { conn, tap } from '../lib/connection.svelte';
   import { debugging, type DebuggingState } from '../lib/debugging';
   import type { DeviceState, SettingDef } from '../lib/devices/types';
-  import { decimal, deltaToUnit, duration, splitHours, toUnit, usageTime } from '../lib/format';
+  import { firstStop, stopsFor, type StorageReport } from '../lib/cleanup';
+  import { decimal, deltaToUnit, duration, size, splitHours, toUnit, usageTime } from '../lib/format';
   import { locale, resolveUnit, type UnitChoice, type WeekChoice } from '../lib/locale.svelte';
+  import { sessions } from '../lib/sessions.svelte';
   import { usage } from '../lib/usage.svelte';
 
   /** Opens the Stats screen. */
@@ -148,6 +152,23 @@
     const share = left !== undefined && full !== undefined ? Math.max(0, Math.min(1, left / full)) : undefined;
     return { value, share, notes };
   });
+  // Session history: the log's size on every device, and the clean-up. Read again when a session
+  // starts or ends (or a clean-up removed some), not on every sample.
+  let storage = $state<StorageReport | null>(null);
+  let cleaning = $state(false);
+  $effect(() => {
+    void sessions.list.length;
+    untrack(() => sessions.storage().then((r) => (storage = r), () => undefined));
+  });
+  const cleanable = $derived(!!storage && firstStop(storage, stopsFor(storage, Date.now()), Date.now()) >= 0);
+  function cleanUp() {
+    tap();
+    cleaning = true;
+  }
+  function cleaned(removed: boolean) {
+    cleaning = false;
+    if (removed) sessions.storage().then((r) => (storage = r), () => undefined);
+  }
   const asNumber = (v: unknown, fallback: number) => (typeof v === 'number' ? v : fallback);
 </script>
 
@@ -376,6 +397,15 @@
           </div>
         {/if}
       {/if}
+      <div class="row">
+        <div class="text">
+          <div class="name">Session history</div>
+          <div class="desc num">
+            {storage ? `${size(storage.bytes)} · ${decimal(storage.count, 0)} ${storage.count === 1 ? 'session' : 'sessions'}` : '–'}
+          </div>
+        </div>
+        <button type="button" class="small press" onclick={cleanUp} disabled={!cleanable}>Clean up…</button>
+      </div>
       {#if debug}
         <div class="row">
           <div class="text">
@@ -400,6 +430,9 @@
 
 {#if diagnostics}
   <Diagnostics onclose={() => (diagnostics = false)} />
+{/if}
+{#if cleaning && storage}
+  <CleanupSheet report={storage} onclose={cleaned} />
 {/if}
 
 <style>
@@ -898,6 +931,11 @@
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
+  }
+  .small:disabled {
+    border-color: var(--track);
+    color: var(--faint);
+    cursor: default;
   }
   .diag {
     align-self: center;

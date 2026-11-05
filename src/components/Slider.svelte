@@ -11,9 +11,11 @@
     defaultValue?: number;
     /** Shown but not adjustable, in black and white. */
     disabled?: boolean;
+    /** What a screen reader says for a value, when the number alone means nothing. */
+    valueText?: (value: number) => string;
     onchange: (value: number) => void;
   }
-  let { id, min, max, step, value, defaultValue, disabled = false, onchange }: Props = $props();
+  let { id, min, max, step, value, defaultValue, disabled = false, valueText, onchange }: Props = $props();
 
   /** How far either side of the factory value the thumb is pulled onto it, in steps. */
   const PULL = 0.75;
@@ -70,7 +72,7 @@
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
   {#if hasDefault}<span class="tick" aria-hidden="true"></span>{/if}
   <input {id} type="range" {min} {max} {step} {value} {disabled} oninput={input}
-    aria-valuetext={hasDefault && value === defaultValue ? `${value}, factory setting` : String(value)} />
+    aria-valuetext={valueText ? valueText(value) : hasDefault && value === defaultValue ? `${value}, factory setting` : String(value)} />
 </div>
 
 <style>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockTime, decimal, duration, fromUnit, stepTarget, toUnit, usageTime } from './format';
+import { clockTime, decimal, duration, fromUnit, size, stepTarget, toUnit, usageTime } from './format';
 
 describe('usageTime', () => {
   it('counts in minutes, with hours once there are 60 of them', () => {
@@ -84,5 +84,16 @@ describe('temperature units', () => {
     expect(stepTarget(183, 1, 'F')).toBe(184);
     // A larger step in °F lands on the nearest whole °C.
     expect(stepTarget(180, 10, 'F')).toBe(186);
+  });
+});
+
+describe('size', () => {
+  it('goes from bytes to KB to MB, in decimal units', () => {
+    expect(size(0, 'en')).toBe('0 B');
+    expect(size(999, 'en')).toBe('999 B');
+    expect(size(1500, 'en')).toBe('2 KB');
+    expect(size(640_000, 'en')).toBe('640 KB');
+    expect(size(2_400_000, 'en')).toBe('2.4 MB');
+    expect(size(2_400_000, 'pl')).toBe('2,4 MB');
   });
 });
