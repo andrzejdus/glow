@@ -46,6 +46,10 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
 - 📊 **Stats.** A tab with each session as a chart (temperature against the target, Ready, boosts
   and the cool-down) and its facts, hours of operation by day, week or month, and a timeline of
   every session Glow saw. Tapping Hours of operation on the dashboard or in Settings opens it.
+  Chips above the chart draw the battery over the temperature: its level, and on a CRAFTY its
+  voltage, current, power and temperature too. A CRAFTY session also shows where the battery
+  went: the energy drawn (voltage × current), split into heat-up, holding, boost and after off,
+  next to the device's own count of the capacity used.
 - 🌙 **Records in the background** (Android 12+, off until you switch it on in Settings). Android
   wakes Glow when the device comes into range, Glow connects and logs the session with the app
   closed (with a notification while it does), and the next time you open Glow the session is in
@@ -84,6 +88,7 @@ built from the protocol and covered by unit tests.
 | Booster / Superbooster offsets | ✓ | ✓ | ✓⁴ | ✓⁴ | ✓⁴ | — |
 | Battery level | ✓ | ✓ | ✅ | ✓ | ✓ | — |
 | Battery voltage, current, power | — | — | ✅ | ✓⁷ | ✓⁷ | — |
+| Battery on the session chart, energy | ✓⁸ | ✓⁸ | ✓⁷ | ✓⁷ | ✓⁷ | — |
 | Charging / charged | ✓ | ✓ | ✅ | ✓⁵ | — | — |
 | Lifetime charging time | ✓ | ✓ | — | — | — | — |
 | Hours of operation, usage per month | ✓ | ✓ | ✅ | ✓ | ✓ | ✓ |
@@ -101,7 +106,8 @@ built from the protocol and covered by unit tests.
 ⁴ The Booster offset only; the CRAFTY+ Superbooster is always 15 °C above it. ·
 ⁵ Uses the bit found on a CRAFTY+, not yet confirmed on this firmware. ·
 ⁶ The target only: VENTY and VEAZY give the app no live temperature, so the dial shows the target and Ready. ·
-⁷ Read the way other open-source clients do, shown only when plausible; confirmed on a CRAFTY+ only.
+⁷ Read the way other open-source clients do, shown only when plausible; confirmed on a CRAFTY+ only. ·
+⁸ The battery level only: no voltage or current, so no energy.
 </sub>
 
 **Not supported:** MIGHTY and MIGHTY+. They have no Bluetooth: STORZ & BICKEL lists the app

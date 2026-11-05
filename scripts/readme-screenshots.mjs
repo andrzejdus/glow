@@ -50,7 +50,8 @@ export async function shoot(browser, base = 'http://127.0.0.1:5791/', out = OUT)
     await shot('connect');
 
     // CRAFTY+ heating, counting down to Ready, then its Stats and Settings tabs. Stats shows the
-    // last finished session, picked from the history: the running one has hardly any chart yet.
+    // last finished session, picked from the history: the running one has hardly any chart yet,
+    // with its current drawn over the temperature.
     await open('crafty');
     await status().filter({ hasText: /Ready in/ }).waitFor();
     await page.waitForTimeout(1000);
@@ -58,6 +59,8 @@ export async function shoot(browser, base = 'http://127.0.0.1:5791/', out = OUT)
     await tab('Stats');
     await page.locator('.history .item').nth(1).click();
     await page.waitForTimeout(1500);
+    await page.locator('.chips button', { hasText: 'Current' }).click();
+    await page.waitForTimeout(600);
     // Picking scrolls to the session card; the shot starts at the top, Hours of operation first.
     await page.locator('h1', { hasText: 'Stats' }).evaluate((e) => e.scrollIntoView({ block: 'start' }));
     await page.waitForTimeout(800);
