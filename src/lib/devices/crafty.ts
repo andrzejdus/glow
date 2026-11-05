@@ -202,6 +202,13 @@ export function decodeCapacity(view: DataView): number | undefined {
   return mah > 0 && mah <= 20000 ? mah : undefined;
 }
 
+/** Charge cycles (0173), a count. Undefined for 0xffff and anything above 10000. */
+export function decodeCycles(view: DataView): number | undefined {
+  if (view.byteLength < 2) return undefined;
+  const n = view.getUint16(0, true);
+  return n <= 10000 ? n : undefined;
+}
+
 export interface CraftyFirmware {
   major: number;
   minor: number;
@@ -405,6 +412,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     await this.readBatteryStats();
     await this.readBatteryTemp();
     await this.readCapacity();
+    await this.readBatteryHealth();
 
     if (!this.legacy) await this.subscribe(SVC_SYSTEM, CHR.status, this.onStatus);
     this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
@@ -464,6 +472,29 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     this.hasCapacity ??= v !== null;
     const mah = v ? decodeCapacity(v) : undefined;
     if (mah !== undefined) this.emit({ batteryCapacity: mah });
+  }
+
+  /** Whether 0143, 0183 and 0173 can be read, each asked once per connection like 0153. */
+  private hasBatteryHealth: Partial<Record<'full' | 'design' | 'cycles', boolean>> = {};
+
+  /**
+   * 0143 full and 0183 design capacity, mAh, and 0173 charge cycles: the device's own view of its
+   * cell, which it relearns after a new cell is fitted. They change slowly, so they are read on
+   * connect and with refresh(), never in the heating poll.
+   */
+  private async readBatteryHealth() {
+    const regs = [
+      ['full', CHR.batteryCapacityFull, decodeCapacity, 'batteryCapacityFull'],
+      ['design', CHR.batteryCapacityDesign, decodeCapacity, 'batteryCapacityDesign'],
+      ['cycles', CHR.chargeCycles, decodeCycles, 'batteryCycles'],
+    ] as const;
+    for (const [key, chr, decode, field] of regs) {
+      if (this.hasBatteryHealth[key] === false) continue;
+      const v = await this.read(SVC_SYSTEM, chr).catch(() => null);
+      this.hasBatteryHealth[key] ??= v !== null;
+      const n = v ? decode(v) : undefined;
+      if (n !== undefined) this.emit({ [field]: n });
+    }
   }
 
   private heating(): boolean {
@@ -638,6 +669,7 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
     await this.readBatteryStats();
     await this.readBatteryTemp();
     await this.readCapacity();
+    await this.readBatteryHealth();
     // Legacy firmware does not notify the status register.
     if (this.legacy) this.onStatus(await this.read(SVC_SYSTEM, CHR.status));
   }

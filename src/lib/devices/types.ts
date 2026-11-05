@@ -56,6 +56,12 @@ export interface DeviceState {
   batteryCurrent?: number;
   /** Remaining battery capacity, mAh, as the device counts it (CRAFTY 0153). */
   batteryCapacity?: number;
+  /** Full capacity, mAh, as the device has learned it (CRAFTY 0143). */
+  batteryCapacityFull?: number;
+  /** Design capacity, mAh, as the device reports it (CRAFTY 0183). */
+  batteryCapacityDesign?: number;
+  /** Charge cycles the device has counted (CRAFTY 0173). */
+  batteryCycles?: number;
   /** Battery temperature, °C (CRAFTY: to 0.1 °C), when the device reports it. */
   batteryTemp?: number;
   /**

@@ -388,6 +388,43 @@ describe('crafty driver', () => {
     await none.driver.stop();
   });
 
+  it('reads full and design capacity and charge cycles on connect and with refresh, not in the heating poll', async () => {
+    // vo0t's published CRAFTY+ diagnostics: 3300 mAh full (e4 0c), 3300 design, 42 charge cycles (2a 00).
+    const t = craftyPlus({
+      [U.batteryCapacityFull]: [0xe4, 0x0c],
+      [U.batteryCapacityDesign]: [0xe4, 0x0c],
+      [U.chargeCycles]: [0x2a, 0x00],
+    });
+    const { driver, state } = await started(t);
+    expect(state).toMatchObject({ batteryCapacityFull: 3300, batteryCapacityDesign: 3300, batteryCycles: 42 });
+    // A new cell: the device relearns its full capacity.
+    t.values.set(U.batteryCapacityFull, [0x7b, 0x05]); // 1403
+    t.values.set(U.chargeCycles, [0x2b, 0x00]);
+    await driver.refresh!();
+    expect(state).toMatchObject({ batteryCapacityFull: 1403, batteryCycles: 43 });
+    t.values.set(U.batteryCapacityFull, le16(0)); // no value: the last one stays
+    t.values.set(U.batteryCapacityDesign, le16(0xffff));
+    t.values.set(U.chargeCycles, le16(0xffff));
+    await driver.refresh!();
+    expect(state).toMatchObject({ batteryCapacityFull: 1403, batteryCapacityDesign: 3300, batteryCycles: 43 });
+    t.ops = [];
+    await driver.pollBattery!();
+    expect(t.ops.some((o) => [U.batteryCapacityFull, U.batteryCapacityDesign, U.chargeCycles].includes(o.chr))).toBe(false);
+    await driver.stop();
+
+    // Only the design capacity can be read: the others are asked once per connection.
+    const old = craftyPlus({ [U.batteryCapacityDesign]: [0xe4, 0x0c] });
+    const some = await started(old);
+    expect(some.state).toMatchObject({ batteryCapacityDesign: 3300 });
+    expect(some.state.batteryCapacityFull).toBeUndefined();
+    expect(some.state.batteryCycles).toBeUndefined();
+    old.ops = [];
+    await some.driver.refresh!();
+    expect(old.ops.some((o) => o.chr === U.batteryCapacityFull || o.chr === U.chargeCycles)).toBe(false);
+    expect(old.ops.some((o) => o.chr === U.batteryCapacityDesign)).toBe(true);
+    await some.driver.stop();
+  });
+
   it('shows the battery capacity and cycles in diagnostics, in mAh and as counts', async () => {
     // vo0t's published CRAFTY+ diagnostics: 1931 / 3300 / 3300 mAh, 42 charge cycles (uint16 LE).
     const t = craftyPlus({

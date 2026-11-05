@@ -272,6 +272,13 @@ and anything above 20 Ah ignored; a first read that fails stops further reads un
 connection). The session log keeps it at the start and at the end of each session, to compare the
 device's own count with the current Glow adds up.
 
+Glow also reads `0143` (full capacity), `0183` (design capacity) and `0173` (charge cycles) on
+connect and with `refresh()`, never in the heating poll, and reports them as `batteryCapacityFull`,
+`batteryCapacityDesign` and `batteryCycles` for the Settings battery card, so a new cell can be
+watched while the gauge relearns it. The capacities follow the rules for `0153`; the cycle count
+ignores `0xffff` and anything above 10000. Each of the three that fails on its first read is not
+asked again until the next connection. `0163` (discharge cycles) stays in Device diagnostics only.
+
 What the CRAFTY+ (V03.24) can push, from its GATT properties (read on the phone, 2026-11-05): in
 service `0003` only `0013`, `0023`, `0063`, `0093`, `01c3` and `01e3` notify. Battery voltage
 (`00b3`), current (`00e3`), battery temperature (`0113`) and the capacities (`0143`, `0153`) are
