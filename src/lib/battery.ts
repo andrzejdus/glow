@@ -6,13 +6,13 @@ import type { BatterySamples, SessionDetail, SessionEvent } from './sessions.sve
 
 export type SeriesKey = 'temp' | 'battery' | 'voltage' | 'current' | 'power' | 'batteryTemp';
 
-export const SERIES: Record<SeriesKey, { chip: string; name: string }> = {
-  temp: { chip: 'Temp', name: 'Temperature' },
-  battery: { chip: 'Battery', name: 'Battery' },
-  voltage: { chip: 'Voltage', name: 'Voltage' },
-  current: { chip: 'Current', name: 'Current' },
-  power: { chip: 'Power', name: 'Power' },
-  batteryTemp: { chip: 'Batt temp', name: 'Battery temp' },
+export const SERIES: Record<SeriesKey, { name: string }> = {
+  temp: { name: 'Temperature' },
+  battery: { name: 'Battery' },
+  voltage: { name: 'Voltage' },
+  current: { name: 'Current' },
+  power: { name: 'Power' },
+  batteryTemp: { name: 'Battery temp' },
 };
 
 /** Readings further apart than this (the connection was lost) are not joined, or added up across. */

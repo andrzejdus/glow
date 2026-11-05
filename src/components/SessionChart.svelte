@@ -1,7 +1,10 @@
 <script lang="ts">
   import { tap } from '../lib/connection.svelte';
-  import { BATTERY_GAP_SEC, batteryValues, energyOf, niceScale, SERIES, seriesOf, type SeriesKey } from '../lib/battery';
+  import { BATTERY_GAP_SEC, batteryValues, niceScale, SERIES, seriesOf, type SeriesKey } from '../lib/battery';
   import { decimal, mmss, toUnit } from '../lib/format';
+  import {
+    legendName, nearestIndex, readoutLine, stepFrom, swipeIntent, swipeStep, timeLabel, valueAt, valuesAt, type ReadoutSession,
+  } from '../lib/readout';
   import type { SessionDetail, SessionSummary } from '../lib/sessions.svelte';
 
   interface Props {
@@ -117,12 +120,23 @@
     x: x(summary.readySec),
     y: y(detail.g[ts.findIndex((t) => t >= summary.readySec!)] ?? lo),
   });
-  // One battery value over the temperature, faded behind it, on a scale of its own on the right
-  // whose steps sit on the temperature's grid lines. Only what the session has readings of.
+  // One value at a time over the temperature, faded behind it, on a scale of its own on the right
+  // whose steps sit on the temperature's grid lines. Only what the session has readings of; a
+  // sideways swipe on the chart or the dots under it move from one to the next.
   const available = $derived(seriesOf(detail));
   let pick = $state<SeriesKey>('temp');
   const sel = $derived(available.includes(pick) ? pick : 'temp');
-  const energy = $derived(energyOf(detail?.battery));
+  /** Which way the last switch went, so the new line comes in from that side. */
+  let dir = $state(1);
+  function show(k: SeriesKey) {
+    if (k === sel) return;
+    tap();
+    dir = available.indexOf(k) > available.indexOf(sel) ? 1 : -1;
+    pick = k;
+  }
+  const session = $derived<ReadoutSession>({
+    detail, unit, live: summary.live, readySec: summary.readySec, endSec, peak: summary.peak, target: summary.target,
+  });
   const units: Record<Exclude<SeriesKey, 'temp'>, string> = { battery: '%', voltage: 'V', current: 'A', power: 'W', batteryTemp: '°' };
   const overlay = $derived.by(() => {
     if (sel === 'temp' || !detail?.battery || ticks.length < 2) return null;
@@ -139,12 +153,12 @@
     const n = ticks.length - 1;
     const { from, step } = niceScale(key === 'current' || key === 'power' ? Math.min(0, min) : min, max, n);
     const tStep = ticks[1] - ticks[0];
-    const oy = (v: number) => y(ticks[0] + ((v - from) / step) * tStep);
+    const oy = (v: number) => y(ticks[0] + ((conv(v) - from) / step) * tStep);
     let d = '';
     let gaps = false;
     pts.forEach((p, k) => {
       const X = x(p.t).toFixed(1);
-      const Y = oy(p.v).toFixed(1);
+      const Y = y(ticks[0] + ((p.v - from) / step) * tStep).toFixed(1);
       const broken = k > 0 && p.t - pts[k - 1].t > BATTERY_GAP_SEC;
       gaps ||= broken;
       // The percentage moves in whole steps.
@@ -159,21 +173,110 @@
       const text = decimal(Math.abs(v) < 1e-9 ? 0 : v, dec);
       return { y: y(t), text: k === n ? `${text} ${u}` : text };
     });
-    const first = pts[0].v;
-    const last = pts[pts.length - 1].v;
-    const top = pts.reduce((a, p) => (p.v > a.v ? p : a));
-    const wh = energy ? ` · ${decimal(energy.wh, 2)} Wh` : '';
-    let summary = '';
-    if (key === 'battery') summary = `${first} → ${last} %${first > last ? ` · −${first - last} %` : ''}`;
-    else if (key === 'voltage') summary = `${decimal(first, 2)} → ${decimal(last, 2)} V · low ${decimal(min, 2)} V`;
-    else if (key === 'current') summary = `peak ${decimal(max, 1)} A${wh}`;
-    else if (key === 'power') summary = `peak ${decimal(max, 1)} W${wh}`;
-    else {
-      const at = endSec !== null && top.t > endSec ? `+${mmss(top.t - endSec)}` : mmss(top.t);
-      summary = `${Math.round(first)} → ${Math.round(max)} ${u} · max at ${at}`;
-    }
-    return { d, area, labels, summary, name: SERIES[key].name };
+    return { d, area, labels, oy, name: SERIES[key].name };
   });
+
+  // Press and hold, then drag: a cursor on the nearest sample, every value at that moment in a
+  // bubble and the shown one in the readout. It stays 2 s after the finger lifts. A plain drag
+  // sideways switches the value instead, and anything more up than across scrolls the page.
+  let svgEl: SVGSVGElement | undefined = $state();
+  let scrubT = $state<number | null>(null);
+  let drag = $state(0);
+  const HOLD_MS = 350;
+  let gesture: { id: number; x0: number; y0: number; at: number; mode: 'wait' | 'swipe' | 'scrub'; timer: ReturnType<typeof setTimeout> } | null = null;
+  let fade: ReturnType<typeof setTimeout> | undefined;
+  const switchable = $derived(ts.length > 1 && available.length > 1);
+
+  function scrubAt(clientX: number) {
+    if (!svgEl) return;
+    const px = clientX - svgEl.getBoundingClientRect().left;
+    const t = t0 + ((px - pad.l) / Math.max(1, w - pad.l - pad.r)) * (t1 - t0);
+    const i = nearestIndex(ts, t);
+    if (i >= 0) scrubT = ts[i];
+  }
+  function down(e: PointerEvent) {
+    if (!switchable || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (gesture) clearTimeout(gesture.timer);
+    const el = e.currentTarget as Element;
+    const id = e.pointerId;
+    gesture = {
+      id, x0: e.clientX, y0: e.clientY, at: e.timeStamp, mode: 'wait',
+      timer: setTimeout(() => {
+        if (!gesture || gesture.id !== id || gesture.mode !== 'wait') return;
+        gesture.mode = 'scrub';
+        clearTimeout(fade);
+        try { el.setPointerCapture(id); } catch { /* the finger is already gone */ }
+        scrubAt(gesture.x0);
+      }, HOLD_MS),
+    };
+  }
+  function move(e: PointerEvent) {
+    if (!gesture || e.pointerId !== gesture.id) return;
+    const dx = e.clientX - gesture.x0;
+    if (gesture.mode === 'wait') {
+      const intent = swipeIntent(dx, e.clientY - gesture.y0);
+      if (intent === 'wait') return;
+      clearTimeout(gesture.timer);
+      if (intent === 'scroll') {
+        gesture = null;
+        return;
+      }
+      gesture.mode = 'swipe';
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    }
+    if (gesture.mode === 'swipe') drag = dx;
+    else scrubAt(e.clientX);
+  }
+  function up(e: PointerEvent) {
+    if (!gesture || e.pointerId !== gesture.id) return;
+    clearTimeout(gesture.timer);
+    if (gesture.mode === 'swipe' && e.type === 'pointerup') {
+      const step = swipeStep(e.clientX - gesture.x0, e.timeStamp - gesture.at, w);
+      if (step) show(stepFrom(available, sel, step));
+    }
+    if (gesture.mode === 'scrub') fade = setTimeout(() => (scrubT = null), 2000);
+    gesture = null;
+    drag = 0;
+  }
+  // Holding still and then moving up or down would scroll the page from under the cursor. Touch
+  // listeners Svelte adds are passive, so this one is added by hand to be allowed to stop that.
+  $effect(() => {
+    const el = svgEl;
+    if (!el) return;
+    const stop = (e: TouchEvent) => {
+      if (gesture && gesture.mode !== 'wait' && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchmove', stop, { passive: false });
+    return () => el.removeEventListener('touchmove', stop);
+  });
+  $effect(() => () => clearTimeout(fade));
+  // A different session or value drops the cursor.
+  $effect(() => {
+    void summary.id;
+    void sel;
+    scrubT = null;
+  });
+
+  const cursor = $derived.by(() => {
+    if (scrubT === null) return null;
+    const t = scrubT;
+    const v = valueAt(session, sel, t);
+    const cy = v === null ? null : sel === 'temp' ? y(v) : overlay ? overlay.oy(v) : null;
+    const vals = valuesAt(session, available, t);
+    const main = vals.find((r) => r.key === sel)!;
+    return { x: x(t), y: cy, time: timeLabel(t, endSec), main: main.text, rest: vals.filter((r) => r.key !== sel), right: x(t) < w / 2 };
+  });
+  const readout = $derived(
+    readoutLine(session, sel, scrubT !== null ? { kind: 'at', t: scrubT } : running ? { kind: 'now' } : { kind: 'summary' }),
+  );
+  function keys(e: KeyboardEvent) {
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const k = stepFrom(available, sel, step);
+    show(k);
+    (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-key="${k}"]`)?.focus();
+  }
 
   // The start, the end (or now) and how long the cool-down ran.
   const xLabels = $derived.by(() => {
@@ -186,15 +289,11 @@
 </script>
 
 <div class="chart" bind:clientWidth={w}>
-  {#if ts.length > 1 && available.length > 1}
-    <div class="chips" role="group" aria-label="Value on the chart">
-      {#each available as k (k)}
-        <button type="button" class="press" aria-pressed={sel === k} onclick={() => { tap(); pick = k; }}>{SERIES[k].chip}</button>
-      {/each}
-    </div>
-  {/if}
   {#if ts.length > 1}
-    <svg width={w} height={H} viewBox="0 0 {w} {H}" role="img" class:overlaid={!!overlay}
+    <div class="plot">
+    <!-- Pointer handling is for touch and the mouse; the dots below are what keyboards and assistive tech use. -->
+    <svg width={w} height={H} viewBox="0 0 {w} {H}" role="img" class:overlaid={!!overlay} class:switchable bind:this={svgEl}
+      onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} oncontextmenu={(e) => switchable && e.preventDefault()}
       aria-label={overlay ? `${overlay.name} over the session, with the temperature faded behind it`
         : `Temperature over the session${summary.live ? ', current and target' : ', target'}`}>
       <defs>
@@ -226,32 +325,67 @@
           <text class="mark-label {m.kind}" x={at.x} y={pad.t - 16} text-anchor={at.anchor}>{m.label}</text>
         {/if}
       {/each}
-      {#if area && !overlay}<path class="area" d={area} />{/if}
-      <g class="temps">
-        <path class="goal" d={goalPath} />
-        {#if beforePath}<path class="current off" d={beforePath} />{/if}
-        {#if afterPath}<path class="current off" d={afterPath} />{/if}
-        {#if currentPath}<path class="current" d={currentPath} />{/if}
+      <!-- The lines follow a sideways swipe a little, so the chart shows it is listening. -->
+      <g class="data" class:dragging={drag !== 0} style:transform="translateX({Math.max(-24, Math.min(24, drag * 0.3))}px)">
+        {#if area && !overlay}<path class="area" d={area} />{/if}
+        <g class="temps">
+          <path class="goal" d={goalPath} />
+          {#if beforePath}<path class="current off" d={beforePath} />{/if}
+          {#if afterPath}<path class="current off" d={afterPath} />{/if}
+          {#if currentPath}<path class="current" d={currentPath} />{/if}
+        </g>
+        {#key sel}
+          <g class="switched" style:--dir={dir}>
+            {#if overlay}
+              {#if overlay.area}<path class="ov-area" d={overlay.area} />{/if}
+              <path class="ov" d={overlay.d} />
+              {#each overlay.labels as l (l.y)}
+                <text class="ov-axis" x={w - pad.r - 2} y={l.y - 3} text-anchor="end">{l.text}</text>
+              {/each}
+            {:else if ready}
+              <line class="ready-line" x1={ready.x} x2={ready.x} y1={pad.t} y2={H - pad.b} />
+              <circle class="ready-dot" cx={ready.x} cy={ready.y} r="5" />
+              <text class="ready-label" x={Math.min(ready.x + 8, w - pad.r - 64)} y={H - pad.b - 8}>Ready {mmss(summary.readySec ?? 0)}</text>
+            {/if}
+          </g>
+        {/key}
+        {#if end && !overlay}
+          {#if running}<circle class="pulse" cx={end.x} cy={end.y} r="5" />{/if}
+          <circle class="end" class:off={!!afterPath} cx={end.x} cy={end.y} r="4.5" />
+        {/if}
       </g>
-      {#if overlay}
-        {#if overlay.area}<path class="ov-area" d={overlay.area} />{/if}
-        <path class="ov" d={overlay.d} />
-        {#each overlay.labels as l (l.y)}
-          <text class="ov-axis" x={w - pad.r - 2} y={l.y - 3} text-anchor="end">{l.text}</text>
-        {/each}
-      {:else if ready}
-        <line class="ready-line" x1={ready.x} x2={ready.x} y1={pad.t} y2={H - pad.b} />
-        <circle class="ready-dot" cx={ready.x} cy={ready.y} r="5" />
-        <text class="ready-label" x={Math.min(ready.x + 8, w - pad.r - 64)} y={H - pad.b - 8}>Ready {mmss(summary.readySec ?? 0)}</text>
-      {/if}
-      {#if end && !overlay}
-        {#if running}<circle class="pulse" cx={end.x} cy={end.y} r="5" />{/if}
-        <circle class="end" class:off={!!afterPath} cx={end.x} cy={end.y} r="4.5" />
+      {#if cursor}
+        <line class="cursor" x1={cursor.x} x2={cursor.x} y1={pad.t - 12} y2={H - pad.b} />
+        {#if cursor.y !== null}<circle class="cursor-dot" cx={cursor.x} cy={cursor.y} r="5.5" />{/if}
       {/if}
     </svg>
+    {#if cursor}
+      <div class="bubble num" class:right={cursor.right} aria-hidden="true">
+        <span class="b-time">At {cursor.time}</span>
+        <span class="b-main">{cursor.main}</span>
+        {#if cursor.rest.length}
+          <span class="b-rest">
+            {#each cursor.rest as r (r.key)}<span>{r.text}{#if r.tag}<em>&nbsp;{r.tag}</em>{/if}</span>{/each}
+          </span>
+        {/if}
+      </div>
+    {/if}
+    </div>
+    {#if switchable}
+      <div class="dots" role="tablist" aria-label="Value on the chart" tabindex="-1" onkeydown={keys}>
+        {#each available as k (k)}
+          <button type="button" role="tab" data-key={k} aria-selected={sel === k} aria-label={SERIES[k].name}
+            tabindex={sel === k ? 0 : -1} onclick={() => show(k)}><i></i></button>
+        {/each}
+      </div>
+      <div class="readout num">
+        <strong>{SERIES[sel].name}</strong>
+        <span>{readout}</span>
+      </div>
+    {/if}
     <div class="legend">
       {#if overlay}
-        <span><i class="sw ov"></i>{overlay.name}</span>
+        <span><i class="sw ov"></i>{legendName(sel, unit)}</span>
         <span><i class="sw current faded"></i>{summary.live ? 'Temperature' : 'At temperature'}</span>
       {:else}
         {#if summary.live}<span><i class="sw current"></i>Temperature</span>{:else if summary.readySec !== null}<span><i class="sw current"></i>At temperature</span>{/if}
@@ -260,9 +394,6 @@
       {#if bands.length}<span><i class="sw band"></i>Boost</span>{/if}
       <span><i class="sw off"></i>Heater off</span>
     </div>
-    {#if overlay}
-      <div class="ov-sum num"><span>{overlay.name}</span><strong>{overlay.summary}</strong></div>
-    {/if}
   {:else}
     <div class="empty" style:height="{H}px">{running ? 'Collecting the first readings…' : 'No readings for this session.'}</div>
   {/if}
@@ -392,7 +523,8 @@
   }
   .legend {
     display: flex;
-    gap: 14px;
+    flex-wrap: wrap;
+    gap: 6px 14px;
     margin-top: 6px;
     font-size: 11px;
     font-weight: 600;
@@ -400,6 +532,7 @@
   }
   .legend span {
     display: flex;
+    white-space: nowrap;
     align-items: center;
     gap: 6px;
   }
@@ -424,35 +557,6 @@
     height: 10px;
     background: var(--card-2);
     box-shadow: inset 0 0 0 1px var(--line);
-  }
-  .chips {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    margin: 0 -16px 10px;
-    padding: 2px 16px 4px;
-    scrollbar-width: none;
-  }
-  .chips::-webkit-scrollbar {
-    display: none;
-  }
-  .chips button {
-    flex-shrink: 0;
-    height: 40px;
-    padding: 0 16px;
-    border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--navy) 16%, transparent);
-    background: var(--card);
-    color: var(--navy);
-    font-size: 14px;
-    font-weight: 700;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .chips button[aria-pressed='true'] {
-    border-color: var(--navy-fill);
-    background: var(--navy-fill);
-    color: #ffffff;
   }
   /* A battery value on top: the temperature and its marks step back. */
   .overlaid .temps {
@@ -493,26 +597,137 @@
   .sw.faded {
     opacity: 0.35;
   }
-  .ov-sum {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 10px;
-    padding: 12px 14px;
-    border-radius: 16px;
-    background: var(--card-2);
+  .plot {
+    position: relative;
   }
-  .ov-sum span {
-    font-size: 13px;
-    font-weight: 600;
+  /* Sideways moves are the chart's own (swipe, scrub); up and down still scroll the page. */
+  svg.switchable {
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
+  }
+  .data {
+    transition: transform 0.2s ease-out;
+  }
+  .data.dragging {
+    transition: none;
+  }
+  .temps,
+  .band,
+  .mark {
+    transition: opacity 0.2s;
+  }
+  .switched {
+    animation: switch-in 0.22s ease-out;
+  }
+  @keyframes switch-in {
+    from {
+      opacity: 0;
+      transform: translateX(calc(var(--dir) * 14px));
+    }
+  }
+  .cursor {
+    stroke: var(--navy);
+    stroke-width: 1.5;
+  }
+  .cursor-dot {
+    fill: var(--navy-fill);
+    stroke: var(--card);
+    stroke-width: 2;
+  }
+  /* Every value at the held moment, on the side away from the finger's line. */
+  .bubble {
+    position: absolute;
+    top: 14px;
+    left: 38px;
+    width: 128px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: 0 6px 22px rgba(0, 26, 77, 0.18), 0 0 0 1px var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    pointer-events: none;
+  }
+  .bubble.right {
+    left: auto;
+    right: 14px;
+  }
+  .b-time {
+    font-size: 11px;
+    font-weight: 800;
     color: var(--muted-2);
+  }
+  .b-main {
+    font-size: 22px;
+    line-height: 24px;
+    font-weight: 800;
+    color: var(--navy);
+  }
+  .b-rest {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink);
     white-space: nowrap;
   }
-  .ov-sum strong {
+  .b-rest em {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  /* One dot per value, the shown one long and filled; each a 44 px target. */
+  .dots {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 -4px;
+  }
+  .dots button {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .dots i {
+    display: block;
+    width: 7px;
+    height: 7px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--navy) 40%, transparent);
+    transition: width 0.2s, background-color 0.2s;
+  }
+  .dots button[aria-selected='true'] i {
+    width: 20px;
+    background: var(--navy);
+  }
+  .readout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    padding: 8px 14px;
+    margin-bottom: 4px;
+    border-radius: 14px;
+    background: var(--card-2);
+  }
+  .readout strong {
     font-size: 15px;
     font-weight: 800;
     color: var(--navy);
+    white-space: nowrap;
+  }
+  .readout span {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted-2);
     text-align: right;
   }
   .empty {
