@@ -818,8 +818,9 @@ export function demoSessions(live: boolean, battery: boolean, now = Date.now()) 
 
 /**
  * Made-up battery readings for a demo session, with no random numbers of its own (the sessions'
- * stay as they were). A CRAFTY+: about 7 A drawn at ~3.1 V while heating up, 2–4 A holding, more in
- * boost, almost nothing after; the battery warms by ~10 °C. A VENTY: the percentage only.
+ * stay as they were). A CRAFTY+, read every 2 s while heating and every 30 s after: about 7 A drawn
+ * at ~3.1 V while heating up, 2–4 A holding, more in boost, almost nothing after; the battery warms by
+ * ~10 °C. A VENTY: the percentage only, with the temperature samples.
  */
 function demoBattery(
   detail: SessionDetail, electric: boolean, length: number, readySec: number | null, boostAt: number | null, pct0: number, perMin: number,
@@ -828,8 +829,8 @@ function demoBattery(
   let mah = 0;
   let temp = 26 + (pct0 % 5);
   let prev: { t: number; a: number } | null = null;
-  const times = [...detail.ts.filter((t) => t >= 0 && t <= length)];
-  if (electric) for (let t = Math.ceil(length / 30) * 30; t <= length + 120; t += 30) times.push(t);
+  const times = electric ? Array.from({ length: Math.floor(length / 2) + 1 }, (_, k) => k * 2) : detail.ts.filter((t) => t >= 0 && t <= length);
+  if (electric) for (let t = Math.floor(length / 30) * 30 + 30; t <= length + 120; t += 30) times.push(t);
   for (const t of times) {
     const on = t <= length;
     const amps = !on ? 0.04

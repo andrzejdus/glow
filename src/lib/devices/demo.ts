@@ -67,19 +67,19 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     s.amps = !s.heater ? 0 : s.current < g - 2 ? 6800 : 2600 + Math.round(900 * Math.max(0, Math.sin(Date.now() / 9000)));
     s.capacity -= (s.amps / 1000) * (0.5 / 3.6);
     emit({
-      ...(kind === 'crafty'
-        ? {
-            batteryTemp: Math.round(s.batteryTemp * 10) / 10,
-            batteryVoltage: Math.round(3850 - 0.11 * s.amps),
-            batteryCurrent: -s.amps,
-            batteryCapacity: Math.round(s.capacity),
-          }
-        : {}),
+      // With the heater on, voltage, current and battery temperature come from pollBattery(), as on a CRAFTY.
+      ...(kind === 'crafty' ? { batteryCapacity: Math.round(s.capacity), ...(s.heater ? {} : batteryReads(true)) } : {}),
       ...(live ? { currentTemp: Math.round(s.current * 10) / 10 } : {}),
       operatingMinutes: s.minutes,
       tempReached: s.heater && Math.abs(goal() - s.current) < 1,
     });
   };
+
+  const batteryReads = (temp: boolean): Partial<DeviceState> => ({
+    batteryVoltage: Math.round(3850 - 0.11 * s.amps),
+    batteryCurrent: -s.amps,
+    ...(temp ? { batteryTemp: Math.round(s.batteryTemp * 10) / 10 } : {}),
+  });
 
   const driver: DeviceDriver = {
     kind,
@@ -163,6 +163,7 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
       emit({ settings: { [key]: value }, ...(key === 'autoShutoff' ? { autoShutoffSec: Number(value) } : {}) });
     },
     async findMyDevice() {},
+    ...(kind === 'crafty' ? { pollBattery: async (temp = true) => emit(batteryReads(temp)) } : {}),
   };
   // Plausible CRAFTY registers; an imaginary charger flips bit 6 of the battery status every 10 s.
   const diagnostics = async (): Promise<DiagnosticValue[]> => [
