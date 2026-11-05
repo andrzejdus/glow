@@ -135,6 +135,19 @@
     if (cm !== undefined) out.push(cm < 60 ? { label: 'Charge time', value: String(cm), unit: 'min' } : { label: 'Charge time', value: String(Math.round(cm / 60)), unit: 'h' });
     return out;
   });
+  // The device's own battery gauge (CRAFTY): what it counts as left of what it has learned the cell
+  // holds. A new cell shows here while the gauge relearns it, so only the reported values appear.
+  const capacity = $derived.by(() => {
+    const left = d.batteryCapacity;
+    const full = d.batteryCapacityFull;
+    const notes: string[] = [];
+    if (d.batteryCapacityDesign !== undefined) notes.push(`Design ${d.batteryCapacityDesign} mAh`);
+    if (d.batteryCycles !== undefined) notes.push(`${d.batteryCycles} ${d.batteryCycles === 1 ? 'cycle' : 'cycles'}`);
+    if (left === undefined && full === undefined && !notes.length) return null;
+    const value = left !== undefined && full !== undefined ? `${left} / ${full}` : left !== undefined ? `${left} left` : full !== undefined ? `${full} full` : undefined;
+    const share = left !== undefined && full !== undefined ? Math.max(0, Math.min(1, left / full)) : undefined;
+    return { value, share, notes };
+  });
   const asNumber = (v: unknown, fallback: number) => (typeof v === 'number' ? v : fallback);
 </script>
 
@@ -206,6 +219,18 @@
             <span class="e-value num">{e.value}<small>{e.unit}</small></span>
           </div>
         {/each}
+      </div>
+    {/if}
+    {#if capacity}
+      <div class="capacity">
+        <div class="cap-top">
+          <span class="cap-label">Capacity</span>
+          {#if capacity.value}<span class="cap-value num">{capacity.value}<small>mAh</small></span>{/if}
+        </div>
+        {#if capacity.share !== undefined}
+          <div class="cap-bar" aria-hidden="true"><span style:width="{capacity.share * 100}%"></span></div>
+        {/if}
+        <div class="cap-note num">{['Reported by the ' + d.model, ...capacity.notes].join(' · ')}</div>
       </div>
     {/if}
     <div class="facts">
@@ -605,6 +630,51 @@
     font-size: 12px;
     font-weight: 700;
     margin-left: 2px;
+    color: var(--muted);
+  }
+  .capacity {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--bg);
+  }
+  .cap-top {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .cap-label {
+    flex-grow: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted-2);
+  }
+  .cap-value {
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .cap-value small {
+    font-size: 12px;
+    font-weight: 700;
+    margin-left: 3px;
+    color: var(--muted);
+  }
+  .cap-bar {
+    height: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--orange) 16%, var(--card));
+    overflow: hidden;
+  }
+  .cap-bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--orange);
+  }
+  .cap-note {
+    font-size: 11px;
     color: var(--muted);
   }
   .facts {
