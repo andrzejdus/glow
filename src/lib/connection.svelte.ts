@@ -29,7 +29,12 @@ interface Saved {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const REFRESH_MS = 30_000;
-const BATTERY_POLL_MS = 5000;
+/**
+ * With the heater on: voltage and current every BATTERY_POLL_MS for the session log's 5 s means (two
+ * reads, ~0.4 s each on a CRAFTY+), the battery temperature every BATTERY_TEMP_MS.
+ */
+const BATTERY_POLL_MS = 2000;
+const BATTERY_TEMP_MS = 5000;
 const hidden = () => globalThis.document?.visibilityState === 'hidden';
 
 export function tap() {
@@ -583,14 +588,31 @@ class Connection {
       this.persist();
     }
     clearInterval(this.refreshTimer);
-    // Every 30 s a refresh while on screen; between them, with the heater on, the battery values
-    // the session log keeps every 5 s.
-    let ticks = 0;
+    // Every 30 s a refresh while on screen; between them, with the heater on, the battery values for
+    // the session log. Not while the background recorder logs the device instead, and not while the
+    // last round is still waiting: commands go first (the driver's queue), so rounds may slip.
+    let lastRefresh = Date.now();
+    let lastPoll = 0;
+    let lastTemp = 0;
+    let polling = false;
     this.refreshTimer = setInterval(() => {
-      if (++ticks % (REFRESH_MS / BATTERY_POLL_MS) === 0) {
-        if (globalThis.document?.visibilityState !== 'hidden') driver.refresh?.().catch(() => undefined);
-      } else if (this.device?.heaterOn) driver.pollBattery?.().catch(() => undefined);
-    }, BATTERY_POLL_MS);
+      const now = Date.now();
+      if (now - lastRefresh >= REFRESH_MS) {
+        lastRefresh = now;
+        if (!hidden()) driver.refresh?.().catch(() => undefined);
+        return;
+      }
+      if (!this.device?.heaterOn || this.quiet || polling || !driver.pollBattery) return;
+      const temp = now - lastTemp >= BATTERY_TEMP_MS;
+      if (!temp && now - lastPoll < BATTERY_POLL_MS) return;
+      lastPoll = now;
+      if (temp) lastTemp = now;
+      polling = true;
+      driver
+        .pollBattery(temp)
+        .catch(() => undefined)
+        .finally(() => (polling = false));
+    }, 1000);
     this.phase = 'connected';
     tap();
   }

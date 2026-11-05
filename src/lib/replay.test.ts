@@ -123,8 +123,9 @@ describe('background recording replay', () => {
     // From the polls: the current drains, the battery warms.
     expect(Math.min(...(b.i!.filter((v) => v !== null) as number[]))).toBeLessThanOrEqual(-5800);
     expect(Math.max(...(b.t!.filter((v) => v !== null) as number[]))).toBeGreaterThan(330);
-    // The first reading is from the values the recording starts with; the next from a poll.
-    expect(b.v!.slice(0, 2)).toEqual([3900, 3600 - 15 * 5]);
+    // The first reading is from the values the recording starts with; the next the mean of that one
+    // (14…15.6 s) and the poll at 15.6 s (to 19 s).
+    expect(b.v!.slice(0, 2)).toEqual([3900, Math.round((1.6 * 3900 + 3.4 * (3600 - 15 * 5)) / 5)]);
     // The cool-down part, every 30 s: down to 50° in about 50 s here.
     expect(b.ts.filter((t) => t > 86)).toEqual([116]);
   });

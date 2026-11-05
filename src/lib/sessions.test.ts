@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DeviceState } from './devices/types';
-import { heatUpSec, readyAtOnce, sessions, type SessionSummary } from './sessions.svelte';
+import { energyOf } from './battery';
+import { heatUpSec, readyAtOnce, sessions, type BatterySamples, type SessionSummary } from './sessions.svelte';
 
 const state = (patch: Partial<DeviceState>): DeviceState => ({
   kind: 'crafty', model: 'CRAFTY+', minTemp: 40, maxTemp: 210, mode: 'normal', heaterOn: false,
@@ -162,10 +163,79 @@ describe('session log', () => {
     // After the heater-off reading, one every 30 s.
     expect(b.ts.filter((t) => t > 60)).toEqual([90, 120, 150, 180]);
     for (const list of [b.p, b.v, b.i, b.t]) expect(list).toHaveLength(b.ts.length);
-    expect(b.v![1]).toBe(3600 - 12);
+    // With the heater on, the mean of the readings since the sample before: 3598…3590 mV, a second each.
+    expect(b.v![1]).toBe(3594);
     expect(b.i![1]).toBe(-6000);
     expect(b.t![0]).toBe(280);
     expect(b.p[0]).toBe(80);
+  });
+
+  it('ends the last mean at heater off, keeps single readings in the cool-down, and starts afresh on the next heat-up', async () => {
+    vi.useFakeTimers();
+    await sessions.bind('log-10');
+    const crafty = (heaterOn: boolean, i: number) => ({ heaterOn, currentTemp: 180, battery: 80, batteryVoltage: i ? 3100 : 3550, batteryCurrent: i });
+    at(0, crafty(false, 0));
+    // On at 1 s; the first poll 1 s later reads -8 A; off at 13 s (the current already 0 at 12 s).
+    at(1, crafty(true, 0));
+    for (let sec = 2; sec <= 11; sec++) at(sec, crafty(true, -8000));
+    at(12, crafty(true, 0));
+    at(13, crafty(false, 0));
+    for (let sec = 14; sec <= 50; sec++) at(sec, { ...crafty(false, 0), currentTemp: 180 - sec });
+    const b = (await sessions.detail(sessions.list[0].id))!.battery!;
+    // Samples at 0, 5, 10 and heater off at 12 s, then the cool-down every 30 s.
+    expect(b.ts.slice(0, 5)).toEqual([0, 5, 10, 12, 42]);
+    expect(b.i!.slice(0, 4)).toEqual([0, Math.round((0 + -8000 * 4) / 5), -8000, -4000]);
+    expect(b.w!.slice(0, 5)).toEqual([null, Math.round((-3100 * 8000 * 4) / 1000 / 5), -24_800, -12_400, null]);
+    for (const list of [b.p, b.v, b.i, b.w, b.t]) expect(list ?? b.ts).toHaveLength(b.ts.length);
+    expect(b.min).toEqual({ i: -8000, w: -24_800 });
+
+    // Back on: nothing held over from the last heat-up.
+    at(60, crafty(true, -5000));
+    at(66, crafty(true, -5000));
+    const again = sessions.activeDetail!.battery!;
+    expect(again.i).toEqual([-5000, -5000]);
+    expect(again.min).toEqual({ i: -5000, w: -15_500 });
+  });
+
+  it('adds up a pulsing heater current from 2 s readings far closer than from 5 s ones', async () => {
+    // Made up, like a CRAFTY+ (seen in a 0.1.76 session's 5 s readings): -8 A at ~3.1 V for the first
+    // 60 s, then holding, the current switching between 0 and -8 A (3.55 V) at unknown times: here
+    // every 0.5–4 s at random. Glow reads voltage and current every 2 s, the temperature comes every
+    // second; the 5 s readings it kept before are taken from the same current.
+    vi.useFakeTimers();
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const errors = { old: [] as number[], now: [] as number[] };
+    for (let run = 0; run < 20; run++) {
+      const edges: number[] = [];
+      for (let t = 60 + rnd() * 2; t < 400; t += 0.5 + rnd() * 3.5) edges.push(t);
+      const on = (sec: number) => sec < 60 || edges.filter((e) => e <= sec).length % 2 === 0;
+      const amps = (sec: number) => (on(sec) ? -8000 : 0);
+      const volts = (sec: number) => (on(sec) ? 3100 : 3550);
+      const end = 211; // heater on 1…211 s
+      let truth = 0;
+      for (let t = 1; t < end; t += 0.001) truth += (-volts(t) * amps(t)) / 1e6 * 0.001;
+      await sessions.bind(`pulse-${run}`);
+      let read = { v: volts(0), i: 0 };
+      at(0, { heaterOn: false, currentTemp: 30, battery: 80, batteryVoltage: read.v, batteryCurrent: read.i });
+      for (let sec = 1; sec <= end; sec++) {
+        if (sec % 2 === 0) read = { v: volts(sec), i: amps(sec) };
+        at(sec, { heaterOn: sec < end, currentTemp: 180, battery: 80, batteryVoltage: read.v, batteryCurrent: read.i });
+      }
+      const b = (await sessions.detail(sessions.list[0].id))!.battery!;
+      const heating = b.ts.filter((t) => t <= end - 1);
+      const old: BatterySamples = {
+        ts: heating, p: heating.map(() => 80), v: heating.map((t) => volts(t + 1)), i: heating.map((t) => amps(t + 1)),
+      };
+      const wh = (x: BatterySamples) => energyOf({ ...x, ts: x.ts.slice(0, heating.length) })!.wh * 3600;
+      errors.old.push(Math.abs(wh(old) - truth) / truth);
+      errors.now.push(Math.abs(wh(b) - truth) / truth);
+      expect(b.min).toEqual({ i: -8000, w: -24_800 });
+    }
+    const mean = (xs: number[]) => xs.reduce((a, x) => a + x, 0) / xs.length;
+    // About 9 % off on average from 5 s readings here (up to 30 % in one run), under 4 % from 2 s ones.
+    expect(mean(errors.now)).toBeLessThan(0.05);
+    expect(mean(errors.now)).toBeLessThan(mean(errors.old) / 2);
   });
 
   it('keeps only the percentage on a VENTY, and nothing on a VOLCANO', async () => {
