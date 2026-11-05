@@ -1,4 +1,4 @@
-import { BATTERY_GAP_SEC, batteryValues, energyOf, SERIES, type SeriesKey } from './battery';
+import { BATTERY_GAP_SEC, batteryPeak, batteryValues, energyOf, SERIES, type SeriesKey } from './battery';
 import { decimal, mmss, toUnit } from './format';
 import type { SessionDetail } from './sessions.svelte';
 
@@ -112,7 +112,9 @@ function headline(s: ReadoutSession, key: SeriesKey): string {
   const vs = pts.map((p) => p.v);
   if (key === 'battery') return `start ${f(vs[0])}`;
   if (key === 'voltage') return `low ${f(Math.min(...vs))}`;
-  return `${key === 'batteryTemp' ? 'max' : 'peak'} ${f(Math.max(...vs))}`;
+  if (key === 'batteryTemp') return `max ${f(Math.max(...vs))}`;
+  // The drawn points are 5 s means; the true peak of the 2 s reads is kept apart.
+  return `peak ${f(batteryPeak(s.detail?.battery, key) ?? Math.max(...vs))}`;
 }
 
 /** The whole session in a line, for a finished one. */
@@ -138,7 +140,7 @@ export function summaryLine(s: ReadoutSession, key: SeriesKey): string {
       return `${decimal(first, 2)} → ${f(last)} · low ${f(min)}`;
     case 'current':
     case 'power':
-      return `peak ${f(max)}${wh}`;
+      return `peak ${f(batteryPeak(s.detail?.battery, key) ?? max)}${wh}`;
     case 'batteryTemp': {
       const top = pts.reduce((a, p) => (p.v > a.v ? p : a));
       return `${toUnit(first, s.unit)} → ${f(max)} · max at ${timeLabel(top.t, s.endSec)}`;

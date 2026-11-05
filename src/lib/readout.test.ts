@@ -108,6 +108,12 @@ describe('the readout', () => {
     expect(summaryLine(venty, 'battery')).toBe('64 → 63 % · −1 %');
   });
 
+  it('gives the true peak of the 2 s reads, not of the 5 s means drawn', () => {
+    const fine = { ...crafty, detail: { ...detail, battery: { ...battery, min: { i: -8100, w: -28000 } } } };
+    expect(summaryLine(fine, 'current')).toMatch(/^peak 8\.1 A · /);
+    expect(readoutLine(fine, 'power', { kind: 'now' })).toContain('peak 28');
+  });
+
   it('gives every value at a moment for the bubble', () => {
     expect(valuesAt(crafty, ['temp', 'current', 'batteryTemp'], 5)).toEqual([
       { key: 'temp', text: '80°', tag: 'temp' },
