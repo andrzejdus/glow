@@ -266,7 +266,8 @@ and duramson/vo0t name them so and read them as uint16 LE; vo0t's published CRAF
 | `0163` | discharge cycles |
 | `0173` | charge cycles |
 
-Glow reads `0153` on connect and with `refresh()` and reports it as `batteryCapacity` (0, `0xffff`
+Device diagnostics shows all five, the capacities in mAh and the cycles as counts. Glow reads `0153`
+on connect and with `refresh()` and reports it as `batteryCapacity` (0, `0xffff`
 and anything above 20 Ah ignored; a first read that fails stops further reads until the next
 connection). The session log keeps it at the start and at the end of each session, to compare the
 device's own count with the current Glow adds up.

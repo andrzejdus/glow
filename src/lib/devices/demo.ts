@@ -172,6 +172,11 @@ export function createDemoDriver(kind: DeviceKind): DeviceDriver {
     { label: 'Auto-off setting', source: '0x0061', value: 120, unit: 's' },
     { label: 'Auto-off left', source: '0x0071', value: 120, unit: 's', quiet: true },
     { label: 'Battery temperature', source: '0x0113', value: Math.round(s.batteryTemp * 10), unit: '°C', quiet: true, scale: 0.1 },
+    { label: 'Capacity full', source: '0x0143', value: 3150, unit: 'mAh' },
+    { label: 'Capacity left', source: '0x0153', value: Math.round(s.capacity), unit: 'mAh', quiet: true },
+    { label: 'Design capacity', source: '0x0183', value: 3300, unit: 'mAh' },
+    { label: 'Discharge cycles', source: '0x0163', value: 41, unit: '×' },
+    { label: 'Charge cycles', source: '0x0173', value: 42, unit: '×' },
   ];
   // Like the real CRAFTY+, the demo switches levels only with the (imaginary) device button.
   return kind === 'crafty' ? Object.assign(driver, { modeSwitchable: false as const, diagnostics }) : driver;

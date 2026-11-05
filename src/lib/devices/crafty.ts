@@ -608,6 +608,14 @@ class CraftyDriver implements DeviceDriver, CraftyDriverExtras {
       ['Battery temperature', SVC_SYSTEM, CHR.batteryTemp, '°C', true, true, 0.1],
       ['Battery temp. min', SVC_SYSTEM, CHR.batteryTempMin, '°C', false, true, 0.1],
       ['Battery temp. max', SVC_SYSTEM, CHR.batteryTempMax, '°C', false, true, 0.1],
+      // Named so by J-Cat/crafty-control and duramson/vo0t. The remaining capacity is what a session
+      // compares its own count of the current with; it changes all the time while heating, so it is
+      // not logged.
+      ['Capacity full', SVC_SYSTEM, CHR.batteryCapacityFull, 'mAh'],
+      ['Capacity left', SVC_SYSTEM, CHR.batteryCapacity, 'mAh', true],
+      ['Design capacity', SVC_SYSTEM, CHR.batteryCapacityDesign, 'mAh'],
+      ['Discharge cycles', SVC_SYSTEM, CHR.dischargeCycles, '×'],
+      ['Charge cycles', SVC_SYSTEM, CHR.chargeCycles, '×'],
     ];
     const out: DiagnosticValue[] = [];
     for (const [label, service, chr, unit, quiet, signed, scale] of registers) {

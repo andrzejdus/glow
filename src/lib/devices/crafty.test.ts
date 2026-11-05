@@ -388,6 +388,26 @@ describe('crafty driver', () => {
     await none.driver.stop();
   });
 
+  it('shows the battery capacity and cycles in diagnostics, in mAh and as counts', async () => {
+    // vo0t's published CRAFTY+ diagnostics: 1931 / 3300 / 3300 mAh, 42 charge cycles (uint16 LE).
+    const t = craftyPlus({
+      [U.batteryCapacityFull]: [0xe4, 0x0c],
+      [U.batteryCapacity]: [0x8b, 0x07],
+      [U.batteryCapacityDesign]: [0xe4, 0x0c],
+      [U.dischargeCycles]: [0x29, 0x00],
+      [U.chargeCycles]: [0x2a, 0x00],
+    });
+    const { driver } = await started(t);
+    const regs = await driver.diagnostics!();
+    const by = (src: string) => regs.find((r) => r.source === src);
+    expect(by('0x0143')).toMatchObject({ label: 'Capacity full', value: 3300, unit: 'mAh' });
+    expect(by('0x0153')).toMatchObject({ label: 'Capacity left', value: 1931, unit: 'mAh' });
+    expect(by('0x0183')).toMatchObject({ value: 3300, unit: 'mAh' });
+    expect(by('0x0163')).toMatchObject({ label: 'Discharge cycles', value: 41, unit: '×' });
+    expect(by('0x0173')).toMatchObject({ label: 'Charge cycles', value: 42, unit: '×' });
+    await driver.stop();
+  });
+
   it('polls voltage, current and battery temperature for the session log', async () => {
     // Readings seen on a CRAFTY+ (V03.24) heating: 3090 mV (12 0c), -7100 mA (44 e4).
     const t = craftyPlus({ [U.batteryVoltage]: le16(3817), [U.batteryCurrent]: le16(0), [U.batteryTemp]: le16(279) });
@@ -473,6 +493,11 @@ describe('crafty driver', () => {
       ['0x0113', null],
       ['0x0123', null],
       ['0x0133', null],
+      ['0x0143', null],
+      ['0x0153', null],
+      ['0x0183', null],
+      ['0x0163', null],
+      ['0x0173', null],
       ['notify 0x0063', 0],
     ]);
   });
