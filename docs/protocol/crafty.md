@@ -272,6 +272,12 @@ and anything above 20 Ah ignored; a first read that fails stops further reads un
 connection). The session log keeps it at the start and at the end of each session, to compare the
 device's own count with the current Glow adds up.
 
+What the CRAFTY+ (V03.24) can push, from its GATT properties (read on the phone, 2026-11-05): in
+service `0003` only `0013`, `0023`, `0063`, `0093`, `01c3` and `01e3` notify. Battery voltage
+(`00b3`), current (`00e3`), battery temperature (`0113`) and the capacities (`0143`, `0153`) are
+read-only, so a finer battery record has to poll them. `0183` (design capacity) and `0193` are also
+writable; Glow never writes them.
+
 The current scale is mA as read, checked on our CRAFTY+ (V03.24, Glow 0.1.76, 2026-11-05): a
 230 s session to 190 °C on battery took `0153` from 1403 to 1134 mAh (−269), and `00e3` read every
 5 s adds up to 312 mAh (1.12 Wh). The 16 % gap is the 5 s steps against a heater current that jumps
