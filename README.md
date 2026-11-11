@@ -51,8 +51,9 @@ VENTY · VEAZY · CRAFTY · CRAFTY+ · VOLCANO HYBRID
   has a switch for its level. Between the arrows the value's name and its number: now, for the
   whole session, or wherever you press and hold the chart, which also shows every value at that
   moment. While a session runs, every value now is listed under the chart, above the session's
-  own figures. A CRAFTY session also shows where the battery went: the energy drawn (voltage × current), split into heat-up, holding, boost and after off,
-  next to the device's own count of the capacity used.
+  own figures. A CRAFTY session also shows where the battery went: the energy drawn (voltage ×
+  current), split into heat-up, holding, boost and after off, next to the device's own count of
+  the capacity used.
 - 🌙 **Records in the background** (Android 12+, off until you switch it on in Settings). Android
   wakes Glow when the device comes into range, Glow connects and logs the session with the app
   closed (with a notification while it does), and the next time you open Glow the session is in
