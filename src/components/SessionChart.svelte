@@ -285,14 +285,13 @@
     readoutLine(session, sel, scrubT !== null ? { kind: 'at', t: scrubT } : running ? { kind: 'now' } : { kind: 'summary' }),
   );
 
-  // While the session runs, every value it has right now, the one on the chart picked out. Without a
+  // While the session runs, every value it has right now, under the chart. Without a
   // live temperature (VENTY, VEAZY) the temperature is what the device is set to.
   const nowRow = $derived.by(() => {
     if (!running || !detail || !ts.length) return [];
     return available.map((key) => {
       const v = key === 'temp' && !summary.live ? detail.g[ts.length - 1] : latest(session, key);
-      const tag = key === 'batteryTemp' ? 'batt' : key === 'temp' && !summary.live ? 'set' : '';
-      return { key, text: formatValue(key, v, unit), tag };
+      return { key, name: key === 'temp' && !summary.live ? 'Set to' : SERIES[key].name, text: formatValue(key, v, unit) };
     });
   });
 
@@ -309,14 +308,6 @@
 </script>
 
 <div class="chart" bind:clientWidth={w}>
-  {#if nowRow.length}
-    <div class="now num">
-      <span class="now-label">Now</span>
-      {#each nowRow as r (r.key)}
-        <span class:on={r.key === sel && switchable}>{r.text}{#if r.tag}<em>&nbsp;{r.tag}</em>{/if}</span>
-      {/each}
-    </div>
-  {/if}
   {#if ts.length > 1}
     <div class="plot">
     <!-- Pointer handling is for touch and the mouse; the arrows below are what keyboards and assistive tech use. -->
@@ -443,6 +434,13 @@
     {/if}
   {:else}
     <div class="empty" style:height="{H}px">{running ? 'Collecting the first readings…' : 'No readings for this session.'}</div>
+  {/if}
+  {#if nowRow.length}
+    <div class="now num" role="group" aria-label="Now">
+      {#each nowRow as r (r.key)}
+        <div><span>{r.name}</span><strong>{r.text}</strong></div>
+      {/each}
+    </div>
   {/if}
 </div>
 
@@ -726,38 +724,29 @@
     font-weight: 600;
     color: var(--muted);
   }
-  /* Every value now, while the session runs. */
+  /* Every value now, while the session runs: the session's facts' grid, a line above it and theirs below. */
   .now {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .now div {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 2px 9px;
-    padding: 8px 10px;
-    margin-bottom: 12px;
-    border-radius: 14px;
-    background: var(--card-2);
-    font-size: 12.5px;
-    font-weight: 700;
-    color: var(--ink);
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
   }
   .now span {
+    font-size: 11px;
+    color: var(--muted);
     white-space: nowrap;
   }
-  .now .on {
+  .now strong {
+    font-size: 16px;
     color: var(--navy);
-  }
-  .now em {
-    font-style: normal;
-    font-weight: 600;
-    color: var(--muted);
-  }
-  .now .now-label {
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    /* Ready's green, deep enough to read on the grey in either theme. */
-    color: color-mix(in srgb, var(--led-ready) 60%, var(--ink));
   }
   /* The held moment, over the cursor's line. */
   .pill-time {
